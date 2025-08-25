@@ -19,7 +19,10 @@ services:
       - key: CORS_ORIGINS
         value: "https://brandflo.netlify.app,http://localhost:3000"
       - key: REDIS_URL
-        value: "redis://localhost:6379"
+        fromService:
+          type: redis
+          name: brandflow-cache
+          property: connectionString
 
   - type: pserv
     name: brandflow-db
