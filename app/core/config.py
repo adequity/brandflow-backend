@@ -46,7 +46,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
-        "http://127.0.0.1:5175"
+        "http://127.0.0.1:5175",
+        "https://brandflo.netlify.app"  # Production frontend URL
     ]
     
     # Alternative CORS_ORIGINS for compatibility
