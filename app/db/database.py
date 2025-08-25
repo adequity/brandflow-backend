@@ -8,7 +8,7 @@ from app.models.base import Base
 
 
 # 데이터베이스 URL 가져오기
-database_url = settings.get_database_url
+database_url = settings.get_database_url()
 
 # 데이터베이스별 엔진 설정
 if database_url.startswith("sqlite"):
