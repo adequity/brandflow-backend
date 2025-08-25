@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  brandflow-backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: brandflow-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=sqlite:///./data/brandflow.db
+      - SECRET_KEY=${SECRET_KEY:-your-super-secret-key-change-this}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5175
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+    networks:
+      - brandflow-network
+
+  # PostgreSQL Database (for production)
+  postgres:
+    image: postgres:15-alpine
+    container_name: brandflow_postgres
+    environment:
+      POSTGRES_USER: brandflow_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brandflow_password_2024}
+      POSTGRES_DB: brandflow
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brandflow_user -d brandflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - brandflow-network
+
+  # Redis for Caching & Session Storage
+  redis:
+    image: redis:7-alpine
+    container_name: brandflow_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-brandflow-redis-pass}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - brandflow-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: brandflow-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/ssl/certs
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - brandflow-backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - brandflow-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  brandflow-network:
+    driver: bridge

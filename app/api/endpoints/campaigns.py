@@ -1,0 +1,336 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
+from typing import List, Optional
+from urllib.parse import unquote
+from datetime import datetime
+
+from app.db.database import get_async_db
+from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
+from app.api.deps import get_current_active_user
+from app.models.user import User
+from app.models.campaign import Campaign
+from app.core.websocket import manager
+
+router = APIRouter()
+
+
+@router.get("/", response_model=List[CampaignResponse])
+async def get_campaigns(
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    # 기존 파라미터도 지원
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 목록 조회 (권한별 필터링)"""
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 현재 사용자 조회
+        current_user_query = select(User).where(User.id == user_id)
+        result = await db.execute(current_user_query)
+        current_user = result.scalar_one_or_none()
+        
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화)
+        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+            # 슈퍼 어드민은 모든 캠페인 조회 가능
+            query = select(Campaign).options(joinedload(Campaign.creator))
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role) or user_role == '직원':
+            # 대행사 어드민/직원은 같은 회사 소속 캠페인만
+            query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
+        elif user_role == '클라이언트':
+            # 클라이언트는 자신의 캠페인만 조회 가능
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
+        else:
+            query = select(Campaign).options(joinedload(Campaign.creator))
+        
+        result = await db.execute(query)
+        campaigns = result.unique().scalars().all()  # unique() 추가로 중복 제거
+        
+        return campaigns
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 캠페인 조회 구현
+        return []
+
+
+@router.post("/", response_model=CampaignResponse)
+async def create_campaign(
+    campaign_data: CampaignCreate,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """새 캠페인 생성 (권한 확인)"""
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 권한 확인 - 관리자만 캠페인 생성 가능
+        is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민'] or 
+                    '슈퍼' in user_role or ('대행사' in user_role and '어드민' in user_role))
+        
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자만 캠페인을 생성할 수 있습니다.")
+        
+        # 새 캠페인 생성
+        new_campaign = Campaign(
+            name=campaign_data.name,
+            description=campaign_data.description or '',
+            client_company=campaign_data.client_company or "테스트 클라이언트",
+            budget=campaign_data.budget or 0.0,
+            start_date=campaign_data.start_date or datetime.utcnow(),
+            end_date=campaign_data.end_date or datetime.utcnow(),
+            creator_id=user_id,
+            status='ACTIVE',
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(new_campaign)
+        await db.commit()
+        await db.refresh(new_campaign)
+        
+        # WebSocket 알림 전송
+        await manager.notify_campaign_update(
+            campaign_id=new_campaign.id,
+            update_type="생성",
+            data={
+                "name": new_campaign.name,
+                "client_company": new_campaign.client_company,
+                "budget": new_campaign.budget
+            }
+        )
+        
+        return new_campaign
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 캠페인 생성 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.get("/{campaign_id}", response_model=CampaignResponse)
+async def get_campaign_detail(
+    campaign_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 상세 조회 (권한별 필터링)"""
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 캠페인 찾기
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_query)
+        campaign = result.scalar_one_or_none()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+        
+        # 권한 확인
+        viewer_query = select(User).where(User.id == user_id)
+        viewer_result = await db.execute(viewer_query)
+        viewer = viewer_result.scalar_one_or_none()
+        
+        if not viewer:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        if user_role == '클라이언트':
+            # 클라이언트는 본인 캠페인만 조회 가능
+            if campaign.creator_id != user_id:
+                raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
+        elif user_role in ['대행사 어드민', '대행사어드민'] or user_role == '직원' or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민/직원은 같은 회사 캠페인만 조회 가능
+            client_query = select(User).where(User.id == campaign.creator_id)
+            client_result = await db.execute(client_query)
+            client = client_result.scalar_one_or_none()
+            
+            if not client or client.company != viewer.company:
+                raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
+        
+        return campaign
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 캠페인 상세 조회 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.put("/{campaign_id}", response_model=CampaignResponse)
+async def update_campaign(
+    campaign_id: int,
+    campaign_data: CampaignUpdate,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 수정"""
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 캠페인 찾기
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_query)
+        campaign = result.scalar_one_or_none()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+        
+        # 권한 확인
+        viewer_query = select(User).where(User.id == user_id)
+        viewer_result = await db.execute(viewer_query)
+        viewer = viewer_result.scalar_one_or_none()
+        
+        if not viewer:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        if user_role == '클라이언트':
+            # 클라이언트는 본인 캠페인만 수정 가능
+            if campaign.creator_id != user_id:
+                raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
+        elif user_role in ['대행사 어드민', '대행사어드민'] or user_role == '직원' or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민/직원은 같은 회사 캠페인만 수정 가능
+            client_query = select(User).where(User.id == campaign.creator_id)
+            client_result = await db.execute(client_query)
+            client = client_result.scalar_one_or_none()
+            
+            if not client or client.company != viewer.company:
+                raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
+        
+        # 캠페인 정보 업데이트
+        update_data = campaign_data.model_dump(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            if field == 'user_id':
+                # 클라이언트 ID는 변경 불가
+                continue
+            elif hasattr(campaign, field):
+                setattr(campaign, field, value)
+        
+        # 업데이트 시간과 업데이트한 사용자 정보 추가
+        campaign.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(campaign)
+        
+        return campaign
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 캠페인 수정 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.get("/{campaign_id}/financial_summary/", response_model=dict)
+async def get_campaign_financial_summary(
+    campaign_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 재무 요약 정보 조회"""
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 캠페인 찾기
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_query)
+        campaign = result.scalar_one_or_none()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+        
+        # 권한 확인
+        viewer_query = select(User).where(User.id == user_id)
+        viewer_result = await db.execute(viewer_query)
+        viewer = viewer_result.scalar_one_or_none()
+        
+        if not viewer:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        # 재무 요약 데이터 (시연용)
+        return {
+            "campaign_id": campaign_id,
+            "total_budget": float(campaign.budget) if campaign.budget else 0.0,
+            "spent_amount": float(campaign.budget * 0.45) if campaign.budget else 0.0,
+            "remaining_budget": float(campaign.budget * 0.55) if campaign.budget else 0.0,
+            "expense_categories": {
+                "광고비": float(campaign.budget * 0.25) if campaign.budget else 0.0,
+                "제작비": float(campaign.budget * 0.15) if campaign.budget else 0.0,
+                "기타": float(campaign.budget * 0.05) if campaign.budget else 0.0
+            },
+            "roi": 2.3,
+            "conversion_rate": 0.045
+        }
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 재무 요약 조회 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")

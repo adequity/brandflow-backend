@@ -1,0 +1,49 @@
+# Core FastAPI dependencies
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+pydantic-settings==2.10.1
+
+# Database
+SQLAlchemy==2.0.43
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+alembic==1.14.0
+
+# Authentication & Security  
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
+python-multipart==0.0.20
+
+# File handling
+aiofiles==24.1.0
+pillow==11.3.0
+
+# Data processing
+pandas==2.2.3
+openpyxl==3.1.5
+
+# PDF generation
+reportlab==4.4.3
+
+# Caching
+redis==6.4.0
+
+# Environment
+python-dotenv==1.1.0
+
+# HTTP clients
+requests==2.32.3
+
+# WebSocket support
+websockets==15.0.1
+
+# Validation
+email-validator==2.2.0
+
+# Date/Time
+python-dateutil==2.9.0.post0
+
+# Core Python utilities
+typing-extensions==4.13.1
