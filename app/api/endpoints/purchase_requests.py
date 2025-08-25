@@ -103,14 +103,11 @@ async def create_purchase_request(
             title=request_data.title,
             description=request_data.description,
             amount=request_data.amount,
-            resource_type=request_data.resource_type or '캠페인 업무 발주',
-            priority=request_data.priority or '보통',
+            quantity=request_data.quantity,
+            vendor=request_data.vendor,
             status=RequestStatus.PENDING,
-            due_date=request_data.due_date,
             campaign_id=request_data.campaign_id,
-            requester_id=user_id,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            requester_id=user_id
         )
         
         db.add(new_request)
@@ -172,7 +169,7 @@ async def update_purchase_request(
             if hasattr(purchase_request, field):
                 setattr(purchase_request, field, value)
         
-        purchase_request.updated_at = datetime.utcnow()
+        # updated_at은 TimestampMixin에서 자동 처리됨
         
         await db.commit()
         await db.refresh(purchase_request)

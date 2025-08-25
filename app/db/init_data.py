@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timedelta
 import random
+import os
 
 from app.models.user import User, UserRole, UserStatus
 from app.models.campaign import Campaign, CampaignStatus
@@ -21,13 +22,18 @@ async def create_superuser(db: AsyncSession):
         print("슈퍼 어드민 계정이 이미 존재합니다.")
         return existing_superuser
     
+    # 환경변수에서 슈퍼 어드민 정보 가져오기 (기본값 포함)
+    admin_email = os.getenv("SUPERUSER_EMAIL", "admin@brandflow.com")
+    admin_password = os.getenv("SUPERUSER_PASSWORD", "BrandFlow2024!Admin")
+    admin_name = os.getenv("SUPERUSER_NAME", "시스템 관리자")
+    
     # 슈퍼 어드민 생성
     superuser = User(
-        name="슈퍼 관리자",
-        email="admin@test.com",
-        hashed_password=get_password_hash("AdminPassword123!"),
+        name=admin_name,
+        email=admin_email,
+        hashed_password=get_password_hash(admin_password),
         role=UserRole.SUPER_ADMIN,
-        company=None,
+        company="BrandFlow Korea",
         contact=None,
         incentive_rate=0.0,
         status=UserStatus.ACTIVE,
@@ -40,7 +46,8 @@ async def create_superuser(db: AsyncSession):
     
     print("슈퍼 어드민 계정이 생성되었습니다.")
     print(f"   이메일: {superuser.email}")
-    print(f"   비밀번호: AdminPassword123!")
+    print(f"   이름: {superuser.name}")
+    print("   비밀번호는 환경변수 SUPERUSER_PASSWORD로 설정됨")
     
     return superuser
 
@@ -272,34 +279,24 @@ async def create_test_purchase_requests(db: AsyncSession, users: list, campaigns
 
 
 async def init_database_data(db: AsyncSession):
-    """데이터베이스 초기 데이터 생성"""
+    """데이터베이스 초기 데이터 생성 - 슈퍼 어드민만"""
     print("초기 데이터 생성 중...")
     
     try:
-        # 1. 슈퍼 어드민 생성
+        # 슈퍼 어드민 계정만 생성
         superuser = await create_superuser(db)
-        
-        # 2. 테스트 사용자들 생성
-        print("\n테스트 사용자들 생성 중...")
-        test_users = await create_test_users(db)
-        all_users = [superuser] + test_users
-        
-        # 3. 테스트 캠페인들 생성
-        print("\n테스트 캠페인들 생성 중...")
-        campaigns = await create_test_campaigns(db, all_users)
-        
-        # 4. 테스트 구매요청들 생성
-        print("\n테스트 구매요청들 생성 중...")
-        purchase_requests = await create_test_purchase_requests(db, all_users, campaigns)
         
         # 커밋
         await db.commit()
         
-        print(f"\n=== 테스트 데이터 생성 완료 ===")
-        print(f"사용자: {len(all_users)}명")
-        print(f"캠페인: {len(campaigns)}개")
-        print(f"구매요청: {len(purchase_requests)}개")
-        print(f"===========================")
+        print(f"\n=== 초기 데이터 생성 완료 ===")
+        print(f"슈퍼 어드민 계정이 생성되었습니다.")
+        print(f"이메일: {superuser.email}")
+        print(f"이름: {superuser.name}")
+        print(f"회사: {superuser.company}")
+        print(f"기본 비밀번호: BrandFlow2024!Admin")
+        print(f"(환경변수 SUPERUSER_PASSWORD로 변경 가능)")
+        print(f"=============================")
         
     except Exception as e:
         print(f"초기 데이터 생성 중 오류 발생: {str(e)}")

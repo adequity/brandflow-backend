@@ -52,8 +52,13 @@ app = FastAPI(
     title="BrandFlow API",
     description="BrandFlow 캠페인 관리 시스템 API",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    default_response_class=None,  # Enable JSON response configuration
 )
+
+# UTF-8 JSON 처리 미들웨어 추가 (가장 먼저 적용)
+from app.middleware.json_utf8 import UTF8JSONMiddleware
+app.add_middleware(UTF8JSONMiddleware)
 
 # 보안 미들웨어 추가 (순서가 중요 - 가장 먼저 적용)
 from app.middleware.security_audit import SecurityAuditMiddleware
