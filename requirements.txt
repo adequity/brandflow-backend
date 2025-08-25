@@ -50,4 +50,4 @@ python-dateutil==2.9.0.post0
 typing-extensions==4.13.1
 
 # System monitoring
-psutil==6.2.0
+psutil==6.1.1
