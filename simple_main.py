@@ -1,5 +1,5 @@
 # BrandFlow FastAPI v2.0.0 - 점진적 기능 복원
-from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -17,6 +17,8 @@ import psutil
 import sys
 import shutil
 import uuid
+import json
+import asyncio
 from typing import Optional, Dict, Any, List
 
 # 로깅 설정
@@ -41,6 +43,87 @@ monitoring_stats = {
     "start_time": time.time(),
     "errors_count": 0
 }
+
+# WebSocket 연결 관리자
+class WebSocketManager:
+    def __init__(self):
+        # 사용자별 활성 연결 {user_id: [websockets]}
+        self.active_connections: Dict[int, List[WebSocket]] = {}
+        # 전체 연결 추적
+        self.all_connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket, user_id: int):
+        await websocket.accept()
+        
+        # 사용자별 연결 추가
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(websocket)
+        
+        # 전체 연결 목록에 추가
+        self.all_connections.append(websocket)
+        
+        logger.info(f"WebSocket connected for user {user_id}")
+    
+    def disconnect(self, websocket: WebSocket, user_id: int):
+        # 사용자별 연결에서 제거
+        if user_id in self.active_connections:
+            if websocket in self.active_connections[user_id]:
+                self.active_connections[user_id].remove(websocket)
+            
+            # 사용자의 연결이 없으면 키 삭제
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        
+        # 전체 연결 목록에서 제거
+        if websocket in self.all_connections:
+            self.all_connections.remove(websocket)
+        
+        logger.info(f"WebSocket disconnected for user {user_id}")
+    
+    async def send_personal_message(self, message: str, user_id: int):
+        """특정 사용자에게 메시지 전송"""
+        if user_id in self.active_connections:
+            disconnected = []
+            for websocket in self.active_connections[user_id]:
+                try:
+                    await websocket.send_text(message)
+                except:
+                    disconnected.append(websocket)
+            
+            # 연결이 끊어진 WebSocket 정리
+            for ws in disconnected:
+                self.disconnect(ws, user_id)
+    
+    async def send_to_all(self, message: str):
+        """모든 연결된 사용자에게 메시지 전송"""
+        disconnected = []
+        for websocket in self.all_connections:
+            try:
+                await websocket.send_text(message)
+            except:
+                disconnected.append(websocket)
+        
+        # 연결이 끊어진 WebSocket 정리
+        for ws in disconnected:
+            if ws in self.all_connections:
+                self.all_connections.remove(ws)
+    
+    async def broadcast_notification(self, notification_data: Dict[str, Any], user_id: Optional[int] = None):
+        """알림을 특정 사용자 또는 전체에게 브로드캐스트"""
+        message = json.dumps({
+            "type": "notification",
+            "data": notification_data,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        })
+        
+        if user_id:
+            await self.send_personal_message(message, user_id)
+        else:
+            await self.send_to_all(message)
+
+# WebSocket 매니저 인스턴스
+websocket_manager = WebSocketManager()
 
 # 파일 업로드 설정
 UPLOAD_DIR = "./uploads"
@@ -328,7 +411,7 @@ def get_campaign_by_id(campaign_id: int) -> Optional[dict]:
 
 # 알림 시스템 헬퍼 함수들
 def create_notification(notification_data: NotificationCreate) -> Optional[int]:
-    """새 알림 생성"""
+    """새 알림 생성 및 실시간 WebSocket 전송"""
     if not db_status["connected"]:
         return None
     try:
@@ -344,10 +427,32 @@ def create_notification(notification_data: NotificationCreate) -> Optional[int]:
         notification_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        
+        # WebSocket을 통한 실시간 알림 전송
+        if notification_id:
+            asyncio.create_task(send_realtime_notification({
+                "id": notification_id,
+                "title": notification_data.title,
+                "message": notification_data.message,
+                "type": notification_data.type,
+                "user_id": notification_data.user_id,
+                "related_campaign_id": notification_data.related_campaign_id,
+                "created_at": datetime.datetime.utcnow().isoformat(),
+                "read": False
+            }, notification_data.user_id))
+        
         return notification_id
     except Exception as e:
         logger.error(f"알림 생성 오류: {e}")
         return None
+
+async def send_realtime_notification(notification_data: Dict[str, Any], user_id: int):
+    """실시간 알림 전송 헬퍼 함수"""
+    try:
+        await websocket_manager.broadcast_notification(notification_data, user_id)
+        logger.info(f"실시간 알림 전송 완료: user_id={user_id}, title={notification_data.get('title')}")
+    except Exception as e:
+        logger.error(f"실시간 알림 전송 오류: {e}")
 
 def get_user_notifications(user_id: int, unread_only: bool = False) -> list:
     """사용자 알림 목록 조회"""
@@ -948,6 +1053,68 @@ async def database_status():
         "error": db_status["error"],
         "tables_created": db_status["tables_created"],
         "database_url": "sqlite:///./data/brandflow.db" if db_status["connected"] else "not_configured"
+    }
+
+# WebSocket 엔드포인트
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: int):
+    """사용자별 WebSocket 연결 엔드포인트"""
+    try:
+        # WebSocket 연결 수락 및 관리자에 등록
+        await websocket_manager.connect(websocket, user_id)
+        
+        # 연결 환영 메시지 전송
+        welcome_message = json.dumps({
+            "type": "connection",
+            "message": f"WebSocket connected for user {user_id}",
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        })
+        await websocket.send_text(welcome_message)
+        
+        # 연결 유지 및 메시지 수신 대기
+        while True:
+            try:
+                # 클라이언트로부터 메시지 수신 (ping/pong 등)
+                data = await websocket.receive_text()
+                message_data = json.loads(data)
+                
+                # ping 메시지에 pong으로 응답
+                if message_data.get("type") == "ping":
+                    pong_message = json.dumps({
+                        "type": "pong",
+                        "timestamp": datetime.datetime.utcnow().isoformat()
+                    })
+                    await websocket.send_text(pong_message)
+                
+                # 기타 메시지 타입 처리 (필요시 확장 가능)
+                
+            except WebSocketDisconnect:
+                break
+            except json.JSONDecodeError:
+                # JSON 파싱 오류 시 에러 메시지 전송
+                error_message = json.dumps({
+                    "type": "error",
+                    "message": "Invalid JSON format",
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                })
+                await websocket.send_text(error_message)
+            except Exception as e:
+                logger.error(f"WebSocket message handling error: {e}")
+                break
+                
+    except Exception as e:
+        logger.error(f"WebSocket connection error for user {user_id}: {e}")
+    finally:
+        # 연결 해제 시 관리자에서 제거
+        websocket_manager.disconnect(websocket, user_id)
+
+@app.get("/api/websocket/status")
+async def websocket_status(current_user = Depends(get_current_user)):
+    """WebSocket 연결 상태 조회 (인증 필요)"""
+    return {
+        "active_connections_by_user": {str(k): len(v) for k, v in websocket_manager.active_connections.items()},
+        "total_connections": len(websocket_manager.all_connections),
+        "message": "WebSocket status retrieved successfully"
     }
 
 # 인증 API 엔드포인트들
@@ -1909,6 +2076,43 @@ async def init_database():
         db_status["error"] = str(e)
         logger.warning(f"⚠️ 데이터베이스 초기화 실패: {e}")
         logger.info("🚀 데이터베이스 없이 API 모드로 계속 진행")
+
+# WebSocket 테스트 엔드포인트
+@app.post("/api/websocket/test-broadcast")
+async def test_websocket_broadcast(
+    message: str = "Test notification",
+    user_id: Optional[int] = None,
+    current_user = Depends(get_current_user)
+):
+    """WebSocket 브로드캐스트 테스트 (인증 필요)"""
+    try:
+        test_notification = {
+            "id": 999,
+            "title": "WebSocket Test",
+            "message": message,
+            "type": "info",
+            "user_id": user_id or current_user["id"],
+            "related_campaign_id": None,
+            "created_at": datetime.datetime.utcnow().isoformat(),
+            "read": False
+        }
+        
+        if user_id:
+            await websocket_manager.broadcast_notification(test_notification, user_id)
+            return {
+                "message": f"Test notification sent to user {user_id}",
+                "notification": test_notification
+            }
+        else:
+            await websocket_manager.broadcast_notification(test_notification)
+            return {
+                "message": "Test notification broadcast to all users",
+                "notification": test_notification
+            }
+            
+    except Exception as e:
+        logger.error(f"WebSocket broadcast test error: {e}")
+        raise HTTPException(status_code=500, detail=f"Broadcast test failed: {str(e)}")
 
 if __name__ == "__main__":
     import asyncio
