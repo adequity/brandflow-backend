@@ -1055,6 +1055,23 @@ async def database_status():
         "database_url": "sqlite:///./data/brandflow.db" if db_status["connected"] else "not_configured"
     }
 
+# 인증 의존성 함수
+async def get_current_user_dependency(token: str = Depends(security)):
+    """현재 사용자 정보를 가져오는 의존성 함수"""
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        
+        user = get_user_by_email(email)
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+
 # WebSocket 엔드포인트
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
@@ -1109,7 +1126,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         websocket_manager.disconnect(websocket, user_id)
 
 @app.get("/api/websocket/status")
-async def websocket_status(current_user = Depends(get_current_user)):
+async def websocket_status(current_user = Depends(get_current_user_dependency)):
     """WebSocket 연결 상태 조회 (인증 필요)"""
     return {
         "active_connections_by_user": {str(k): len(v) for k, v in websocket_manager.active_connections.items()},
@@ -2082,7 +2099,7 @@ async def init_database():
 async def test_websocket_broadcast(
     message: str = "Test notification",
     user_id: Optional[int] = None,
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dependency)
 ):
     """WebSocket 브로드캐스트 테스트 (인증 필요)"""
     try:

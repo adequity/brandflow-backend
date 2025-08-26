@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BrandFlow WebSocket Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 BrandFlow WebSocket Test Client</h1>
+    
+    <div class="container">
+        <h3>연결 설정</h3>
+        <input type="text" id="serverUrl" placeholder="WebSocket URL" value="ws://localhost:8000/ws/1">
+        <input type="number" id="userId" placeholder="User ID" value="1">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <div id="status" class="status disconnected">Disconnected</div>
+    </div>
+
+    <div class="container">
+        <h3>메시지 전송</h3>
+        <button onclick="sendPing()">Send Ping</button>
+        <button onclick="sendTestMessage()">Send Test Message</button>
+        <input type="text" id="customMessage" placeholder="Custom message">
+        <button onclick="sendCustomMessage()">Send Custom</button>
+    </div>
+
+    <div class="container">
+        <h3>실시간 로그</h3>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let logElement = document.getElementById('log');
+        let statusElement = document.getElementById('status');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'sent' ? '📤' : type === 'received' ? '📥' : 'ℹ️';
+            logElement.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function updateStatus(connected) {
+            if (connected) {
+                statusElement.textContent = 'Connected ✅';
+                statusElement.className = 'status connected';
+            } else {
+                statusElement.textContent = 'Disconnected ❌';
+                statusElement.className = 'status disconnected';
+            }
+        }
+        
+        function connect() {
+            const url = document.getElementById('serverUrl').value;
+            const userId = document.getElementById('userId').value;
+            
+            if (websocket) {
+                log('이미 연결되어 있습니다. 먼저 연결을 끊어주세요.', 'error');
+                return;
+            }
+            
+            try {
+                websocket = new WebSocket(url);
+                
+                websocket.onopen = function(event) {
+                    log(`WebSocket 연결 성공: ${url}`);
+                    updateStatus(true);
+                };
+                
+                websocket.onmessage = function(event) {
+                    log(`수신: ${event.data}`, 'received');
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'notification') {
+                            log(`📢 알림: ${data.data.title} - ${data.data.message}`, 'received');
+                        }
+                    } catch (e) {
+                        // JSON 파싱 실패는 무시
+                    }
+                };
+                
+                websocket.onclose = function(event) {
+                    log(`WebSocket 연결 종료 (code: ${event.code})`);
+                    updateStatus(false);
+                    websocket = null;
+                };
+                
+                websocket.onerror = function(error) {
+                    log(`WebSocket 오류: ${error}`, 'error');
+                    updateStatus(false);
+                };
+                
+            } catch (error) {
+                log(`연결 실패: ${error}`, 'error');
+            }
+        }
+        
+        function disconnect() {
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+                log('연결을 종료했습니다.');
+                updateStatus(false);
+            } else {
+                log('연결되어 있지 않습니다.', 'error');
+            }
+        }
+        
+        function sendPing() {
+            if (!websocket) {
+                log('WebSocket이 연결되어 있지 않습니다.', 'error');
+                return;
+            }
+            
+            const message = JSON.stringify({
+                type: 'ping',
+                timestamp: new Date().toISOString()
+            });
+            
+            websocket.send(message);
+            log(`전송: ${message}`, 'sent');
+        }
+        
+        function sendTestMessage() {
+            if (!websocket) {
+                log('WebSocket이 연결되어 있지 않습니다.', 'error');
+                return;
+            }
+            
+            const message = JSON.stringify({
+                type: 'test',
+                message: 'Test message from client',
+                timestamp: new Date().toISOString()
+            });
+            
+            websocket.send(message);
+            log(`전송: ${message}`, 'sent');
+        }
+        
+        function sendCustomMessage() {
+            if (!websocket) {
+                log('WebSocket이 연결되어 있지 않습니다.', 'error');
+                return;
+            }
+            
+            const customMsg = document.getElementById('customMessage').value;
+            if (!customMsg) {
+                log('메시지를 입력해주세요.', 'error');
+                return;
+            }
+            
+            const message = JSON.stringify({
+                type: 'custom',
+                message: customMsg,
+                timestamp: new Date().toISOString()
+            });
+            
+            websocket.send(message);
+            log(`전송: ${message}`, 'sent');
+            document.getElementById('customMessage').value = '';
+        }
+        
+        function clearLog() {
+            logElement.textContent = '';
+        }
+        
+        // 페이지 로드 시 초기 상태 설정
+        updateStatus(false);
+        log('WebSocket 테스트 클라이언트 준비완료');
+        
+        // 페이지 종료 시 WebSocket 연결 정리
+        window.addEventListener('beforeunload', function() {
+            if (websocket) {
+                websocket.close();
+            }
+        });
+    </script>
+</body>
+</html>
+</html>
