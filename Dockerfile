@@ -26,10 +26,9 @@ COPY . .
 # 데이터 디렉토리 생성
 RUN mkdir -p /app/data /app/logs /app/uploads
 
-# 권한 설정 (보안)
-RUN adduser --system --group appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+# Railway 테스트용 권한 단순화 (root 사용)
+# RUN adduser --system --group appuser && chown -R appuser:appuser /app
+# USER appuser
 
 # 포트 설정 (Railway는 8000, Render는 10000)
 EXPOSE 8000
@@ -38,5 +37,5 @@ EXPOSE 10000
 # Railway handles healthcheck internally via railway.json
 # HEALTHCHECK removed to avoid conflicts
 
-# 애플리케이션 시작 (다양한 플랫폼 지원)
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Railway 테스트용 단순 시작
+CMD ["python", "simple_main.py"]
