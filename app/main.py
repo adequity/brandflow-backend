@@ -3,45 +3,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 
-# from app.core.config import settings  # 임시 비활성화
-# from app.db.database import create_tables, create_performance_indexes, get_async_db  # 임시 비활성화
-# from app.db.init_data import init_database_data  # 임시 비활성화
-# from app.api.router import api_router  # 임시 비활성화
-# from app.middleware.simple_performance import SimplePerformanceMiddleware  # 임시 비활성화
-# from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware, RequestSanitizationMiddleware  # 임시 비활성화
+from app.core.config import settings
+from app.db.database import create_tables, create_performance_indexes, get_async_db
+from app.db.init_data import init_database_data
+from app.api.endpoints import auth
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting BrandFlow FastAPI server...")
-    # await create_tables()
-    # print("Database tables created/verified")  # 임시 비활성화
+    await create_tables()
+    print("Database tables created/verified")
     
     # 성능 최적화 인덱스 생성
-    # await create_performance_indexes()
-    # print("Performance indexes created/verified")  # 임시 비활성화
+    await create_performance_indexes()
+    print("Performance indexes created/verified")
     
     # 초기 데이터 생성
-    # from app.db.database import AsyncSessionLocal
-    # async with AsyncSessionLocal() as session:
-    #     await init_database_data(session)  # 임시 비활성화
-    
-    # 캐시 정리 백그라운드 태스크 시작
-    # import asyncio
-    # from app.core.cache import cache_cleanup_task
-    # asyncio.create_task(cache_cleanup_task())
-    # print("Cache cleanup task started")  # 임시 비활성화
-    
-    # 보안 로깅 시스템 초기화
-    # from app.core.logging import setup_application_logging
-    # setup_application_logging()
-    # print("Security logging system initialized")  # 임시 비활성화
-    
-    # WebSocket 연결 정리 백그라운드 태스크 시작
-    # from app.core.websocket import periodic_cleanup
-    # asyncio.create_task(periodic_cleanup())
-    # print("WebSocket cleanup task started")  # 임시 비활성화
+    from app.db.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        await init_database_data(session)
+    print("Initial data created")
     
     yield
     # Shutdown
@@ -71,19 +54,28 @@ app = FastAPI(
 # from app.middleware.performance_monitor import PerformanceMiddleware, performance_monitor
 # app.add_middleware(PerformanceMiddleware, monitor=performance_monitor)  # 임시 비활성화
 
-# CORS 미들웨어 설정 (보안 강화) - 임시 단순화
+# CORS 미들웨어 설정 (보안 강화)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 임시로 모든 origin 허용
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["*"],  # 임시로 모든 헤더 허용
+    allow_headers=[
+        "Authorization", 
+        "Content-Type", 
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "User-Agent",
+        "Cache-Control",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers"
+    ],
+    expose_headers=["X-Total-Count", "X-Page-Count"],
 )
 
-# API 라우터 등록 (임시로 기본 auth만)
-# from app.api.endpoints import auth
-# app.include_router(auth.router, prefix="/api/auth", tags=["인증"])  # 임시 비활성화
-# app.include_router(api_router, prefix="/api")  # 임시 비활성화
+# API 라우터 등록 (기본 auth만 사용)
+app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 
 
 @app.get("/")
@@ -99,9 +91,7 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-@app.get("/test")
-async def test_endpoint():
-    return {"status": "working", "message": "Backend is responding"}
+# 테스트 엔드포인트 제거
 
 
 if __name__ == "__main__":

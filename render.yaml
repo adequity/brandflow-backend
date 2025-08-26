@@ -3,34 +3,18 @@ services:
     name: brandflow-api
     runtime: python3
     plan: free
-    buildCommand: pip install -r requirements_minimal.txt
-    startCommand: uvicorn simple_test:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PORT
         value: 10000
-      # - key: DATABASE_URL
-        # fromDatabase:
-          # name: brandflow-db
-          # property: connectionString
+      - key: DATABASE_URL
+        value: "sqlite+aiosqlite:///./brandflow.db"
       - key: SECRET_KEY
         generateValue: true
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS
         value: "https://brandflo.netlify.app,http://localhost:3000"
-      # - key: REDIS_URL
-        # fromService:
-          # type: redis
-          # name: brandflow-cache
-          # property: connectionString
-
-  - type: pserv
-    name: brandflow-db
-    plan: free
-    databaseName: brandflow
-    user: brandflow_user
-
-  - type: redis
-    name: brandflow-cache
-    plan: free
-    ipAllowList: []
+      - key: REDIS_URL
+        value: "redis://localhost:6379"
