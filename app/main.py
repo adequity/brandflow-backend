@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 
-from app.core.config import settings
+# from app.core.config import settings  # 임시 비활성화
 # from app.db.database import create_tables, create_performance_indexes, get_async_db  # 임시 비활성화
 # from app.db.init_data import init_database_data  # 임시 비활성화
 # from app.api.router import api_router  # 임시 비활성화
@@ -71,24 +71,13 @@ app = FastAPI(
 # from app.middleware.performance_monitor import PerformanceMiddleware, performance_monitor
 # app.add_middleware(PerformanceMiddleware, monitor=performance_monitor)  # 임시 비활성화
 
-# CORS 미들웨어 설정 (보안 강화)
+# CORS 미들웨어 설정 (보안 강화) - 임시 단순화
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],  # 임시로 모든 origin 허용
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # 필요한 메서드 + OPTIONS for CORS
-    allow_headers=[
-        "Authorization", 
-        "Content-Type", 
-        "X-Requested-With",
-        "Accept",
-        "Origin",
-        "User-Agent",
-        "Cache-Control",
-        "Access-Control-Request-Method",
-        "Access-Control-Request-Headers"
-    ],  # 필요한 헤더만 허용
-    expose_headers=["X-Total-Count", "X-Page-Count"],  # 노출할 헤더 제한
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["*"],  # 임시로 모든 헤더 허용
 )
 
 # API 라우터 등록 (임시로 기본 auth만)
