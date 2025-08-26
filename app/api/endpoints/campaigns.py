@@ -334,3 +334,51 @@ async def get_campaign_financial_summary(
         current_user = await get_current_active_user()
         # TODO: 기존 방식으로 재무 요약 조회 구현
         raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.get("/{campaign_id}/posts/", response_model=list)
+async def get_campaign_posts(
+    campaign_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 게시물 목록 조회"""
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 캠페인 존재 여부 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_query)
+        campaign = result.scalar_one_or_none()
+        
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+        
+        # 권한 확인 (financial_summary와 동일한 로직)
+        viewer_query = select(User).where(User.id == user_id)
+        viewer_result = await db.execute(viewer_query)
+        viewer = viewer_result.scalar_one_or_none()
+        
+        if not viewer:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        # 현재는 빈 배열 반환 (추후 posts 모델 구현시 확장)
+        return []
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 게시물 목록 조회 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")

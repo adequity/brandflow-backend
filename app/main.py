@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, notifications
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, notifications, file_upload, performance, monitoring
 
 
 @asynccontextmanager
@@ -60,27 +60,25 @@ app = FastAPI(
 # app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_second=10)  # 임시 비활성화
 # app.add_middleware(SecurityHeadersMiddleware)  # 임시 비활성화
 
-# 성능 모니터링 미들웨어 추가 (고급 버전)
-# from app.middleware.performance_monitor import PerformanceMiddleware, performance_monitor
-# app.add_middleware(PerformanceMiddleware, monitor=performance_monitor)  # 임시 비활성화
+# 모니터링 미들웨어 추가
+from app.middleware.monitoring import MonitoringMiddleware, set_monitoring_instance
 
-# CORS 미들웨어 설정 (보안 강화)
+# 모니터링 미들웨어 인스턴스 생성 및 등록
+monitoring_middleware_instance = MonitoringMiddleware(app)
+app.add_middleware(MonitoringMiddleware)
+set_monitoring_instance(monitoring_middleware_instance)
+
+# 성능 모니터링 미들웨어 추가
+from app.middleware.simple_performance import SimplePerformanceMiddleware
+app.add_middleware(SimplePerformanceMiddleware)
+
+# CORS 미들웨어 설정 (개발 환경용 - 모든 origin 허용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],  # 개발 환경용 - 모든 origin 허용
+    allow_credentials=False,  # allow_origins=["*"]일 때는 False여야 함
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=[
-        "Authorization", 
-        "Content-Type", 
-        "X-Requested-With",
-        "Accept",
-        "Origin",
-        "User-Agent",
-        "Cache-Control",
-        "Access-Control-Request-Method",
-        "Access-Control-Request-Headers"
-    ],
+    allow_headers=["*"],  # 모든 헤더 허용
     expose_headers=["X-Total-Count", "X-Page-Count"],
 )
 
@@ -91,6 +89,9 @@ app.include_router(campaigns.router, prefix="/api/campaigns", tags=["캠페인"]
 app.include_router(purchase_requests.router, prefix="/api/purchase-requests", tags=["구매요청"])
 app.include_router(company_logo.router, prefix="/api/company", tags=["회사"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["알림"])
+app.include_router(file_upload.router, prefix="/api/files", tags=["파일"])
+app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
+app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])
 
 
 @app.get("/")

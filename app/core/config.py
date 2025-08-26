@@ -43,10 +43,16 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:5174",  # Vite dev server alternative port
         "http://localhost:5175",  # Vite dev server alternative port 2
+        "http://localhost:5176",  # Vite dev server alternative port 3
+        "http://localhost:5177",  # Vite dev server alternative port 4
+        "http://localhost:5178",  # Vite dev server alternative port 5
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+        "http://127.0.0.1:5177",
+        "http://127.0.0.1:5178",
         "https://brandflo.netlify.app"  # Production frontend URL
     ]
     

@@ -11,7 +11,7 @@ class UserBase(BaseModel):
     role: UserRole
     company: Optional[str] = Field(None, max_length=200)
     contact: Optional[str] = Field(None, max_length=50)
-    incentive_rate: float = Field(default=0.0, ge=0.0, le=100.0)
+    incentive_rate: Optional[float] = Field(default=None, ge=0.0, le=100.0)
 
 
 class UserCreate(UserBase):
@@ -29,8 +29,14 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=6, max_length=50)
 
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: int
+    name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    role: UserRole
+    company: Optional[str] = Field(None, max_length=200)
+    contact: Optional[str] = Field(None, max_length=50)
+    incentive_rate: Optional[float] = Field(default=0.0, ge=0.0, le=100.0)
     status: UserStatus
     is_active: bool
     created_at: datetime

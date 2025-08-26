@@ -20,3 +20,14 @@ python-dotenv==1.0.0
 
 # Validation
 email-validator==2.1.0
+
+# File Upload & Processing
+Pillow==10.1.0
+aiofiles==23.2.0
+
+# PostgreSQL (optional)
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# System monitoring
+psutil==5.9.6
