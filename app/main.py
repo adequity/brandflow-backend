@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, notifications
 
 
 @asynccontextmanager
@@ -47,7 +47,6 @@ app = FastAPI(
     description="BrandFlow 캠페인 관리 시스템 API",
     version="2.0.0",
     lifespan=lifespan,
-    default_response_class=None,  # Enable JSON response configuration
 )
 
 # UTF-8 JSON 처리 미들웨어 추가 (가장 먼저 적용)
@@ -85,8 +84,13 @@ app.add_middleware(
     expose_headers=["X-Total-Count", "X-Page-Count"],
 )
 
-# API 라우터 등록 (기본 auth만 사용)
+# API 라우터 등록
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+app.include_router(users.router, prefix="/api/users", tags=["사용자"])
+app.include_router(campaigns.router, prefix="/api/campaigns", tags=["캠페인"])
+app.include_router(purchase_requests.router, prefix="/api/purchase-requests", tags=["구매요청"])
+app.include_router(company_logo.router, prefix="/api/company", tags=["회사"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["알림"])
 
 
 @app.get("/")
