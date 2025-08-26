@@ -7,8 +7,8 @@ from app.core.config import settings
 # from app.db.database import create_tables, create_performance_indexes, get_async_db  # 임시 비활성화
 # from app.db.init_data import init_database_data  # 임시 비활성화
 # from app.api.router import api_router  # 임시 비활성화
-from app.middleware.simple_performance import SimplePerformanceMiddleware
-from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware, RequestSanitizationMiddleware
+# from app.middleware.simple_performance import SimplePerformanceMiddleware  # 임시 비활성화
+# from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware, RequestSanitizationMiddleware  # 임시 비활성화
 
 
 @asynccontextmanager
@@ -63,9 +63,9 @@ app = FastAPI(
 # 보안 미들웨어 추가 (순서가 중요 - 가장 먼저 적용)
 # from app.middleware.security_audit import SecurityAuditMiddleware
 # app.add_middleware(SecurityAuditMiddleware)  # 임시 비활성화
-app.add_middleware(RequestSanitizationMiddleware, max_body_size=10*1024*1024)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_second=10)
-app.add_middleware(SecurityHeadersMiddleware)
+# app.add_middleware(RequestSanitizationMiddleware, max_body_size=10*1024*1024)  # 임시 비활성화
+# app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_second=10)  # 임시 비활성화
+# app.add_middleware(SecurityHeadersMiddleware)  # 임시 비활성화
 
 # 성능 모니터링 미들웨어 추가 (고급 버전)
 # from app.middleware.performance_monitor import PerformanceMiddleware, performance_monitor
