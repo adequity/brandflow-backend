@@ -99,6 +99,10 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+@app.get("/test")
+async def test_endpoint():
+    return {"status": "working", "message": "Backend is responding"}
+
 
 if __name__ == "__main__":
     uvicorn.run(
