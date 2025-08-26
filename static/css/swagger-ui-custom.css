@@ -1,0 +1,290 @@
+/* BrandFlow API Custom Swagger UI Styles */
+
+/* 전체 브랜드 색상 */
+:root {
+  --brandflow-primary: #2563eb;
+  --brandflow-secondary: #1d4ed8;
+  --brandflow-accent: #3b82f6;
+  --brandflow-success: #10b981;
+  --brandflow-warning: #f59e0b;
+  --brandflow-error: #ef4444;
+  --brandflow-dark: #1f2937;
+  --brandflow-light: #f8fafc;
+}
+
+/* 메인 헤더 스타일링 */
+.swagger-ui .topbar {
+  background: linear-gradient(135deg, var(--brandflow-primary), var(--brandflow-secondary));
+  padding: 15px 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.swagger-ui .topbar .link {
+  content: "🚀 BrandFlow API Documentation";
+  font-weight: bold;
+  font-size: 24px;
+  color: white !important;
+}
+
+/* 전체 배경 */
+body {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  min-height: 100vh;
+}
+
+.swagger-ui {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* 정보 섹션 스타일링 */
+.swagger-ui .info {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin: 20px 0;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid var(--brandflow-primary);
+}
+
+.swagger-ui .info .title {
+  color: var(--brandflow-dark);
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.swagger-ui .info .description {
+  color: #4b5563;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+/* 태그 그룹 스타일링 */
+.swagger-ui .opblock-tag-section {
+  background: white;
+  border-radius: 12px;
+  margin: 20px 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.swagger-ui .opblock-tag {
+  background: linear-gradient(135deg, var(--brandflow-primary), var(--brandflow-accent));
+  color: white !important;
+  font-weight: 600;
+  font-size: 18px;
+  padding: 15px 20px;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+}
+
+.swagger-ui .opblock-tag:hover {
+  background: linear-gradient(135deg, var(--brandflow-secondary), var(--brandflow-primary));
+}
+
+/* HTTP 메소드 색상 */
+.swagger-ui .opblock.opblock-get {
+  border-left: 4px solid var(--brandflow-success);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.swagger-ui .opblock.opblock-post {
+  border-left: 4px solid var(--brandflow-primary);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.swagger-ui .opblock.opblock-put {
+  border-left: 4px solid var(--brandflow-warning);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.swagger-ui .opblock.opblock-delete {
+  border-left: 4px solid var(--brandflow-error);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* 메소드 라벨 */
+.swagger-ui .opblock .opblock-summary-method {
+  border-radius: 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 12px;
+  padding: 6px 12px;
+  margin-right: 10px;
+}
+
+/* GET 메소드 */
+.swagger-ui .opblock.opblock-get .opblock-summary-method {
+  background: var(--brandflow-success);
+  color: white;
+}
+
+/* POST 메소드 */
+.swagger-ui .opblock.opblock-post .opblock-summary-method {
+  background: var(--brandflow-primary);
+  color: white;
+}
+
+/* PUT 메소드 */
+.swagger-ui .opblock.opblock-put .opblock-summary-method {
+  background: var(--brandflow-warning);
+  color: white;
+}
+
+/* DELETE 메소드 */
+.swagger-ui .opblock.opblock-delete .opblock-summary-method {
+  background: var(--brandflow-error);
+  color: white;
+}
+
+/* 엔드포인트 요약 */
+.swagger-ui .opblock .opblock-summary-description {
+  font-weight: 600;
+  color: var(--brandflow-dark);
+  font-size: 16px;
+}
+
+/* 엔드포인트 경로 */
+.swagger-ui .opblock .opblock-summary-path {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* 파라미터 테이블 */
+.swagger-ui .parameters-col_description {
+  color: #374151;
+}
+
+.swagger-ui .parameters-col_name {
+  font-weight: 600;
+  color: var(--brandflow-primary);
+}
+
+/* 실행 버튼 */
+.swagger-ui .btn.execute {
+  background: linear-gradient(135deg, var(--brandflow-primary), var(--brandflow-secondary));
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.swagger-ui .btn.execute:hover {
+  background: linear-gradient(135deg, var(--brandflow-secondary), var(--brandflow-dark));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 클리어 버튼 */
+.swagger-ui .btn.clear {
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+}
+
+/* 응답 섹션 */
+.swagger-ui .responses-wrapper {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 모델 섹션 */
+.swagger-ui .model-box {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+/* 코드 하이라이팅 */
+.swagger-ui .highlight-code {
+  background: #1f2937;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 15px;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+/* 스크롤바 커스터마이징 */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--brandflow-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brandflow-secondary);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .swagger-ui .info {
+    padding: 20px;
+    margin: 10px;
+  }
+  
+  .swagger-ui .info .title {
+    font-size: 2rem;
+  }
+  
+  .swagger-ui .opblock-tag {
+    font-size: 16px;
+    padding: 12px 15px;
+  }
+}
+
+/* 로딩 애니메이션 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.swagger-ui .loading {
+  animation: pulse 2s infinite;
+}
+
+/* 성공/에러 메시지 스타일 */
+.swagger-ui .response .highlight-code.success {
+  border-left: 4px solid var(--brandflow-success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.swagger-ui .response .highlight-code.error {
+  border-left: 4px solid var(--brandflow-error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* 푸터 스타일 */
+.swagger-ui .info .description::after {
+  content: "\A\A🚀 Made with FastAPI | 💙 Built for developers";
+  white-space: pre;
+  display: block;
+  text-align: center;
+  margin-top: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--brandflow-primary), var(--brandflow-accent));
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+}

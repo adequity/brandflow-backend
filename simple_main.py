@@ -3,7 +3,8 @@ from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File, 
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import os
@@ -958,12 +959,134 @@ async def lifespan(app: FastAPI):
     # Shutdown  
     logger.info("🛑 BrandFlow 서버 종료 중...")
 
+# API 문서화 설정
 app = FastAPI(
-    title="BrandFlow API v2.0.0",
-    description="BrandFlow 캠페인 관리 시스템 - Railway 배포",
+    title="🚀 BrandFlow API",
+    description="""
+# BrandFlow Campaign Management System API
+
+**BrandFlow**는 브랜드 캠페인을 효율적으로 관리하기 위한 종합 플랫폼입니다.
+
+## ✨ 주요 기능
+
+### 🔐 인증 시스템
+- JWT 토큰 기반 인증
+- 역할 기반 접근 제어 (관리자/사용자)
+- 보안 헤더 및 미들웨어
+
+### 📊 캠페인 관리
+- 캠페인 CRUD 작업
+- 예산 및 일정 관리
+- 클라이언트 회사별 분류
+
+### 📝 발주 관리
+- 구매 요청 생성 및 승인 프로세스
+- 예산 관리 및 추적
+- 업체별 발주 현황
+
+### 🔔 알림 시스템
+- 실시간 WebSocket 알림
+- 이메일/SMS 알림 (향후 구현)
+- 알림 히스토리 관리
+
+### 📁 파일 관리
+- 안전한 파일 업로드
+- 다양한 파일 타입 지원
+- 파일 크기 및 보안 검증
+
+### 📈 모니터링
+- 시스템 성능 모니터링
+- 사용자 활동 추적
+- 실시간 상태 대시보드
+
+## 🔧 기술 스택
+- **Backend**: FastAPI + Python 3.11
+- **Database**: SQLite (개발) / PostgreSQL (프로덕션)
+- **Authentication**: JWT
+- **Real-time**: WebSocket
+- **Deploy**: Railway Platform
+
+## 📱 클라이언트 SDK
+프론트엔드 개발을 위한 JavaScript/TypeScript SDK를 제공합니다.
+
+## 🌐 환경
+- **개발**: http://localhost:8000
+- **프로덕션**: https://brandflow-backend-production.up.railway.app
+
+---
+*Built with ❤️ by BrandFlow Team*
+    """,
     version="2.0.0",
-    lifespan=lifespan
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+    terms_of_service="https://brandflow.com/terms",
+    contact={
+        "name": "BrandFlow API Support",
+        "url": "https://brandflow.com/support",
+        "email": "api-support@brandflow.com"
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT"
+    },
+    servers=[
+        {
+            "url": "http://localhost:8000",
+            "description": "개발 서버"
+        },
+        {
+            "url": "https://brandflow-backend-production.up.railway.app",
+            "description": "프로덕션 서버"
+        }
+    ],
+    openapi_tags=[
+        {
+            "name": "🏠 System",
+            "description": "시스템 상태 및 기본 정보"
+        },
+        {
+            "name": "🔐 Authentication",
+            "description": "사용자 인증 및 권한 관리 - JWT 토큰 기반 인증 시스템"
+        },
+        {
+            "name": "👥 Users", 
+            "description": "사용자 관리 - 프로필, 권한, 활동 내역"
+        },
+        {
+            "name": "📊 Campaigns",
+            "description": "캠페인 관리 - 생성, 수정, 삭제, 조회 및 예산 관리"
+        },
+        {
+            "name": "📝 Purchase Orders",
+            "description": "발주 관리 - 구매 요청, 승인 프로세스, 예산 추적"
+        },
+        {
+            "name": "🔔 Notifications",
+            "description": "알림 시스템 - 실시간 알림, 히스토리, 설정"
+        },
+        {
+            "name": "🌐 WebSocket",
+            "description": "실시간 통신 - WebSocket 연결, 브로드캐스트, 상태 관리"
+        },
+        {
+            "name": "📁 Files",
+            "description": "파일 관리 - 업로드, 다운로드, 보안 검증"
+        },
+        {
+            "name": "🏢 Company",
+            "description": "회사 정보 - 로고, 프로필, 설정"
+        },
+        {
+            "name": "📈 Monitoring",
+            "description": "시스템 모니터링 - 성능, 상태, 로그"
+        }
+    ]
 )
+
+# 정적 파일 서빙 설정
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS 미들웨어 설정 (프론트엔드 연동용)
 app.add_middleware(
@@ -1029,7 +1152,20 @@ async def log_requests(request: Request, call_next):
         logger.error(f"Request failed: {e}")
         raise
 
-@app.get("/")
+@app.get("/", 
+         tags=["🏠 System"],
+         summary="시스템 상태 확인",
+         description="""
+         ## 시스템 기본 정보 조회
+         
+         BrandFlow API 서버의 기본 상태와 정보를 반환합니다.
+         
+         ### 응답 정보
+         - **message**: 서비스 버전 및 환경
+         - **status**: 서버 실행 상태
+         - **port**: 실행 중인 포트
+         - **database**: 데이터베이스 연결 상태
+         """)
 async def root():
     return {
         "message": "BrandFlow FastAPI v2.0.0 - Railway Test", 
@@ -1038,16 +1174,98 @@ async def root():
         "database": db_status["connected"]
     }
 
-@app.get("/health")
+@app.get("/health",
+         tags=["🏠 System"], 
+         summary="헬스 체크",
+         description="""
+         ## 서버 헬스 체크
+         
+         시스템 상태와 주요 구성 요소의 상태를 확인합니다.
+         
+         ### 체크 항목
+         - 서버 실행 상태
+         - 데이터베이스 연결 상태
+         
+         ### 사용 사례
+         - 로드밸런서 헬스 체크
+         - 모니터링 시스템 상태 확인
+         - 자동화된 시스템 진단
+         """)
 async def health():
     return {
         "status": "healthy",
         "database": "connected" if db_status["connected"] else "disconnected"
     }
 
-@app.get("/db/status")
+@app.get("/docs-custom",
+         tags=["🏠 System"],
+         summary="커스텀 API 문서",
+         description="BrandFlow 브랜드가 적용된 커스텀 Swagger UI 문서",
+         response_class=HTMLResponse,
+         include_in_schema=False)
+async def custom_swagger_ui():
+    """커스텀 스타일이 적용된 Swagger UI 반환"""
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>🚀 BrandFlow API Documentation</title>
+        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@3.52.5/swagger-ui.css" />
+        <link rel="stylesheet" type="text/css" href="/static/css/swagger-ui-custom.css" />
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@3.52.5/swagger-ui-bundle.js"></script>
+        <script src="https://unpkg.com/swagger-ui-dist@3.52.5/swagger-ui-standalone-preset.js"></script>
+        <script>
+            SwaggerUIBundle({
+                url: '/openapi.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.presets.standalone
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                defaultModelsExpandDepth: 1,
+                defaultModelExpandDepth: 1,
+                docExpansion: "list",
+                filter: true,
+                showExtensions: true,
+                showCommonExtensions: true,
+                tryItOutEnabled: true
+            });
+        </script>
+    </body>
+    </html>
+    """)
+
+@app.get("/db/status",
+         tags=["🏠 System"],
+         summary="데이터베이스 상태 확인",
+         description="""
+         ## 데이터베이스 연결 상태 상세 조회
+         
+         데이터베이스의 상세한 연결 상태와 테이블 초기화 여부를 확인합니다.
+         
+         ### 응답 정보
+         - **connected**: 데이터베이스 연결 상태 (true/false)
+         - **error**: 연결 오류 메시지 (있는 경우)
+         - **tables_created**: 테이블 생성 완료 여부
+         - **database_url**: 사용 중인 데이터베이스 URL
+         
+         ### 사용 사례
+         - 시스템 초기화 상태 확인
+         - 데이터베이스 마이그레이션 상태 점검
+         - 장애 진단 및 디버깅
+         """)
 async def database_status():
-    """데이터베이스 연결 상태 확인"""
     return {
         "connected": db_status["connected"],
         "error": db_status["error"],
@@ -1125,9 +1343,40 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         # 연결 해제 시 관리자에서 제거
         websocket_manager.disconnect(websocket, user_id)
 
-@app.get("/api/websocket/status")
+@app.get("/api/websocket/status",
+         tags=["🌐 WebSocket"],
+         summary="WebSocket 연결 상태 조회",
+         description="""
+         ## WebSocket 연결 현황 모니터링
+         
+         현재 활성화된 WebSocket 연결의 상태를 실시간으로 조회합니다.
+         
+         ### 🔐 인증 필요
+         JWT 토큰을 통한 인증이 필요합니다.
+         
+         ### 응답 정보
+         - **active_connections_by_user**: 사용자별 활성 연결 수
+         - **total_connections**: 전체 활성 연결 수
+         - **message**: 상태 메시지
+         
+         ### 사용 사례
+         - 실시간 연결 모니터링
+         - 서버 부하 확인
+         - WebSocket 디버깅
+         
+         ### 예시 응답
+         ```json
+         {
+           "active_connections_by_user": {
+             "1": 2,
+             "5": 1
+           },
+           "total_connections": 3,
+           "message": "WebSocket status retrieved successfully"
+         }
+         ```
+         """)
 async def websocket_status(current_user = Depends(get_current_user_dependency)):
-    """WebSocket 연결 상태 조회 (인증 필요)"""
     return {
         "active_connections_by_user": {str(k): len(v) for k, v in websocket_manager.active_connections.items()},
         "total_connections": len(websocket_manager.all_connections),
@@ -1135,9 +1384,42 @@ async def websocket_status(current_user = Depends(get_current_user_dependency)):
     }
 
 # 인증 API 엔드포인트들
-@app.post("/api/auth/login-json", response_model=Token)
+@app.post("/api/auth/login-json", 
+          response_model=Token,
+          tags=["🔐 Authentication"],
+          summary="사용자 로그인",
+          description="""
+          ## JWT 토큰 기반 사용자 인증
+          
+          이메일과 비밀번호를 통해 사용자 인증을 수행하고 JWT 액세스 토큰을 발급합니다.
+          
+          ### 📝 요청 데이터
+          - **email**: 사용자 이메일 주소
+          - **password**: 사용자 비밀번호
+          
+          ### 🎯 응답 데이터
+          - **access_token**: JWT 액세스 토큰 (30분 유효)
+          - **token_type**: 토큰 타입 (bearer)
+          
+          ### 🔐 보안
+          - 비밀번호는 해시화되어 저장됨
+          - JWT 토큰은 30분 후 만료
+          - 역할 기반 접근 제어 지원
+          
+          ### 📋 사용 방법
+          1. 발급받은 토큰을 `Authorization: Bearer <token>` 헤더에 포함
+          2. 보호된 엔드포인트 접근 시 토큰 사용
+          
+          ### 🔧 테스트 계정
+          - **이메일**: test@brandflow.com  
+          - **비밀번호**: test123
+          - **역할**: 관리자
+          
+          ### ⚠️ 오류 코드
+          - **401**: 잘못된 이메일 또는 비밀번호
+          - **503**: 데이터베이스 연결 실패
+          """)
 async def login(login_request: LoginRequest):
-    """사용자 로그인"""
     if not db_status["connected"]:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -1264,9 +1546,46 @@ async def get_campaigns():
         logger.error(f"캠페인 목록 조회 오류: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch campaigns")
 
-@app.post("/api/campaigns")
+@app.post("/api/campaigns",
+          tags=["📊 Campaigns"],
+          summary="새 캠페인 생성",
+          description="""
+          ## 새로운 마케팅 캠페인 생성
+          
+          새로운 브랜드 캠페인을 생성하고 자동으로 관련 알림을 전송합니다.
+          
+          ### 🔐 인증 필요
+          JWT 토큰을 통한 인증이 필요합니다.
+          
+          ### 📝 요청 데이터
+          - **name**: 캠페인 이름 (필수)
+          - **description**: 캠페인 설명 (선택)
+          - **client_company**: 클라이언트 회사명 (선택)
+          - **budget**: 예산 금액 (선택, 기본값: 0)
+          - **start_date**: 시작일 (선택, YYYY-MM-DD 형식)
+          - **end_date**: 종료일 (선택, YYYY-MM-DD 형식)
+          - **status**: 상태 (선택, 기본값: "active")
+          
+          ### 🎯 응답 데이터
+          - 생성된 캠페인의 상세 정보
+          - 생성자 정보 포함
+          - 생성 시간 포함
+          
+          ### 🔄 자동 동작
+          - 캠페인 생성 시 자동 알림 생성
+          - WebSocket을 통한 실시간 알림 전송
+          - 생성자에게 확인 알림 발송
+          
+          ### 📋 사용 사례
+          - 새로운 광고 캠페인 등록
+          - 프로젝트 기반 업무 관리
+          - 클라이언트별 작업 분류
+          
+          ### ⚠️ 오류 코드
+          - **401**: 인증 토큰 없음 또는 무효
+          - **503**: 데이터베이스 연결 실패
+          """)
 async def create_new_campaign(campaign_data: CampaignCreate, token: str = Depends(security)):
-    """새 캠페인 생성"""
     if not db_status["connected"]:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -1636,9 +1955,62 @@ async def delete_file(file_id: int, token: str = Depends(security)):
         raise HTTPException(status_code=500, detail="Failed to delete file")
 
 # 발주관리 API 엔드포인트들
-@app.post("/api/purchase-orders")
+@app.post("/api/purchase-orders",
+          tags=["📝 Purchase Orders"],
+          summary="발주 요청 생성",
+          description="""
+          ## 새로운 발주 요청 생성
+          
+          캠페인에 연결된 새로운 발주 요청을 생성하고 자동으로 승인 프로세스를 시작합니다.
+          
+          ### 🔐 인증 필요
+          JWT 토큰을 통한 인증이 필요합니다.
+          
+          ### 📝 요청 데이터
+          - **campaign_id**: 연결된 캠페인 ID (필수)
+          - **title**: 발주 제목 (필수)
+          - **description**: 발주 상세 설명 (필수)
+          - **requested_amount**: 요청 금액 (필수)
+          - **vendor**: 업체명 (선택, 기본값: "")
+          - **category**: 카테고리 (선택, 기본값: "general")
+          - **priority**: 우선순위 (선택, 기본값: "medium")
+          
+          ### 🎯 응답 데이터
+          - 생성된 발주 요청의 상세 정보
+          - 요청자 및 캠페인 정보 포함
+          - 상태: "pending" (승인 대기)
+          
+          ### 🔄 자동 프로세스
+          1. 발주 요청 데이터베이스 저장
+          2. 캠페인 연결 및 유효성 검증
+          3. 자동 알림 생성 및 전송
+          4. WebSocket 실시간 알림 발송
+          5. 관리자에게 승인 요청 알림
+          
+          ### 📋 승인 프로세스
+          - 생성 시 상태: "pending"
+          - 관리자 승인 후: "approved"
+          - 승인 거부 시: "rejected"
+          
+          ### 📊 예시 요청
+          ```json
+          {
+            "campaign_id": 1,
+            "title": "광고 영상 제작",
+            "description": "브랜드 홍보 영상 제작 발주",
+            "requested_amount": 5000000,
+            "vendor": "미디어 프로덕션",
+            "category": "video_production",
+            "priority": "high"
+          }
+          ```
+          
+          ### ⚠️ 오류 코드
+          - **401**: 인증 토큰 없음 또는 무효
+          - **404**: 존재하지 않는 캠페인 ID
+          - **503**: 데이터베이스 연결 실패
+          """)
 async def create_purchase_order_request(po_data: PurchaseOrderCreate, token: str = Depends(security)):
-    """발주요청 생성"""
     if not db_status["connected"]:
         raise HTTPException(status_code=503, detail="Database not available")
     
