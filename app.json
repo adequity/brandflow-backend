@@ -1,0 +1,28 @@
+{
+  "name": "BrandFlow API",
+  "description": "BrandFlow 캠페인 관리 시스템 API",
+  "image": "heroku/python",
+  "stack": "heroku-22",
+  "keywords": [
+    "fastapi",
+    "python",
+    "api",
+    "brandflow"
+  ],
+  "env": {
+    "DATABASE_URL": {
+      "value": "sqlite+aiosqlite:///./data/brandflow.db"
+    },
+    "ENVIRONMENT": {
+      "value": "production"
+    },
+    "SECRET_KEY": {
+      "generator": "secret"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
