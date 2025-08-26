@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db
 from app.db.init_data import init_database_data
-from app.api.router import api_router
+# from app.api.router import api_router  # 임시 비활성화
 from app.middleware.simple_performance import SimplePerformanceMiddleware
 from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware, RequestSanitizationMiddleware
 
@@ -91,8 +91,10 @@ app.add_middleware(
     expose_headers=["X-Total-Count", "X-Page-Count"],  # 노출할 헤더 제한
 )
 
-# API 라우터 등록
-app.include_router(api_router, prefix="/api")
+# API 라우터 등록 (임시로 기본 auth만)
+from app.api.endpoints import auth
+app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+# app.include_router(api_router, prefix="/api")  # 임시 비활성화
 
 
 @app.get("/")
