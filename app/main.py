@@ -13,18 +13,22 @@ from app.api.endpoints import auth
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting BrandFlow FastAPI server...")
-    await create_tables()
-    print("Database tables created/verified")
-    
-    # 성능 최적화 인덱스 생성
-    await create_performance_indexes()
-    print("Performance indexes created/verified")
-    
-    # 초기 데이터 생성
-    from app.db.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
-        await init_database_data(session)
-    print("Initial data created")
+    try:
+        await create_tables()
+        print("Database tables created/verified")
+        
+        # 성능 최적화 인덱스 생성
+        await create_performance_indexes()
+        print("Performance indexes created/verified")
+        
+        # 초기 데이터 생성
+        from app.db.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            await init_database_data(session)
+        print("Initial data created")
+    except Exception as e:
+        print(f"Database initialization error (continuing): {e}")
+        # 데이터베이스 문제가 있어도 서버는 계속 시작
     
     yield
     # Shutdown
