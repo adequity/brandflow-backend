@@ -1,0 +1,11 @@
+# Force Railway to use Dockerfile instead of detecting Node.js
+package*.json
+node_modules/
+test-server.js
+*.js
+!app/**/*.js
+
+# Only use Python FastAPI
+.venv/
+.env.local
+.env.development
