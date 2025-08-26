@@ -61,15 +61,15 @@ app = FastAPI(
 # app.add_middleware(UTF8JSONMiddleware)  # 임시 비활성화
 
 # 보안 미들웨어 추가 (순서가 중요 - 가장 먼저 적용)
-from app.middleware.security_audit import SecurityAuditMiddleware
-app.add_middleware(SecurityAuditMiddleware)
+# from app.middleware.security_audit import SecurityAuditMiddleware
+# app.add_middleware(SecurityAuditMiddleware)  # 임시 비활성화
 app.add_middleware(RequestSanitizationMiddleware, max_body_size=10*1024*1024)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_second=10)
 app.add_middleware(SecurityHeadersMiddleware)
 
 # 성능 모니터링 미들웨어 추가 (고급 버전)
-from app.middleware.performance_monitor import PerformanceMiddleware, performance_monitor
-app.add_middleware(PerformanceMiddleware, monitor=performance_monitor)
+# from app.middleware.performance_monitor import PerformanceMiddleware, performance_monitor
+# app.add_middleware(PerformanceMiddleware, monitor=performance_monitor)  # 임시 비활성화
 
 # CORS 미들웨어 설정 (보안 강화)
 app.add_middleware(
