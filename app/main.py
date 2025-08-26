@@ -15,12 +15,12 @@ from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddlewa
 async def lifespan(app: FastAPI):
     # Startup
     print("Starting BrandFlow FastAPI server...")
-    await create_tables()
-    print("Database tables created/verified")
+    # await create_tables()
+    # print("Database tables created/verified")  # 임시 비활성화
     
     # 성능 최적화 인덱스 생성
-    await create_performance_indexes()
-    print("Performance indexes created/verified")
+    # await create_performance_indexes()
+    # print("Performance indexes created/verified")  # 임시 비활성화
     
     # 초기 데이터 생성
     # from app.db.database import AsyncSessionLocal
