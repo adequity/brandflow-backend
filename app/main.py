@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from app.core.config import settings
-from app.db.database import create_tables, create_performance_indexes, get_async_db
-from app.db.init_data import init_database_data
+# from app.db.database import create_tables, create_performance_indexes, get_async_db  # 임시 비활성화
+# from app.db.init_data import init_database_data  # 임시 비활성화
 # from app.api.router import api_router  # 임시 비활성화
 from app.middleware.simple_performance import SimplePerformanceMiddleware
 from app.middleware.security import SecurityHeadersMiddleware, RateLimitMiddleware, RequestSanitizationMiddleware
