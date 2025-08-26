@@ -92,6 +92,29 @@ class NotificationCreate(BaseModel):
     user_id: int
     related_campaign_id: Optional[int] = None
 
+class PurchaseOrderCreate(BaseModel):
+    campaign_id: int
+    title: str
+    description: str
+    requested_amount: float
+    vendor: str = ""
+    category: str = "general"  # general, media, production, service
+    priority: str = "medium"  # low, medium, high, urgent
+    requested_delivery_date: str = ""
+    
+class PurchaseOrderUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    requested_amount: Optional[float] = None
+    vendor: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    approved_amount: Optional[float] = None
+    approved_by: Optional[int] = None
+    rejection_reason: Optional[str] = None
+    requested_delivery_date: Optional[str] = None
+
 # 인증 헬퍼 함수들
 def hash_password(password: str) -> str:
     """비밀번호 해시화"""
@@ -584,6 +607,239 @@ def get_file_by_id(file_id: int) -> Optional[dict]:
     except Exception as e:
         logger.error(f"파일 조회 오류: {e}")
         return None
+
+# 발주관리 헬퍼 함수들
+def create_purchase_order(po_data: PurchaseOrderCreate, requester_id: int) -> Optional[int]:
+    """새 발주요청 생성"""
+    if not db_status["connected"]:
+        return None
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO purchase_orders (campaign_id, title, description, requested_amount,
+                                       vendor, category, priority, requester_id, requested_delivery_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            po_data.campaign_id, po_data.title, po_data.description, po_data.requested_amount,
+            po_data.vendor, po_data.category, po_data.priority, requester_id, po_data.requested_delivery_date
+        ))
+        po_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return po_id
+    except Exception as e:
+        logger.error(f"발주요청 생성 오류: {e}")
+        return None
+
+def get_purchase_orders(campaign_id: Optional[int] = None, status: Optional[str] = None) -> list:
+    """발주요청 목록 조회"""
+    if not db_status["connected"]:
+        return []
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT po.*, c.name as campaign_name, u1.name as requester_name, u2.name as approver_name
+            FROM purchase_orders po
+            LEFT JOIN campaigns c ON po.campaign_id = c.id
+            LEFT JOIN users u1 ON po.requester_id = u1.id
+            LEFT JOIN users u2 ON po.approved_by = u2.id
+            WHERE 1=1
+        """
+        params = []
+        
+        if campaign_id:
+            query += " AND po.campaign_id = ?"
+            params.append(campaign_id)
+            
+        if status:
+            query += " AND po.status = ?"
+            params.append(status)
+            
+        query += " ORDER BY po.created_at DESC"
+        
+        cursor.execute(query, params)
+        orders = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                "id": order[0],
+                "campaign_id": order[1],
+                "title": order[2],
+                "description": order[3],
+                "requested_amount": order[4],
+                "approved_amount": order[5],
+                "vendor": order[6],
+                "category": order[7],
+                "priority": order[8],
+                "status": order[9],
+                "requester_id": order[10],
+                "approved_by": order[11],
+                "rejection_reason": order[12],
+                "requested_delivery_date": order[13],
+                "approved_date": order[14],
+                "created_at": order[15],
+                "campaign_name": order[16],
+                "requester_name": order[17],
+                "approver_name": order[18]
+            } for order in orders
+        ]
+    except Exception as e:
+        logger.error(f"발주요청 목록 조회 오류: {e}")
+        return []
+
+def get_purchase_order_by_id(po_id: int) -> Optional[dict]:
+    """발주요청 상세 조회"""
+    if not db_status["connected"]:
+        return None
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT po.*, c.name as campaign_name, u1.name as requester_name, u2.name as approver_name
+            FROM purchase_orders po
+            LEFT JOIN campaigns c ON po.campaign_id = c.id
+            LEFT JOIN users u1 ON po.requester_id = u1.id
+            LEFT JOIN users u2 ON po.approved_by = u2.id
+            WHERE po.id = ?
+        """, (po_id,))
+        order = cursor.fetchone()
+        conn.close()
+        
+        if order:
+            return {
+                "id": order[0],
+                "campaign_id": order[1],
+                "title": order[2],
+                "description": order[3],
+                "requested_amount": order[4],
+                "approved_amount": order[5],
+                "vendor": order[6],
+                "category": order[7],
+                "priority": order[8],
+                "status": order[9],
+                "requester_id": order[10],
+                "approved_by": order[11],
+                "rejection_reason": order[12],
+                "requested_delivery_date": order[13],
+                "approved_date": order[14],
+                "created_at": order[15],
+                "campaign_name": order[16],
+                "requester_name": order[17],
+                "approver_name": order[18]
+            }
+        return None
+    except Exception as e:
+        logger.error(f"발주요청 조회 오류: {e}")
+        return None
+
+def update_purchase_order(po_id: int, po_data: PurchaseOrderUpdate) -> bool:
+    """발주요청 업데이트"""
+    if not db_status["connected"]:
+        return False
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        
+        update_fields = []
+        params = []
+        
+        for field, value in po_data.dict(exclude_none=True).items():
+            update_fields.append(f"{field} = ?")
+            params.append(value)
+        
+        if not update_fields:
+            return True
+        
+        params.append(po_id)
+        query = f"UPDATE purchase_orders SET {', '.join(update_fields)} WHERE id = ?"
+        
+        cursor.execute(query, params)
+        conn.commit()
+        affected_rows = cursor.rowcount
+        conn.close()
+        
+        return affected_rows > 0
+    except Exception as e:
+        logger.error(f"발주요청 업데이트 오류: {e}")
+        return False
+
+def approve_purchase_order(po_id: int, approver_id: int, approved_amount: float) -> bool:
+    """발주요청 승인"""
+    if not db_status["connected"]:
+        return False
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE purchase_orders 
+            SET status = 'approved', approved_by = ?, approved_amount = ?, approved_date = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (approver_id, approved_amount, po_id))
+        conn.commit()
+        affected_rows = cursor.rowcount
+        conn.close()
+        return affected_rows > 0
+    except Exception as e:
+        logger.error(f"발주요청 승인 오류: {e}")
+        return False
+
+def reject_purchase_order(po_id: int, approver_id: int, reason: str) -> bool:
+    """발주요청 거부"""
+    if not db_status["connected"]:
+        return False
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE purchase_orders 
+            SET status = 'rejected', approved_by = ?, rejection_reason = ?, approved_date = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (approver_id, reason, po_id))
+        conn.commit()
+        affected_rows = cursor.rowcount
+        conn.close()
+        return affected_rows > 0
+    except Exception as e:
+        logger.error(f"발주요청 거부 오류: {e}")
+        return False
+
+# 발주 알림 자동 생성 함수
+def notify_purchase_order_created(po_id: int, campaign_id: int, requester_id: int, po_title: str):
+    """발주요청 생성 알림"""
+    notification = NotificationCreate(
+        title="새 발주요청",
+        message=f"'{po_title}' 발주요청이 생성되었습니다.",
+        type="info",
+        user_id=requester_id,
+        related_campaign_id=campaign_id
+    )
+    create_notification(notification)
+
+def notify_purchase_order_approved(po_id: int, campaign_id: int, requester_id: int, po_title: str, approved_amount: float):
+    """발주요청 승인 알림"""
+    notification = NotificationCreate(
+        title="발주요청 승인",
+        message=f"'{po_title}' 발주요청이 {approved_amount:,.0f}원으로 승인되었습니다.",
+        type="success",
+        user_id=requester_id,
+        related_campaign_id=campaign_id
+    )
+    create_notification(notification)
+
+def notify_purchase_order_rejected(po_id: int, campaign_id: int, requester_id: int, po_title: str, reason: str):
+    """발주요청 거부 알림"""
+    notification = NotificationCreate(
+        title="발주요청 거부",
+        message=f"'{po_title}' 발주요청이 거부되었습니다. 사유: {reason}",
+        type="warning",
+        user_id=requester_id,
+        related_campaign_id=campaign_id
+    )
+    create_notification(notification)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1195,6 +1451,268 @@ async def delete_file(file_id: int, token: str = Depends(security)):
         logger.error(f"파일 삭제 오류: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete file")
 
+# 발주관리 API 엔드포인트들
+@app.post("/api/purchase-orders")
+async def create_purchase_order_request(po_data: PurchaseOrderCreate, token: str = Depends(security)):
+    """발주요청 생성"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 캠페인 존재 확인
+    campaign = get_campaign_by_id(po_data.campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # 발주요청 생성
+    po_id = create_purchase_order(po_data, user_id)
+    if po_id:
+        # 생성된 발주요청 정보 반환
+        purchase_order = get_purchase_order_by_id(po_id)
+        
+        # 알림 생성
+        notify_purchase_order_created(po_id, po_data.campaign_id, user_id, po_data.title)
+        
+        return {
+            "message": "Purchase order created successfully",
+            "purchase_order": purchase_order
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to create purchase order")
+
+@app.get("/api/purchase-orders")
+async def get_purchase_order_list(
+    campaign_id: Optional[int] = None, 
+    status: Optional[str] = None, 
+    token: str = Depends(security)
+):
+    """발주요청 목록 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰 검증
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    purchase_orders = get_purchase_orders(campaign_id, status)
+    
+    # 일반 사용자는 자신이 요청한 발주만 볼 수 있음 (관리자는 모든 발주 조회)
+    user = get_user_by_email(payload.get("sub"))
+    if user and user["role"] != "admin":
+        purchase_orders = [po for po in purchase_orders if po["requester_id"] == user_id]
+    
+    return {
+        "purchase_orders": purchase_orders,
+        "count": len(purchase_orders)
+    }
+
+@app.get("/api/purchase-orders/{po_id}")
+async def get_purchase_order_detail(po_id: int, token: str = Depends(security)):
+    """발주요청 상세 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    purchase_order = get_purchase_order_by_id(po_id)
+    if not purchase_order:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    # 권한 확인 (요청자 또는 관리자만)
+    if purchase_order["requester_id"] != user_id:
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    return purchase_order
+
+@app.put("/api/purchase-orders/{po_id}")
+async def update_purchase_order_detail(
+    po_id: int, 
+    po_data: PurchaseOrderUpdate, 
+    token: str = Depends(security)
+):
+    """발주요청 업데이트"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 발주요청 존재 확인
+    existing_po = get_purchase_order_by_id(po_id)
+    if not existing_po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    # 권한 확인 (요청자 또는 관리자만, pending 상태만 수정 가능)
+    if existing_po["requester_id"] != user_id:
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    if existing_po["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Can only edit pending purchase orders")
+    
+    # 발주요청 업데이트
+    if update_purchase_order(po_id, po_data):
+        updated_po = get_purchase_order_by_id(po_id)
+        return {
+            "message": "Purchase order updated successfully",
+            "purchase_order": updated_po
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to update purchase order")
+
+@app.post("/api/purchase-orders/{po_id}/approve")
+async def approve_purchase_order_request(
+    po_id: int, 
+    approved_amount: float,
+    token: str = Depends(security)
+):
+    """발주요청 승인 (관리자만)"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 정보 추출 및 관리자 권한 확인
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin permission required")
+        user_id = user["id"]
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 발주요청 존재 확인
+    existing_po = get_purchase_order_by_id(po_id)
+    if not existing_po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    if existing_po["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Can only approve pending purchase orders")
+    
+    # 발주요청 승인
+    if approve_purchase_order(po_id, user_id, approved_amount):
+        # 승인 알림 생성
+        notify_purchase_order_approved(
+            po_id, existing_po["campaign_id"], existing_po["requester_id"], 
+            existing_po["title"], approved_amount
+        )
+        
+        updated_po = get_purchase_order_by_id(po_id)
+        return {
+            "message": "Purchase order approved successfully",
+            "purchase_order": updated_po
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to approve purchase order")
+
+@app.post("/api/purchase-orders/{po_id}/reject")
+async def reject_purchase_order_request(
+    po_id: int, 
+    reason: str,
+    token: str = Depends(security)
+):
+    """발주요청 거부 (관리자만)"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 정보 추출 및 관리자 권한 확인
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin permission required")
+        user_id = user["id"]
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 발주요청 존재 확인
+    existing_po = get_purchase_order_by_id(po_id)
+    if not existing_po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    if existing_po["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Can only reject pending purchase orders")
+    
+    # 발주요청 거부
+    if reject_purchase_order(po_id, user_id, reason):
+        # 거부 알림 생성
+        notify_purchase_order_rejected(
+            po_id, existing_po["campaign_id"], existing_po["requester_id"], 
+            existing_po["title"], reason
+        )
+        
+        updated_po = get_purchase_order_by_id(po_id)
+        return {
+            "message": "Purchase order rejected successfully",
+            "purchase_order": updated_po
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to reject purchase order")
+
+@app.get("/api/campaigns/{campaign_id}/purchase-orders")
+async def get_campaign_purchase_orders(campaign_id: int, token: str = Depends(security)):
+    """캠페인별 발주요청 목록 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰 검증
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 캠페인 존재 확인
+    campaign = get_campaign_by_id(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    purchase_orders = get_purchase_orders(campaign_id=campaign_id)
+    
+    # 일반 사용자는 자신이 요청한 발주만 볼 수 있음
+    user = get_user_by_email(payload.get("sub"))
+    if user and user["role"] != "admin":
+        purchase_orders = [po for po in purchase_orders if po["requester_id"] == user_id]
+    
+    return {
+        "campaign": {
+            "id": campaign["id"],
+            "name": campaign["name"]
+        },
+        "purchase_orders": purchase_orders,
+        "count": len(purchase_orders)
+    }
+
 # 모니터링 API 엔드포인트들
 @app.get("/api/monitoring/health")
 async def monitoring_health():
@@ -1341,6 +1859,27 @@ async def init_database():
                 uploader_id INTEGER REFERENCES users(id),
                 related_campaign_id INTEGER REFERENCES campaigns(id),
                 description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER REFERENCES campaigns(id),
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                requested_amount REAL NOT NULL,
+                approved_amount REAL,
+                vendor TEXT,
+                category TEXT DEFAULT 'general',
+                priority TEXT DEFAULT 'medium',
+                status TEXT DEFAULT 'pending',
+                requester_id INTEGER REFERENCES users(id),
+                approved_by INTEGER REFERENCES users(id),
+                rejection_reason TEXT,
+                requested_delivery_date DATE,
+                approved_date TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
