@@ -1,8 +1,9 @@
 # BrandFlow FastAPI v2.0.0 - 점진적 기능 복원
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import os
@@ -14,7 +15,9 @@ import datetime
 import time
 import psutil
 import sys
-from typing import Optional, Dict, Any
+import shutil
+import uuid
+from typing import Optional, Dict, Any, List
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +41,16 @@ monitoring_stats = {
     "start_time": time.time(),
     "errors_count": 0
 }
+
+# 파일 업로드 설정
+UPLOAD_DIR = "./uploads"
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_EXTENSIONS = {
+    "images": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"],
+    "documents": [".pdf", ".doc", ".docx", ".txt", ".xlsx", ".xls", ".ppt", ".pptx"],
+    "archives": [".zip", ".rar", ".7z"]
+}
+ALL_ALLOWED_EXTENSIONS = sum(ALLOWED_EXTENSIONS.values(), [])
 
 # Pydantic 모델들
 class LoginRequest(BaseModel):
@@ -71,6 +84,13 @@ class CampaignUpdate(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     status: Optional[str] = None
+
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+    type: str = "info"  # info, success, warning, error
+    user_id: int
+    related_campaign_id: Optional[int] = None
 
 # 인증 헬퍼 함수들
 def hash_password(password: str) -> str:
@@ -281,6 +301,288 @@ def get_campaign_by_id(campaign_id: int) -> Optional[dict]:
         return None
     except Exception as e:
         logger.error(f"캠페인 조회 오류: {e}")
+        return None
+
+# 알림 시스템 헬퍼 함수들
+def create_notification(notification_data: NotificationCreate) -> Optional[int]:
+    """새 알림 생성"""
+    if not db_status["connected"]:
+        return None
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO notifications (title, message, type, user_id, related_campaign_id) 
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            notification_data.title, notification_data.message, notification_data.type,
+            notification_data.user_id, notification_data.related_campaign_id
+        ))
+        notification_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return notification_id
+    except Exception as e:
+        logger.error(f"알림 생성 오류: {e}")
+        return None
+
+def get_user_notifications(user_id: int, unread_only: bool = False) -> list:
+    """사용자 알림 목록 조회"""
+    if not db_status["connected"]:
+        return []
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT n.*, c.name as campaign_name
+            FROM notifications n
+            LEFT JOIN campaigns c ON n.related_campaign_id = c.id
+            WHERE n.user_id = ?
+        """
+        params = [user_id]
+        
+        if unread_only:
+            query += " AND n.is_read = 0"
+        
+        query += " ORDER BY n.created_at DESC"
+        
+        cursor.execute(query, params)
+        notifications = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                "id": notif[0],
+                "title": notif[1],
+                "message": notif[2],
+                "type": notif[3],
+                "user_id": notif[4],
+                "related_campaign_id": notif[5],
+                "is_read": bool(notif[6]),
+                "created_at": notif[7],
+                "campaign_name": notif[8]
+            } for notif in notifications
+        ]
+    except Exception as e:
+        logger.error(f"알림 목록 조회 오류: {e}")
+        return []
+
+def mark_notification_read(notification_id: int, user_id: int) -> bool:
+    """알림 읽음 처리"""
+    if not db_status["connected"]:
+        return False
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?",
+            (notification_id, user_id)
+        )
+        conn.commit()
+        affected_rows = cursor.rowcount
+        conn.close()
+        return affected_rows > 0
+    except Exception as e:
+        logger.error(f"알림 읽음 처리 오류: {e}")
+        return False
+
+def get_unread_count(user_id: int) -> int:
+    """읽지 않은 알림 수 조회"""
+    if not db_status["connected"]:
+        return 0
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0", (user_id,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+    except Exception as e:
+        logger.error(f"읽지 않은 알림 수 조회 오류: {e}")
+        return 0
+
+# 알림 자동 생성 함수
+def notify_campaign_created(campaign_id: int, creator_id: int, campaign_name: str):
+    """캠페인 생성 알림"""
+    notification = NotificationCreate(
+        title="새 캠페인 생성",
+        message=f"'{campaign_name}' 캠페인이 성공적으로 생성되었습니다.",
+        type="success",
+        user_id=creator_id,
+        related_campaign_id=campaign_id
+    )
+    create_notification(notification)
+
+def notify_campaign_updated(campaign_id: int, user_id: int, campaign_name: str):
+    """캠페인 업데이트 알림"""
+    notification = NotificationCreate(
+        title="캠페인 업데이트",
+        message=f"'{campaign_name}' 캠페인이 업데이트되었습니다.",
+        type="info",
+        user_id=user_id,
+        related_campaign_id=campaign_id
+    )
+    create_notification(notification)
+
+# 파일 업로드 헬퍼 함수들
+def is_allowed_file(filename: str) -> bool:
+    """허용된 파일 확장자 확인"""
+    if not filename:
+        return False
+    ext = os.path.splitext(filename.lower())[1]
+    return ext in ALL_ALLOWED_EXTENSIONS
+
+def get_file_category(filename: str) -> str:
+    """파일 카테고리 결정"""
+    ext = os.path.splitext(filename.lower())[1]
+    for category, extensions in ALLOWED_EXTENSIONS.items():
+        if ext in extensions:
+            return category
+    return "other"
+
+def save_uploaded_file(file: UploadFile, uploader_id: int, campaign_id: Optional[int] = None, description: str = "") -> Optional[dict]:
+    """파일 업로드 및 DB 저장"""
+    if not db_status["connected"]:
+        return None
+        
+    try:
+        # 파일 크기 확인
+        file.file.seek(0, 2)  # 파일 끝으로 이동
+        file_size = file.file.tell()
+        file.file.seek(0)  # 파일 시작으로 다시 이동
+        
+        if file_size > MAX_FILE_SIZE:
+            return None
+            
+        # 안전한 파일명 생성
+        unique_filename = f"{uuid.uuid4()}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        # 파일 저장
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # DB에 파일 정보 저장
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO files (filename, original_filename, file_path, file_size, 
+                             file_type, mime_type, uploader_id, related_campaign_id, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            unique_filename, file.filename, file_path, file_size,
+            get_file_category(file.filename), file.content_type,
+            uploader_id, campaign_id, description
+        ))
+        
+        file_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return {
+            "id": file_id,
+            "filename": unique_filename,
+            "original_filename": file.filename,
+            "file_size": file_size,
+            "file_type": get_file_category(file.filename),
+            "mime_type": file.content_type
+        }
+        
+    except Exception as e:
+        logger.error(f"파일 업로드 오류: {e}")
+        # 오류 시 파일 정리
+        try:
+            if 'file_path' in locals() and os.path.exists(file_path):
+                os.remove(file_path)
+        except:
+            pass
+        return None
+
+def get_user_files(user_id: int, campaign_id: Optional[int] = None) -> list:
+    """사용자 파일 목록 조회"""
+    if not db_status["connected"]:
+        return []
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT f.*, c.name as campaign_name, u.name as uploader_name
+            FROM files f
+            LEFT JOIN campaigns c ON f.related_campaign_id = c.id
+            LEFT JOIN users u ON f.uploader_id = u.id
+            WHERE f.uploader_id = ?
+        """
+        params = [user_id]
+        
+        if campaign_id:
+            query += " AND f.related_campaign_id = ?"
+            params.append(campaign_id)
+            
+        query += " ORDER BY f.created_at DESC"
+        
+        cursor.execute(query, params)
+        files = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                "id": f[0],
+                "filename": f[1],
+                "original_filename": f[2],
+                "file_path": f[3],
+                "file_size": f[4],
+                "file_type": f[5],
+                "mime_type": f[6],
+                "uploader_id": f[7],
+                "related_campaign_id": f[8],
+                "description": f[9],
+                "created_at": f[10],
+                "campaign_name": f[11],
+                "uploader_name": f[12]
+            } for f in files
+        ]
+    except Exception as e:
+        logger.error(f"파일 목록 조회 오류: {e}")
+        return []
+
+def get_file_by_id(file_id: int) -> Optional[dict]:
+    """파일 정보 조회"""
+    if not db_status["connected"]:
+        return None
+    try:
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT f.*, c.name as campaign_name, u.name as uploader_name
+            FROM files f
+            LEFT JOIN campaigns c ON f.related_campaign_id = c.id
+            LEFT JOIN users u ON f.uploader_id = u.id
+            WHERE f.id = ?
+        """, (file_id,))
+        file_data = cursor.fetchone()
+        conn.close()
+        
+        if file_data:
+            return {
+                "id": file_data[0],
+                "filename": file_data[1],
+                "original_filename": file_data[2],
+                "file_path": file_data[3],
+                "file_size": file_data[4],
+                "file_type": file_data[5],
+                "mime_type": file_data[6],
+                "uploader_id": file_data[7],
+                "related_campaign_id": file_data[8],
+                "description": file_data[9],
+                "created_at": file_data[10],
+                "campaign_name": file_data[11],
+                "uploader_name": file_data[12]
+            }
+        return None
+    except Exception as e:
+        logger.error(f"파일 조회 오류: {e}")
         return None
 
 @asynccontextmanager
@@ -542,6 +844,10 @@ async def create_new_campaign(campaign_data: CampaignCreate, token: str = Depend
     if campaign_id:
         # 생성된 캠페인 정보 반환
         campaign = get_campaign_by_id(campaign_id)
+        
+        # 알림 생성
+        notify_campaign_created(campaign_id, user_id, campaign_data.name)
+        
         return {"message": "Campaign created successfully", "campaign": campaign}
     else:
         raise HTTPException(status_code=500, detail="Failed to create campaign")
@@ -592,6 +898,10 @@ async def update_campaign_detail(
     # 캠페인 업데이트
     if update_campaign(campaign_id, campaign_data):
         updated_campaign = get_campaign_by_id(campaign_id)
+        
+        # 알림 생성
+        notify_campaign_updated(campaign_id, user_id, existing_campaign["name"])
+        
         return {"message": "Campaign updated successfully", "campaign": updated_campaign}
     else:
         raise HTTPException(status_code=500, detail="Failed to update campaign")
@@ -628,6 +938,262 @@ async def delete_campaign_by_id(campaign_id: int, token: str = Depends(security)
         return {"message": "Campaign deleted successfully"}
     else:
         raise HTTPException(status_code=500, detail="Failed to delete campaign")
+
+# 알림 API 엔드포인트들
+@app.get("/api/notifications")
+async def get_notifications(unread_only: bool = False, token: str = Depends(security)):
+    """사용자 알림 목록 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    notifications = get_user_notifications(user_id, unread_only)
+    unread_count = get_unread_count(user_id)
+    
+    return {
+        "notifications": notifications,
+        "count": len(notifications),
+        "unread_count": unread_count
+    }
+
+@app.put("/api/notifications/{notification_id}/read")
+async def mark_notification_as_read(notification_id: int, token: str = Depends(security)):
+    """알림 읽음 처리"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    if mark_notification_read(notification_id, user_id):
+        return {"message": "Notification marked as read"}
+    else:
+        raise HTTPException(status_code=404, detail="Notification not found or not authorized")
+
+@app.get("/api/notifications/unread-count")
+async def get_unread_notifications_count(token: str = Depends(security)):
+    """읽지 않은 알림 수 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    unread_count = get_unread_count(user_id)
+    return {"unread_count": unread_count}
+
+@app.post("/api/notifications")
+async def create_manual_notification(notification_data: NotificationCreate, token: str = Depends(security)):
+    """수동 알림 생성 (관리자용)"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 정보 추출 및 관리자 권한 확인
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin permission required")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    notification_id = create_notification(notification_data)
+    if notification_id:
+        return {"message": "Notification created successfully", "notification_id": notification_id}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to create notification")
+
+# 파일 업로드 API 엔드포인트들
+@app.post("/api/files/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    campaign_id: Optional[int] = None,
+    description: str = "",
+    token: str = Depends(security)
+):
+    """파일 업로드"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # 파일 유효성 검사
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file selected")
+    
+    if not is_allowed_file(file.filename):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"File type not allowed. Allowed types: {', '.join(ALL_ALLOWED_EXTENSIONS)}"
+        )
+    
+    # 캠페인 존재 확인 (campaign_id가 제공된 경우)
+    if campaign_id:
+        campaign = get_campaign_by_id(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # 파일 업로드
+    uploaded_file = save_uploaded_file(file, user_id, campaign_id, description)
+    if uploaded_file:
+        return {
+            "message": "File uploaded successfully",
+            "file": uploaded_file
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to upload file")
+
+@app.get("/api/files")
+async def get_files(campaign_id: Optional[int] = None, token: str = Depends(security)):
+    """사용자 파일 목록 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    files = get_user_files(user_id, campaign_id)
+    return {
+        "files": files,
+        "count": len(files)
+    }
+
+@app.get("/api/files/{file_id}")
+async def get_file_info(file_id: int, token: str = Depends(security)):
+    """파일 정보 조회"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    file_info = get_file_by_id(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # 권한 확인 (파일 업로더 또는 관리자만)
+    if file_info["uploader_id"] != user_id:
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    return file_info
+
+@app.get("/api/files/{file_id}/download")
+async def download_file(file_id: int, token: str = Depends(security)):
+    """파일 다운로드"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    file_info = get_file_by_id(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # 권한 확인 (파일 업로더 또는 관리자만)
+    if file_info["uploader_id"] != user_id:
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # 파일 존재 확인
+    if not os.path.exists(file_info["file_path"]):
+        raise HTTPException(status_code=404, detail="Physical file not found")
+    
+    return FileResponse(
+        path=file_info["file_path"],
+        filename=file_info["original_filename"],
+        media_type=file_info["mime_type"]
+    )
+
+@app.delete("/api/files/{file_id}")
+async def delete_file(file_id: int, token: str = Depends(security)):
+    """파일 삭제"""
+    if not db_status["connected"]:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # JWT 토큰에서 사용자 ID 추출
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    file_info = get_file_by_id(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # 권한 확인 (파일 업로더 또는 관리자만)
+    if file_info["uploader_id"] != user_id:
+        user = get_user_by_email(payload.get("sub"))
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    try:
+        # DB에서 파일 정보 삭제
+        conn = sqlite3.connect("./data/brandflow.db")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
+        conn.commit()
+        conn.close()
+        
+        # 실제 파일 삭제
+        if os.path.exists(file_info["file_path"]):
+            os.remove(file_info["file_path"])
+        
+        return {"message": "File deleted successfully"}
+    except Exception as e:
+        logger.error(f"파일 삭제 오류: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete file")
 
 # 모니터링 API 엔드포인트들
 @app.get("/api/monitoring/health")
@@ -716,6 +1282,7 @@ async def init_database():
         
         # 기본 데이터 디렉토리 생성
         os.makedirs("./data", exist_ok=True)
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
         
         # SQLite 연결 및 기본 테이블 생성
         import sqlite3
@@ -745,6 +1312,35 @@ async def init_database():
                 end_date DATE,
                 status TEXT DEFAULT 'active',
                 creator_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                type TEXT DEFAULT 'info',
+                user_id INTEGER REFERENCES users(id),
+                related_campaign_id INTEGER REFERENCES campaigns(id),
+                is_read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                file_type TEXT NOT NULL,
+                mime_type TEXT,
+                uploader_id INTEGER REFERENCES users(id),
+                related_campaign_id INTEGER REFERENCES campaigns(id),
+                description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
