@@ -23,9 +23,9 @@ async def lifespan(app: FastAPI):
     print("Performance indexes created/verified")
     
     # 초기 데이터 생성
-    from app.db.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
-        await init_database_data(session)
+    # from app.db.database import AsyncSessionLocal
+    # async with AsyncSessionLocal() as session:
+    #     await init_database_data(session)  # 임시 비활성화
     
     # 캐시 정리 백그라운드 태스크 시작
     # import asyncio
