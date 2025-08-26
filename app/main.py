@@ -28,20 +28,20 @@ async def lifespan(app: FastAPI):
         await init_database_data(session)
     
     # 캐시 정리 백그라운드 태스크 시작
-    import asyncio
-    from app.core.cache import cache_cleanup_task
-    asyncio.create_task(cache_cleanup_task())
-    print("Cache cleanup task started")
+    # import asyncio
+    # from app.core.cache import cache_cleanup_task
+    # asyncio.create_task(cache_cleanup_task())
+    # print("Cache cleanup task started")  # 임시 비활성화
     
     # 보안 로깅 시스템 초기화
-    from app.core.logging import setup_application_logging
-    setup_application_logging()
-    print("Security logging system initialized")
+    # from app.core.logging import setup_application_logging
+    # setup_application_logging()
+    # print("Security logging system initialized")  # 임시 비활성화
     
     # WebSocket 연결 정리 백그라운드 태스크 시작
-    from app.core.websocket import periodic_cleanup
-    asyncio.create_task(periodic_cleanup())
-    print("WebSocket cleanup task started")
+    # from app.core.websocket import periodic_cleanup
+    # asyncio.create_task(periodic_cleanup())
+    # print("WebSocket cleanup task started")  # 임시 비활성화
     
     yield
     # Shutdown
