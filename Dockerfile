@@ -35,9 +35,8 @@ USER appuser
 EXPOSE 8000
 EXPOSE 10000
 
-# 헬스체크 설정 (유연한 포트 사용)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
+# Railway handles healthcheck internally via railway.json
+# HEALTHCHECK removed to avoid conflicts
 
 # 애플리케이션 시작 (다양한 플랫폼 지원)
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
