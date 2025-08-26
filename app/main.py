@@ -11,35 +11,17 @@ from app.api.endpoints import auth, users, campaigns, purchase_requests, company
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    print("Starting BrandFlow FastAPI server...")
+    # Startup - Railway 배포용 단순화
+    print("🚀 Starting BrandFlow FastAPI v2.0.0...")
+    print("🌐 Railway deployment mode - minimal startup")
     
-    # 데이터베이스 초기화 (개별 예외 처리)
-    try:
-        await create_tables()
-        print("Database tables created/verified")
-    except Exception as e:
-        print(f"Database table creation failed: {e}")
-    
-    try:
-        await create_performance_indexes()
-        print("Performance indexes created/verified")
-    except Exception as e:
-        print(f"Performance index creation failed: {e}")
-    
-    try:
-        from app.db.database import AsyncSessionLocal
-        async with AsyncSessionLocal() as session:
-            await init_database_data(session)
-        print("Initial data created")
-    except Exception as e:
-        print(f"Initial data creation failed: {e}")
-    
-    print("BrandFlow server startup completed")
+    # Railway 환경에서는 데이터베이스 초기화 건너뛰기
+    print("⚠️ Database initialization skipped for Railway deployment")
+    print("✅ BrandFlow FastAPI v2.0.0 ready!")
     
     yield
     # Shutdown
-    print("Shutting down BrandFlow server...")
+    print("🛑 BrandFlow server shutdown completed")
 
 
 app = FastAPI(
