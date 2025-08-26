@@ -92,8 +92,8 @@ app.add_middleware(
 )
 
 # API 라우터 등록 (임시로 기본 auth만)
-from app.api.endpoints import auth
-app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+# from app.api.endpoints import auth
+# app.include_router(auth.router, prefix="/api/auth", tags=["인증"])  # 임시 비활성화
 # app.include_router(api_router, prefix="/api")  # 임시 비활성화
 
 
