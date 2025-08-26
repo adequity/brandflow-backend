@@ -23,12 +23,12 @@ COPY . .
 # 데이터 디렉토리 생성
 RUN mkdir -p /app/data
 
-# 포트 설정 (환경변수에서 가져오거나 기본값 8000)
-EXPOSE $PORT
+# 포트 설정 (기본값 10000, Render가 덮어씀)
+EXPOSE 10000
 
-# 헬스체크 설정
+# 헬스체크 설정 (고정 포트 사용)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:$PORT/health || exit 1
+  CMD curl -f http://localhost:10000/health || exit 1
 
 # 애플리케이션 시작 (Render의 PORT 환경변수 사용)
-CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
