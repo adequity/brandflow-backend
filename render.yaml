@@ -1,21 +1,19 @@
 services:
   - type: web
     name: brandflow-api
-    runtime: python
-    pythonVersion: "3.11"
+    runtime: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --log-level info
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: PORT
-        value: 10000
+        value: 8000
       - key: DATABASE_URL
-        value: "sqlite+aiosqlite:///./brandflow.db"
+        value: "sqlite+aiosqlite:///./data/brandflow.db"
       - key: SECRET_KEY
         generateValue: true
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS
         value: "https://brandflo.netlify.app,http://localhost:3000"
-      - key: REDIS_URL
-        value: "redis://localhost:6379"
+      - key: PYTHONPATH
+        value: "/app"
