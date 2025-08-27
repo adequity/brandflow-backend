@@ -31,3 +31,6 @@ psycopg2-binary==2.9.9
 
 # System monitoring
 psutil==5.9.6
+
+# Task scheduling
+APScheduler==3.10.4

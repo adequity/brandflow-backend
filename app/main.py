@@ -12,12 +12,12 @@ from app.api.endpoints import auth, users, campaigns, purchase_requests, company
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup - Railway 배포용 단순화
-    print("🚀 Starting BrandFlow FastAPI v2.0.0...")
-    print("🌐 Railway deployment mode - minimal startup")
+    print("🚀 Starting BrandFlow FastAPI v2.2.2...")
+    print("🌐 Railway deployment mode - Health API enabled")
     
     # Railway 환경에서는 데이터베이스 초기화 건너뛰기
     print("⚠️ Database initialization skipped for Railway deployment")
-    print("✅ BrandFlow FastAPI v2.0.0 ready!")
+    print("✅ BrandFlow FastAPI v2.2.2 ready!")
     
     yield
     # Shutdown
@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="BrandFlow API",
     description="BrandFlow 캠페인 관리 시스템 API",
-    version="2.0.0",
+    version="2.2.2",
     lifespan=lifespan,
 )
 
@@ -79,7 +79,7 @@ app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터
 @app.get("/")
 async def root():
     return {
-        "message": "BrandFlow API v2.0.0 - CORS Fixed",
+        "message": "BrandFlow API v2.2.2 - Health API Ready",
         "status": "running",
         "docs": "/docs"
     }
