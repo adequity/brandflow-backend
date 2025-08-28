@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, notifications, file_upload, performance, monitoring, health
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, notifications, file_upload, performance, monitoring
 
 
 @asynccontextmanager
@@ -74,7 +74,6 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["알
 app.include_router(file_upload.router, prefix="/api/files", tags=["파일"])
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])
-app.include_router(health.router, prefix="/api/health", tags=["헬스체크"])
 
 
 @app.get("/")
@@ -88,7 +87,12 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "version": "2.2.2",
+        "message": "BrandFlow FastAPI Health Check",
+        "timestamp": "2025-08-28T10:30:00Z"
+    }
 
 # 테스트 엔드포인트 제거
 
