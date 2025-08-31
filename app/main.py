@@ -22,10 +22,15 @@ async def lifespan(app: FastAPI):
         print("✅ Database tables created")
         
         print("🔄 Initializing test data...")
-        await init_database_data()
+        # 데이터베이스 세션을 사용하여 초기화 데이터 생성
+        async for db in get_async_db():
+            await init_database_data(db)
+            break  # 첫 번째 세션만 사용
         print("✅ Database initialization completed")
     except Exception as e:
         print(f"⚠️ Database initialization failed: {str(e)}")
+        import traceback
+        print(f"Full error: {traceback.format_exc()}")
         # 초기화 실패해도 서버는 계속 실행
         pass
     print("✅ BrandFlow FastAPI v2.2.2 ready!")
