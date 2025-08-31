@@ -15,8 +15,13 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting BrandFlow FastAPI v2.2.2...")
     print("🌐 Railway deployment mode - Health API enabled")
     
-    # Railway 환경에서는 데이터베이스 초기화 건너뛰기
-    print("⚠️ Database initialization skipped for Railway deployment")
+    # 데이터베이스 초기화 실행
+    try:
+        await create_tables()
+        await init_database_data()
+        print("✅ Database initialization completed")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
     print("✅ BrandFlow FastAPI v2.2.2 ready!")
     
     yield
