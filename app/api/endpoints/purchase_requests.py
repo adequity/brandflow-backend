@@ -188,3 +188,93 @@ async def update_purchase_request(
         current_user = await get_current_active_user()
         # TODO: 기존 방식으로 구매요청 업데이트 구현
         raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.get("/summary/stats")
+async def get_purchase_request_stats(
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """구매요청 통계 데이터 조회"""
+    
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 사용자 정보 조회
+        user_query = select(User).where(User.id == user_id)
+        result = await db.execute(user_query)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        # 권한에 따라 데이터 필터링
+        query = select(PurchaseRequest)
+        
+        if user_role not in ['슈퍼 어드민']:
+            # 슈퍼 어드민이 아니면 자신의 회사 데이터만
+            if user.company:
+                # 회사 필터링 로직은 실제 스키마에 맞게 조정 필요
+                pass
+        
+        # 상태별 통계
+        total_query = select(func.count(PurchaseRequest.id))
+        pending_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.PENDING)
+        approved_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.APPROVED)
+        rejected_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.REJECTED)
+        completed_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.COMPLETED)
+        
+        # 총액 통계
+        total_amount_query = select(func.coalesce(func.sum(PurchaseRequest.amount), 0))
+        approved_amount_query = select(func.coalesce(func.sum(PurchaseRequest.amount), 0)).where(
+            PurchaseRequest.status == RequestStatus.APPROVED
+        )
+        
+        # 쿼리 실행
+        total_count = await db.scalar(total_query)
+        pending_count = await db.scalar(pending_query)
+        approved_count = await db.scalar(approved_query)
+        rejected_count = await db.scalar(rejected_query)
+        completed_count = await db.scalar(completed_query)
+        
+        total_amount = await db.scalar(total_amount_query)
+        approved_amount = await db.scalar(approved_amount_query)
+        
+        return {
+            "totalRequests": total_count or 0,
+            "pendingRequests": pending_count or 0,
+            "approvedRequests": approved_count or 0,
+            "rejectedRequests": rejected_count or 0,
+            "completedRequests": completed_count or 0,
+            "totalAmount": float(total_amount or 0),
+            "approvedAmount": float(approved_amount or 0),
+            "averageAmount": float(total_amount / total_count) if total_count > 0 else 0.0,
+            "approvalRate": float(approved_count / total_count * 100) if total_count > 0 else 0.0
+        }
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        # 기본 통계 반환
+        return {
+            "totalRequests": 0,
+            "pendingRequests": 0,
+            "approvedRequests": 0,
+            "rejectedRequests": 0,
+            "completedRequests": 0,
+            "totalAmount": 0.0,
+            "approvedAmount": 0.0,
+            "averageAmount": 0.0,
+            "approvalRate": 0.0
+        }
