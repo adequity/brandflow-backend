@@ -21,7 +21,7 @@ if database_url.startswith("sqlite"):
     # SQLite용 비동기 엔진  
     async_engine = create_async_engine(
         database_url,
-        echo=True,
+        echo=False,  # Railway 배포 시 로깅 비활성화
         future=True,
         connect_args={"check_same_thread": False}
     )
