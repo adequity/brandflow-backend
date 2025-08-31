@@ -16,6 +16,7 @@ router = APIRouter()
 
 
 @router.get("/", response_model=dict)
+@router.get("", response_model=dict)  # 🚨 슬래시 없는 URL도 허용 (Mixed Content 방지)
 async def get_purchase_requests(
     # Node.js API 호환성을 위한 쿼리 파라미터
     viewerId: Optional[int] = Query(None, alias="viewerId"),
