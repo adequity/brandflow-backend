@@ -169,12 +169,30 @@ async def create_user(
         # URL 디코딩
         user_role = unquote(user_role).strip()
         
-        # 권한 확인 - 관리자만 사용자 생성 가능
+        # 권한 확인 - 관리자와 직원은 사용자 생성 가능
         is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민'] or 
                     '슈퍼' in user_role or ('대행사' in user_role and '어드민' in user_role))
+        is_staff = (user_role == '직원')
         
-        if not is_admin:
-            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자만 사용자를 생성할 수 있습니다.")
+        if not (is_admin or is_staff):
+            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 사용자를 생성할 수 있습니다.")
+        
+        # 직원의 경우 클라이언트 계정만 생성 가능
+        if is_staff and not is_admin:
+            if user_data.role.value != '클라이언트':
+                raise HTTPException(status_code=403, detail="직원은 클라이언트 계정만 생성할 수 있습니다.")
+        
+        # 현재 사용자 정보 조회 (회사 확인을 위해)
+        current_user_query = select(User).where(User.id == user_id)
+        current_user_result = await db.execute(current_user_query)
+        current_user = current_user_result.scalar_one_or_none()
+        
+        if not current_user:
+            raise HTTPException(status_code=404, detail="현재 사용자를 찾을 수 없습니다.")
+        
+        # 직원의 경우 같은 회사의 클라이언트만 생성 가능
+        if is_staff and not is_admin:
+            user_data.company = current_user.company
         
         # 이메일 중복 확인
         existing_user_query = select(User).where(User.email == user_data.email)

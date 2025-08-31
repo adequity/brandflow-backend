@@ -53,9 +53,12 @@ async def get_campaigns(
         if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
             # 슈퍼 어드민은 모든 캠페인 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator))
-        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role) or user_role == '직원':
-            # 대행사 어드민/직원은 같은 회사 소속 캠페인만
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민은 같은 회사 소속 캠페인만
             query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
+        elif user_role == '직원':
+            # 직원은 자신이 생성한 캠페인만 조회 가능
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
         elif user_role == '클라이언트':
             # 클라이언트는 자신의 캠페인만 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
@@ -96,12 +99,13 @@ async def create_campaign(
         # URL 디코딩
         user_role = unquote(user_role).strip()
         
-        # 권한 확인 - 관리자만 캠페인 생성 가능
+        # 권한 확인 - 관리자와 직원은 캠페인 생성 가능
         is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민'] or 
                     '슈퍼' in user_role or ('대행사' in user_role and '어드민' in user_role))
+        is_staff = (user_role == '직원')
         
-        if not is_admin:
-            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자만 캠페인을 생성할 수 있습니다.")
+        if not (is_admin or is_staff):
+            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
         
         # 새 캠페인 생성
         new_campaign = Campaign(
@@ -182,14 +186,18 @@ async def get_campaign_detail(
             # 클라이언트는 본인 캠페인만 조회 가능
             if campaign.creator_id != user_id:
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-        elif user_role in ['대행사 어드민', '대행사어드민'] or user_role == '직원' or ('대행사' in user_role and '어드민' in user_role):
-            # 대행사 어드민/직원은 같은 회사 캠페인만 조회 가능
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민은 같은 회사 캠페인만 조회 가능
             client_query = select(User).where(User.id == campaign.creator_id)
             client_result = await db.execute(client_query)
             client = client_result.scalar_one_or_none()
             
             if not client or client.company != viewer.company:
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
+        elif user_role == '직원':
+            # 직원은 자신이 생성한 캠페인만 조회 가능
+            if campaign.creator_id != user_id:
+                raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
         
         return campaign
     else:
@@ -243,14 +251,18 @@ async def update_campaign(
             # 클라이언트는 본인 캠페인만 수정 가능
             if campaign.creator_id != user_id:
                 raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
-        elif user_role in ['대행사 어드민', '대행사어드민'] or user_role == '직원' or ('대행사' in user_role and '어드민' in user_role):
-            # 대행사 어드민/직원은 같은 회사 캠페인만 수정 가능
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민은 같은 회사 캠페인만 수정 가능
             client_query = select(User).where(User.id == campaign.creator_id)
             client_result = await db.execute(client_query)
             client = client_result.scalar_one_or_none()
             
             if not client or client.company != viewer.company:
                 raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
+        elif user_role == '직원':
+            # 직원은 자신이 생성한 캠페인만 수정 가능
+            if campaign.creator_id != user_id:
+                raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 수정할 수 있습니다.")
         
         # 캠페인 정보 업데이트
         update_data = campaign_data.model_dump(exclude_unset=True)
