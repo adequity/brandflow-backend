@@ -42,13 +42,13 @@ app = FastAPI(
 # app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_second=10)  # 임시 비활성화
 # app.add_middleware(SecurityHeadersMiddleware)  # 임시 비활성화
 
-# 모니터링 미들웨어 추가
-from app.middleware.monitoring import MonitoringMiddleware, set_monitoring_instance
+# 모니터링 미들웨어 추가 (Railway 배포 시 임시 비활성화)
+# from app.middleware.monitoring import MonitoringMiddleware, set_monitoring_instance
 
-# 모니터링 미들웨어 인스턴스 생성 및 등록
-monitoring_middleware_instance = MonitoringMiddleware(app)
-app.add_middleware(MonitoringMiddleware)
-set_monitoring_instance(monitoring_middleware_instance)
+# 모니터링 미들웨어 인스턴스 생성 및 등록 (임시 비활성화)
+# monitoring_middleware_instance = MonitoringMiddleware(app)
+# app.add_middleware(MonitoringMiddleware)
+# set_monitoring_instance(monitoring_middleware_instance)
 
 # 성능 모니터링 미들웨어 추가
 from app.middleware.simple_performance import SimplePerformanceMiddleware

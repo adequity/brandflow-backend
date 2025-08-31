@@ -121,12 +121,16 @@ class MonitoringMiddleware(BaseHTTPMiddleware):
         self.system_monitor = SystemMonitor()
         self.request_log = []
         self.max_log_size = 1000
+        self.monitoring_task = None
         
-        # 주기적 시스템 모니터링 시작
-        asyncio.create_task(self.periodic_monitoring())
+        # 주기적 모니터링은 이벤트 루프가 시작된 후 시작
     
     async def dispatch(self, request: Request, call_next):
         """요청 처리 및 모니터링"""
+        # 첫 요청 시 모니터링 태스크 시작
+        if self.monitoring_task is None:
+            self.monitoring_task = asyncio.create_task(self.periodic_monitoring())
+            
         request_id = str(uuid.uuid4())
         start_time = time.time()
         
