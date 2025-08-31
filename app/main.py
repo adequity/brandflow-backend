@@ -66,6 +66,14 @@ app = FastAPI(
 # app.add_middleware(MonitoringMiddleware)
 # set_monitoring_instance(monitoring_middleware_instance)
 
+# HTTPS 리다이렉트 미들웨어 추가 (Mixed Content 방지)
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+# Railway 환경에서만 HTTPS 강제 (로컬 개발 환경은 제외)
+import os
+if os.getenv('RAILWAY_ENVIRONMENT_NAME') or os.getenv('PORT'):
+    app.add_middleware(HTTPSRedirectMiddleware)
+    print("🔒 HTTPS 리다이렉트 미들웨어 활성화")
+
 # 성능 모니터링 미들웨어 추가
 from app.middleware.simple_performance import SimplePerformanceMiddleware
 app.add_middleware(SimplePerformanceMiddleware)
