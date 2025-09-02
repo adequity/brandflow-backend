@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import auth, users, campaigns, purchase_requests, dashboard, company_logo, products, notifications, performance, cache, performance_dashboard, security_dashboard, websocket, file_upload, export, search, admin
+from app.api.endpoints import auth, users, campaigns, purchase_requests, dashboard, company_logo, products, work_types, notifications, performance, cache, performance_dashboard, security_dashboard, websocket, file_upload, export, search, admin
 
 api_router = APIRouter()
 
@@ -24,6 +24,9 @@ api_router.include_router(company_logo.router, prefix="/company", tags=["회사 
 
 # 상품 관리 라우터
 api_router.include_router(products.router, prefix="/products", tags=["상품 관리"])
+
+# 작업 유형 관리 라우터
+api_router.include_router(work_types.router, prefix="/work-types", tags=["작업 유형 관리"])
 
 # 알림 라우터
 api_router.include_router(notifications.router, prefix="/notifications", tags=["알림"])
