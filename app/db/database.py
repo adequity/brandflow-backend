@@ -5,6 +5,12 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.models.base import Base
+# 모든 모델을 import하여 테이블 생성 보장
+from app.models.user import User
+from app.models.campaign import Campaign
+from app.models.purchase_request import PurchaseRequest
+from app.models.product import Product
+from app.models.work_type import WorkType
 
 
 # 데이터베이스 URL 가져오기

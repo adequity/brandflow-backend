@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, notifications, file_upload, performance, monitoring
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring
 
 
 @asynccontextmanager
@@ -95,6 +95,8 @@ app.include_router(users.router, prefix="/api/users", tags=["사용자"])
 app.include_router(campaigns.router, prefix="/api/campaigns", tags=["캠페인"])
 app.include_router(purchase_requests.router, prefix="/api/purchase-requests", tags=["구매요청"])
 app.include_router(company_logo.router, prefix="/api/company", tags=["회사"])
+app.include_router(products.router, prefix="/api/products", tags=["상품"])
+app.include_router(work_types.router, prefix="/api/work-types", tags=["작업유형"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["알림"])
 app.include_router(file_upload.router, prefix="/api/files", tags=["파일"])
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
