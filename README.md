@@ -181,4 +181,4 @@ pytest --cov=app
 
 ## 📄 라이선스
 
-MIT License
+MIT License# Force deployment 2025년 09월  5일 금 오후  8:13:25
