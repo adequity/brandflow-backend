@@ -52,8 +52,8 @@ app = FastAPI(
 from app.middleware.simple_cors import SimpleCORSMiddleware
 app.add_middleware(SimpleCORSMiddleware)
 
-from app.middleware.json_utf8 import UTF8JSONMiddleware
-app.add_middleware(UTF8JSONMiddleware)  # ✅ 한글 JSON 파싱 오류 해결을 위해 재활성화
+# from app.middleware.json_utf8 import UTF8JSONMiddleware
+# app.add_middleware(UTF8JSONMiddleware)  # ⚠️ 2분 타임아웃 문제로 재비활성화
 
 # 보안 미들웨어 추가 (순서가 중요 - 가장 먼저 적용)
 # from app.middleware.security_audit import SecurityAuditMiddleware
