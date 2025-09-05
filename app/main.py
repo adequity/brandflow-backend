@@ -6,7 +6,7 @@ import uvicorn
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple
 
 
 @asynccontextmanager
@@ -99,7 +99,7 @@ app.add_middleware(
     expose_headers=["X-Total-Count", "X-Page-Count"],
 )
 
-# API 라우터 등록
+# API 라우터 등록 - 핵심 기능
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(users.router, prefix="/api/users", tags=["사용자"])
 app.include_router(campaigns.router, prefix="/api/campaigns", tags=["캠페인"])
@@ -109,16 +109,36 @@ app.include_router(products.router, prefix="/api/products", tags=["상품"])
 app.include_router(work_types.router, prefix="/api/work-types", tags=["작업유형"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["알림"])
 app.include_router(file_upload.router, prefix="/api/files", tags=["파일"])
+
+# API 라우터 등록 - 대시보드 & 분석
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["대시보드"])
+app.include_router(dashboard_simple.router, prefix="/api/dashboard-simple", tags=["간단대시보드"])
+app.include_router(search.router, prefix="/api/search", tags=["검색"])
+app.include_router(export.router, prefix="/api/export", tags=["내보내기"])
+app.include_router(performance_dashboard.router, prefix="/api/performance-dashboard", tags=["성능대시보드"])
+app.include_router(security_dashboard.router, prefix="/api/security-dashboard", tags=["보안대시보드"])
+
+# API 라우터 등록 - 시스템 & 관리
+app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])
+app.include_router(cache.router, prefix="/api/cache", tags=["캐시"])
+app.include_router(health.router, prefix="/api/system", tags=["시스템상태"])
+app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
 
 
 @app.get("/")
 async def root():
     return {
-        "message": "BrandFlow API v2.2.2 - Health API Ready",
+        "message": "BrandFlow API v2.2.2 - Complete API Ready",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
+        "total_endpoints": 21,
+        "new_endpoints": [
+            "dashboard", "search", "export", "admin", 
+            "websocket", "security_dashboard", "performance_dashboard", 
+            "cache", "system", "dashboard_simple"
+        ]
     }
 
 
@@ -127,8 +147,9 @@ async def health_check():
     return {
         "status": "healthy",
         "version": "2.2.2",
-        "message": "BrandFlow FastAPI Health Check",
-        "timestamp": "2025-08-28T10:30:00Z"
+        "message": "BrandFlow FastAPI Health Check - All APIs Connected",
+        "timestamp": "2025-09-06T03:45:00Z",
+        "registered_apis": 21
     }
 
 # 테스트 엔드포인트 제거
