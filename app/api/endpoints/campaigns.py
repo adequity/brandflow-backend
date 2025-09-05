@@ -41,6 +41,20 @@ async def get_campaigns(
         # URL 디코딩
         user_role = unquote(user_role).strip()
         
+        # 영어 역할명을 한글로 매핑 (프론트엔드 호환성)
+        english_to_korean_roles = {
+            'super_admin': '슈퍼 어드민',
+            'agency_admin': '대행사 어드민',
+            'agency_staff': '대행사 직원',
+            'staff': '직원',
+            'client': '클라이언트',
+            'admin': '어드민'
+        }
+        
+        # 영어 역할명이면 한글로 변환
+        if user_role in english_to_korean_roles:
+            user_role = english_to_korean_roles[user_role]
+        
         # 현재 사용자 조회
         current_user_query = select(User).where(User.id == user_id)
         result = await db.execute(current_user_query)

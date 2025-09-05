@@ -12,6 +12,23 @@ from app.core.cache import cached
 router = APIRouter()
 
 
+def map_english_role_to_korean(user_role: str) -> str:
+    """영어 역할명을 한글로 매핑 (프론트엔드 호환성)"""
+    english_to_korean_roles = {
+        'super_admin': '슈퍼 어드민',
+        'agency_admin': '대행사 어드민',
+        'agency_staff': '대행사 직원',
+        'staff': '직원',
+        'client': '클라이언트',
+        'admin': '어드민'
+    }
+    
+    # 영어 역할명이면 한글로 변환
+    if user_role in english_to_korean_roles:
+        return english_to_korean_roles[user_role]
+    return user_role
+
+
 class NotificationResponse(BaseModel):
     id: int
     title: str
@@ -78,8 +95,9 @@ async def get_unread_notifications_count(
         if not user_id or not user_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
         
-        # URL 디코딩
+        # URL 디코딩 및 역할명 매핑
         user_role = unquote(user_role).strip()
+        user_role = map_english_role_to_korean(user_role)
         
         # 캐시된 사용자 조회
         current_user = await get_user_from_db_cached(user_id, db)
@@ -117,8 +135,9 @@ async def get_notifications(
         if not user_id or not user_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
         
-        # URL 디코딩
+        # URL 디코딩 및 역할명 매핑
         user_role = unquote(user_role).strip()
+        user_role = map_english_role_to_korean(user_role)
         
         # 캐시된 사용자 조회
         current_user = await get_user_from_db_cached(user_id, db)
@@ -156,8 +175,9 @@ async def mark_notification_as_read(
         if not user_id or not user_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
         
-        # URL 디코딩
+        # URL 디코딩 및 역할명 매핑
         user_role = unquote(user_role).strip()
+        user_role = map_english_role_to_korean(user_role)
         
         # 캐시된 사용자 조회
         current_user = await get_user_from_db_cached(user_id, db)
@@ -188,8 +208,9 @@ async def mark_all_notifications_as_read(
         if not user_id or not user_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
         
-        # URL 디코딩
+        # URL 디코딩 및 역할명 매핑
         user_role = unquote(user_role).strip()
+        user_role = map_english_role_to_korean(user_role)
         
         # 캐시된 사용자 조회
         current_user = await get_user_from_db_cached(user_id, db)
