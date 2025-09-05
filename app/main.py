@@ -21,12 +21,12 @@ async def lifespan(app: FastAPI):
         await create_tables()
         print("✅ Database tables created")
         
-        print("🔄 Initializing test data...")
-        # 데이터베이스 세션을 사용하여 초기화 데이터 생성
-        async for db in get_async_db():
-            await init_database_data(db)
-            break  # 첫 번째 세션만 사용
-        print("✅ Database initialization completed")
+        print("🔄 Skipping data initialization - using existing database...")
+        # 기존 데이터베이스 사용, 초기화 데이터 생성 비활성화
+        # async for db in get_async_db():
+        #     await init_database_data(db)
+        #     break  # 첫 번째 세션만 사용
+        print("✅ Using existing database data")
     except Exception as e:
         print(f"⚠️ Database initialization failed: {str(e)}")
         import traceback
