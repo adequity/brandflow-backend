@@ -5,7 +5,7 @@ import os
 
 class Settings(BaseSettings):
     # Database Configuration
-    DATABASE_URL: str = "sqlite+aiosqlite:///./brandflow.db"  # Default to SQLite
+    DATABASE_URL: str = "sqlite+aiosqlite:///./database.sqlite"  # Default to SQLite
     
     # PostgreSQL specific settings (used when DATABASE_URL points to PostgreSQL)
     POSTGRES_USER: Optional[str] = "brandflow_user"
