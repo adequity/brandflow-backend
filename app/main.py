@@ -48,9 +48,9 @@ app = FastAPI(
 )
 
 # UTF-8 JSON 처리 미들웨어 추가 (가장 먼저 적용)
-# 간단한 CORS 미들웨어 추가 (UTF-8 미들웨어 비활성화로 인한 CORS 이슈 해결)
-from app.middleware.simple_cors import SimpleCORSMiddleware
-app.add_middleware(SimpleCORSMiddleware)
+# SimpleCORSMiddleware 제거 - CORSMiddleware와 중복 방지
+# from app.middleware.simple_cors import SimpleCORSMiddleware
+# app.add_middleware(SimpleCORSMiddleware)  # CORSMiddleware와 중복되어 비활성화
 
 # from app.middleware.json_utf8 import UTF8JSONMiddleware
 # app.add_middleware(UTF8JSONMiddleware)  # ⚠️ 2분 타임아웃 문제로 재비활성화
@@ -83,13 +83,19 @@ import os
 from app.middleware.simple_performance import SimplePerformanceMiddleware
 app.add_middleware(SimplePerformanceMiddleware)
 
-# CORS 미들웨어 설정 (개발 환경용 - 모든 origin 허용)
+# CORS 미들웨어 설정 (프로덕션 보안 강화)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 환경용 - 모든 origin 허용
-    allow_credentials=False,  # allow_origins=["*"]일 때는 False여야 함
+    allow_origins=[
+        "https://brandflo.netlify.app",  # 메인 Netlify 도메인
+        "http://localhost:3000",        # 로컬 개발
+        "http://localhost:5173",        # Vite 개발 서버
+        "http://127.0.0.1:3000",        # 로컬 IP 개발
+        "http://127.0.0.1:5173"
+    ],
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["*"],  # 모든 헤더 허용
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
     expose_headers=["X-Total-Count", "X-Page-Count"],
 )
 
