@@ -48,8 +48,8 @@ app = FastAPI(
 )
 
 # UTF-8 JSON 처리 미들웨어 추가 (가장 먼저 적용)
-# from app.middleware.json_utf8 import UTF8JSONMiddleware
-# app.add_middleware(UTF8JSONMiddleware)  # 임시 비활성화
+from app.middleware.json_utf8 import UTF8JSONMiddleware
+app.add_middleware(UTF8JSONMiddleware)  # ✅ UTF-8 처리 활성화
 
 # 보안 미들웨어 추가 (순서가 중요 - 가장 먼저 적용)
 # from app.middleware.security_audit import SecurityAuditMiddleware
