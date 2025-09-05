@@ -4,12 +4,12 @@ import os
 
 
 class Settings(BaseSettings):
-    # Database Configuration - PostgreSQL by default
-    DATABASE_URL: str = "postgresql+asyncpg://brandflow_user:brandflow_password_2024@localhost:5432/brandflow"
+    # Database Configuration
+    DATABASE_URL: str = "sqlite+aiosqlite:///./database.sqlite"  # Default to SQLite
     
     # PostgreSQL specific settings (used when DATABASE_URL points to PostgreSQL)
     POSTGRES_USER: Optional[str] = "brandflow_user"
-    POSTGRES_PASSWORD: Optional[str] = "brandflow_password_2024"
+    POSTGRES_PASSWORD: Optional[str] = "your-secure-password"
     POSTGRES_DB: Optional[str] = "brandflow"
     POSTGRES_HOST: Optional[str] = "localhost"
     POSTGRES_PORT: Optional[int] = 5432
@@ -19,20 +19,20 @@ class Settings(BaseSettings):
         """Get the appropriate database URL based on environment"""
         if self.DATABASE_URL.startswith("postgresql"):
             return self.DATABASE_URL
-        elif self.POSTGRES_HOST and os.getenv("USE_POSTGRESQL", "true").lower() == "true":  # Default to PostgreSQL
+        elif self.POSTGRES_HOST and os.getenv("USE_POSTGRESQL", "false").lower() == "true":
             # Build PostgreSQL URL from components if USE_POSTGRESQL=true
             return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         else:
-            # Fallback to original URL
+            # Default to SQLite
             return self.DATABASE_URL
     
     # Security
-    SECRET_KEY: str = "brandflow-production-secret-key-2024-change-this-in-production"
+    SECRET_KEY: str = "your-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Application settings
-    DEBUG: bool = False  # Production mode
+    DEBUG: bool = True
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
