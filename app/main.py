@@ -48,6 +48,10 @@ app = FastAPI(
 )
 
 # UTF-8 JSON 처리 미들웨어 추가 (가장 먼저 적용)
+# 간단한 CORS 미들웨어 추가 (UTF-8 미들웨어 비활성화로 인한 CORS 이슈 해결)
+from app.middleware.simple_cors import SimpleCORSMiddleware
+app.add_middleware(SimpleCORSMiddleware)
+
 # from app.middleware.json_utf8 import UTF8JSONMiddleware
 # app.add_middleware(UTF8JSONMiddleware)  # ⚠️ 임시 비활성화
 
