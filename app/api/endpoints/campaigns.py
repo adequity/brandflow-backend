@@ -101,8 +101,12 @@ async def create_campaign(
     db: AsyncSession = Depends(get_async_db)
 ):
     """새 캠페인 생성 (권한 확인)"""
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
+    try:
+        print(f"🚀 캠페인 생성 시작 - viewerId: {viewerId}, viewerRole: {viewerRole}")
+        print(f"📝 캠페인 데이터: {campaign_data}")
+        
+        # Node.js API 호환 모드인지 확인
+        if viewerId is not None or adminId is not None:
         # Node.js API 호환 모드
         user_id = viewerId or adminId
         user_role = viewerRole or adminRole
@@ -133,6 +137,18 @@ async def create_campaign(
         if not (is_admin or is_staff):
             raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
         
+        # 사용자 존재 여부 확인
+        print(f"👤 사용자 ID {user_id} 존재 여부 확인 중...")
+        user_check_query = select(User).where(User.id == user_id)
+        user_check_result = await db.execute(user_check_query)
+        creator_user = user_check_result.scalar_one_or_none()
+        
+        if not creator_user:
+            print(f"❌ 사용자 ID {user_id}가 존재하지 않음")
+            raise HTTPException(status_code=400, detail=f"사용자 ID {user_id}가 존재하지 않습니다.")
+        
+        print(f"✅ 사용자 확인 완료: {creator_user.username} ({creator_user.role})")
+        
         # 새 캠페인 생성
         new_campaign = Campaign(
             name=campaign_data.name,
@@ -145,9 +161,16 @@ async def create_campaign(
             status=CampaignStatus.ACTIVE  # Enum 사용
         )
         
+        print(f"💾 데이터베이스에 캠페인 저장 중...")
         db.add(new_campaign)
+        
+        print(f"🔄 커밋 실행 중...")
         await db.commit()
+        
+        print(f"🔄 캠페인 정보 새로고침 중...")
         await db.refresh(new_campaign)
+        
+        print(f"✅ 캠페인 생성 완료: ID {new_campaign.id}")
         
         # WebSocket 알림 전송 (일시적으로 비활성화)
         try:
@@ -170,6 +193,18 @@ async def create_campaign(
         current_user = await get_current_active_user()
         # TODO: 기존 방식으로 캠페인 생성 구현
         raise HTTPException(status_code=501, detail="Not implemented yet")
+        
+    except HTTPException:
+        # HTTPException은 그대로 재발생
+        raise
+    except Exception as e:
+        print(f"💥 캠페인 생성 중 예상치 못한 오류 발생: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, 
+            detail=f"캠페인 생성 중 오류가 발생했습니다: {str(e)}"
+        )
 
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
