@@ -12,25 +12,25 @@ from app.api.endpoints import auth, users, campaigns, purchase_requests, company
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup - Railway 배포용 단순화
-    print("🚀 Starting BrandFlow FastAPI v2.2.2...")
-    print("🌐 Railway deployment mode - Health API enabled")
+    print("Starting BrandFlow FastAPI v2.3.0...")
+    print("Railway deployment mode - Health API enabled")
     
-    # 데이터베이스 초기화 실행 - Railway 헬스체크 안정성 확보
+    # 데이터베이스 초기화 실행 - Railway 안정성 확보
     try:
-        print("🔄 Creating database tables...")
+        print("Creating database tables...")
         await create_tables()
-        print("✅ Database tables created successfully")
-        print("✅ Using existing database data - no initialization needed")
+        print("Database tables created successfully")
+        print("Using existing database data - no initialization needed")
     except Exception as e:
-        print(f"⚠️ Database initialization failed (non-critical): {str(e)}")
-        print("✅ Server will continue without database initialization")
-        # 헬스체크가 실패하지 않도록 예외를 삼킴
+        print(f"Database initialization failed (non-critical): {str(e)}")
+        print("Server will continue without database initialization")
+        # 예외를 삼켜서 서버 시작 계속
         pass
-    print("✅ BrandFlow FastAPI v2.2.2 ready!")
+    print("BrandFlow FastAPI v2.3.0 ready!")
     
     yield
     # Shutdown
-    print("🛑 BrandFlow server shutdown completed")
+    print("BrandFlow server shutdown completed")
 
 
 app = FastAPI(
@@ -125,7 +125,7 @@ async def root():
     import os
     from datetime import datetime
     return {
-        "message": "🚀 BrandFlow API v2.3.0 - CACHE CLEARED - ALL 112 APIs ACTIVE",
+        "message": "BrandFlow API v2.3.0 - CACHE CLEARED - ALL 112 APIs ACTIVE",
         "status": "running",
         "cache_cleared": True,
         "deployment_time": datetime.now().isoformat(),
