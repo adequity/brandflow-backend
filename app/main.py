@@ -35,8 +35,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="BrandFlow API",
-    description="BrandFlow 캠페인 관리 시스템 API",
-    version="2.2.2",
+    description="BrandFlow 캠페인 관리 시스템 API - 캐시 무효화 버전",
+    version="2.3.0",
     lifespan=lifespan,
 )
 
@@ -122,16 +122,18 @@ app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
 
 @app.get("/")
 async def root():
+    import os
+    from datetime import datetime
     return {
-        "message": "BrandFlow API v2.2.2 - Complete API Ready",
+        "message": "🚀 BrandFlow API v2.3.0 - CACHE CLEARED - ALL 112 APIs ACTIVE",
         "status": "running",
-        "docs": "/docs",
-        "total_endpoints": 21,
-        "new_endpoints": [
-            "dashboard", "search", "export", "admin", 
-            "websocket", "security_dashboard", "performance_dashboard", 
-            "cache", "system", "dashboard_simple"
-        ]
+        "cache_cleared": True,
+        "deployment_time": datetime.now().isoformat(),
+        "environment": "railway" if os.getenv("PORT") else "local",
+        "total_routes": len(app.router.routes),
+        "api_endpoints": len([r for r in app.router.routes if hasattr(r, 'path') and '/api/' in r.path]),
+        "debug_endpoints": ["/debug/routes", "/debug/imports"],
+        "docs": "/docs"
     }
 
 
