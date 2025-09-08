@@ -145,6 +145,63 @@ async def health_check():
         "registered_apis": 21
     }
 
+
+@app.get("/debug/routes")
+async def debug_routes():
+    """진단용: 실제 등록된 라우트 확인"""
+    routes_info = []
+    for route in app.router.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            routes_info.append({
+                "path": route.path,
+                "methods": list(route.methods) if route.methods else [],
+                "name": getattr(route, 'name', 'unnamed')
+            })
+    
+    # API 라우트만 필터링
+    api_routes = [r for r in routes_info if r['path'].startswith('/api/')]
+    
+    return {
+        "total_routes": len(routes_info),
+        "api_routes_count": len(api_routes),
+        "api_routes": sorted(api_routes, key=lambda x: x['path']),
+        "environment": "railway" if os.getenv("PORT") else "local",
+        "database_url_type": "postgresql" if "postgresql" in settings.get_database_url else "sqlite"
+    }
+
+
+@app.get("/debug/imports")
+async def debug_imports():
+    """진단용: 모듈 임포트 상태 확인"""
+    import_status = {}
+    modules_to_test = [
+        "dashboard", "search", "export", "admin", "websocket", 
+        "security_dashboard", "performance_dashboard", "cache", "health", "dashboard_simple"
+    ]
+    
+    for module_name in modules_to_test:
+        try:
+            module = __import__(f"app.api.endpoints.{module_name}", fromlist=[module_name])
+            has_router = hasattr(module, 'router')
+            import_status[module_name] = {
+                "imported": True,
+                "has_router": has_router,
+                "router_type": str(type(module.router)) if has_router else None
+            }
+        except Exception as e:
+            import_status[module_name] = {
+                "imported": False,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+    
+    return {
+        "environment": "railway" if os.getenv("PORT") else "local",
+        "import_status": import_status,
+        "successful_imports": sum(1 for status in import_status.values() if status["imported"]),
+        "failed_imports": sum(1 for status in import_status.values() if not status["imported"])
+    }
+
 # 테스트 엔드포인트 제거
 
 
