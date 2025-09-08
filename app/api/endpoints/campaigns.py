@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from urllib.parse import unquote
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.db.database import get_async_db
 from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
@@ -139,8 +139,8 @@ async def create_campaign(
             description=campaign_data.description or '',
             client_company=campaign_data.client_company or "테스트 클라이언트",
             budget=campaign_data.budget or 0.0,
-            start_date=campaign_data.start_date or datetime.utcnow(),
-            end_date=campaign_data.end_date or datetime.utcnow(),
+            start_date=campaign_data.start_date or datetime.now(timezone.utc),
+            end_date=campaign_data.end_date or datetime.now(timezone.utc),
             creator_id=user_id,
             status=CampaignStatus.ACTIVE  # Enum 사용
         )
@@ -149,16 +149,20 @@ async def create_campaign(
         await db.commit()
         await db.refresh(new_campaign)
         
-        # WebSocket 알림 전송
-        await manager.notify_campaign_update(
-            campaign_id=new_campaign.id,
-            update_type="생성",
-            data={
-                "name": new_campaign.name,
-                "client_company": new_campaign.client_company,
-                "budget": new_campaign.budget
-            }
-        )
+        # WebSocket 알림 전송 (일시적으로 비활성화)
+        try:
+            await manager.notify_campaign_update(
+                campaign_id=new_campaign.id,
+                update_type="생성",
+                data={
+                    "name": new_campaign.name,
+                    "client_company": new_campaign.client_company,
+                    "budget": new_campaign.budget
+                }
+            )
+        except Exception as e:
+            # WebSocket 에러는 무시하고 계속 진행
+            print(f"WebSocket notification failed: {e}")
         
         return new_campaign
     else:
