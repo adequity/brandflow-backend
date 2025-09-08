@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "PYTHONIOENCODING=utf-8 python main.py"
+startCommand = "python main.py"
 
 [env]
 PYTHONIOENCODING = "utf-8"
