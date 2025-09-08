@@ -40,7 +40,7 @@ class Settings(BaseSettings):
             return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         
         # 4. SQLite fallback (최후의 수단)
-        print("⚠️ Warning: Using SQLite fallback - PostgreSQL connection failed")
+        print("Warning: Using SQLite fallback - PostgreSQL connection failed")
         return "sqlite+aiosqlite:///./database.sqlite"
     
     # Security
