@@ -174,7 +174,10 @@ async def debug_routes():
         "api_routes_count": len(api_routes),
         "api_routes": sorted(api_routes, key=lambda x: x['path']),
         "environment": "railway" if os.getenv("PORT") else "local",
-        "database_url_type": "postgresql" if "postgresql" in settings.get_database_url else "sqlite"
+        "database_url_type": "postgresql" if "postgresql" in settings.get_database_url else "sqlite",
+        "database_url": settings.get_database_url,
+        "raw_database_url": os.getenv("DATABASE_URL", "NOT_SET"),
+        "railway_env": os.getenv("RAILWAY_ENVIRONMENT_NAME", "NOT_SET")
     }
 
 
