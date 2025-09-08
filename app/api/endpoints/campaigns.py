@@ -139,8 +139,8 @@ async def create_campaign(
             description=campaign_data.description or '',
             client_company=campaign_data.client_company or "테스트 클라이언트",
             budget=campaign_data.budget or 0.0,
-            start_date=campaign_data.start_date or datetime.now(timezone.utc),
-            end_date=campaign_data.end_date or datetime.now(timezone.utc),
+            start_date=campaign_data.start_date.replace(tzinfo=None) if campaign_data.start_date else datetime.now(timezone.utc).replace(tzinfo=None),
+            end_date=campaign_data.end_date.replace(tzinfo=None) if campaign_data.end_date else datetime.now(timezone.utc).replace(tzinfo=None),
             creator_id=user_id,
             status=CampaignStatus.ACTIVE  # Enum 사용
         )
