@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field, validator
+from typing import Optional, Union
 from datetime import datetime
 
 from app.models.user import UserRole, UserStatus
@@ -8,10 +8,23 @@ from app.models.user import UserRole, UserStatus
 class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
-    role: UserRole
+    role: Union[UserRole, str]
     company: Optional[str] = Field(None, max_length=200)
     contact: Optional[str] = Field(None, max_length=50)
     incentive_rate: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    
+    @validator('role', pre=True)
+    def validate_role(cls, v):
+        if isinstance(v, str):
+            # 영어 역할명을 한글로 변환
+            role_mapping = {
+                'super_admin': '슈퍼 어드민',
+                'agency_admin': '대행사 어드민', 
+                'staff': '직원',
+                'client': '클라이언트'
+            }
+            return role_mapping.get(v.lower(), v)
+        return v
 
 
 class UserCreate(UserBase):
@@ -21,12 +34,25 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[EmailStr] = None
-    role: Optional[UserRole] = None
+    role: Optional[Union[UserRole, str]] = None
     company: Optional[str] = Field(None, max_length=200)
     contact: Optional[str] = Field(None, max_length=50)
     incentive_rate: Optional[float] = Field(None, ge=0.0, le=100.0)
     status: Optional[UserStatus] = None
     password: Optional[str] = Field(None, min_length=6, max_length=50)
+    
+    @validator('role', pre=True)
+    def validate_role(cls, v):
+        if isinstance(v, str):
+            # 영어 역할명을 한글로 변환
+            role_mapping = {
+                'super_admin': '슈퍼 어드민',
+                'agency_admin': '대행사 어드민', 
+                'staff': '직원',
+                'client': '클라이언트'
+            }
+            return role_mapping.get(v.lower(), v)
+        return v
 
 
 class UserResponse(BaseModel):

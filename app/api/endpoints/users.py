@@ -212,7 +212,7 @@ async def create_user(
         if existing_user:
             raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다")
         
-        # 새 사용자 생성
+        # 새 사용자 생성 (Pydantic validator에서 이미 역할명 변환됨)
         hashed_password = get_password_hash(user_data.password)
         
         new_user = User(
