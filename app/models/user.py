@@ -33,7 +33,7 @@ class User(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
 
     # 관계 설정
-    campaigns = relationship("Campaign", foreign_keys="Campaign.creator_id", back_populates="creator")
+    campaigns = relationship("Campaign", back_populates="creator")
     purchase_requests = relationship("PurchaseRequest", back_populates="requester")
     sales_records = relationship("Sales", back_populates="employee")
     

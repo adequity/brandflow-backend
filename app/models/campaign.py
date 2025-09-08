@@ -27,11 +27,9 @@ class Campaign(Base, TimestampMixin):
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    client_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 클라이언트 ID (선택적)
     
     # 관계 설정
-    creator = relationship("User", foreign_keys=[creator_id], back_populates="campaigns")
-    client = relationship("User", foreign_keys=[client_id])  # 클라이언트 관계
+    creator = relationship("User", back_populates="campaigns")
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     
     @property
@@ -44,9 +42,7 @@ class Campaign(Base, TimestampMixin):
     @property
     def client_name(self) -> Optional[str]:
         """클라이언트 이름 반환"""
-        if self.client:
-            return self.client.name or f"{self.client.first_name or ''} {self.client.last_name or ''}".strip() or self.client.username
-        return self.client_company  # fallback to company name
+        return self.client_company  # 기존 client_company 필드 사용
     
     def __repr__(self):
         return f"<Campaign(id={self.id}, name={self.name}, status={self.status})>"

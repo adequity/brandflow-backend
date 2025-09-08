@@ -15,7 +15,7 @@ class CampaignBase(BaseModel):
 
 
 class CampaignCreate(CampaignBase):
-    client_id: Optional[int] = None
+    pass
 
 
 class CampaignUpdate(BaseModel):
@@ -32,7 +32,6 @@ class CampaignResponse(CampaignBase):
     id: int
     status: CampaignStatus
     creator_id: int
-    client_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     
