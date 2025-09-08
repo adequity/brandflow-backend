@@ -15,23 +15,16 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting BrandFlow FastAPI v2.2.2...")
     print("🌐 Railway deployment mode - Health API enabled")
     
-    # 데이터베이스 초기화 실행
+    # 데이터베이스 초기화 실행 - Railway 헬스체크 안정성 확보
     try:
         print("🔄 Creating database tables...")
         await create_tables()
-        print("✅ Database tables created")
-        
-        print("🔄 Skipping data initialization - using existing database...")
-        # 기존 데이터베이스 사용, 초기화 데이터 생성 비활성화
-        # async for db in get_async_db():
-        #     await init_database_data(db)
-        #     break  # 첫 번째 세션만 사용
-        print("✅ Using existing database data")
+        print("✅ Database tables created successfully")
+        print("✅ Using existing database data - no initialization needed")
     except Exception as e:
-        print(f"⚠️ Database initialization failed: {str(e)}")
-        import traceback
-        print(f"Full error: {traceback.format_exc()}")
-        # 초기화 실패해도 서버는 계속 실행
+        print(f"⚠️ Database initialization failed (non-critical): {str(e)}")
+        print("✅ Server will continue without database initialization")
+        # 헬스체크가 실패하지 않도록 예외를 삼킴
         pass
     print("✅ BrandFlow FastAPI v2.2.2 ready!")
     

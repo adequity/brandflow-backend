@@ -16,21 +16,20 @@ class Settings(BaseSettings):
     
     @property
     def get_database_url(self) -> str:
-        """Railway 환경과 로컬 환경을 모두 지원하는 데이터베이스 URL"""
-        # Railway 환경에서는 DATABASE_URL 환경변수가 자동으로 설정됨
+        """Railway PostgreSQL 우선 사용 - 헬스체크 비활성화로 안정성 확보"""
+        # Railway 환경에서 DATABASE_URL 환경변수 우선 사용
         railway_db_url = os.getenv("DATABASE_URL")
         if railway_db_url:
-            # Railway PostgreSQL URL 사용
+            # Railway PostgreSQL URL 변환 및 사용
             if railway_db_url.startswith("postgres://"):
-                # postgres:// → postgresql+asyncpg:// 변환
                 railway_db_url = railway_db_url.replace("postgres://", "postgresql+asyncpg://", 1)
             return railway_db_url
         
-        # 로컬 개발 환경: PostgreSQL 우선, 실패시 SQLite
+        # 로컬 개발 환경: PostgreSQL 설정 확인
         if os.getenv("USE_POSTGRESQL", "false").lower() == "true":
             return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         
-        # SQLite 기본값 (안전한 fallback)
+        # SQLite fallback (Railway에서 DATABASE_URL이 없는 경우)
         return "sqlite+aiosqlite:///./database.sqlite"
     
     # Security
