@@ -66,18 +66,18 @@ async def get_campaigns(
         # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화)
         if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
             # 슈퍼 어드민은 모든 캠페인 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.manager))
+            query = select(Campaign).options(joinedload(Campaign.creator))
         elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
             # 대행사 어드민은 같은 회사 소속 캠페인만
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.manager)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
+            query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
         elif user_role == '직원':
             # 직원은 자신이 생성한 캠페인만 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.manager)).where(Campaign.creator_id == user_id)
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
         elif user_role == '클라이언트':
             # 클라이언트는 자신의 캠페인만 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.manager)).where(Campaign.creator_id == user_id)
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
         else:
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.manager))
+            query = select(Campaign).options(joinedload(Campaign.creator))
         
         result = await db.execute(query)
         campaigns = result.unique().scalars().all()  # unique() 추가로 중복 제거
@@ -142,7 +142,6 @@ async def create_campaign(
             start_date=campaign_data.start_date.replace(tzinfo=None) if campaign_data.start_date else datetime.now(timezone.utc).replace(tzinfo=None),
             end_date=campaign_data.end_date.replace(tzinfo=None) if campaign_data.end_date else datetime.now(timezone.utc).replace(tzinfo=None),
             creator_id=user_id,
-            manager_id=campaign_data.manager_id,
             status=CampaignStatus.ACTIVE  # Enum 사용
         )
         
