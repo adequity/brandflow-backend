@@ -279,23 +279,36 @@ async def create_test_purchase_requests(db: AsyncSession, users: list, campaigns
 
 
 async def init_database_data(db: AsyncSession):
-    """데이터베이스 초기 데이터 생성 - 슈퍼 어드민만"""
-    print("초기 데이터 생성 중...")
+    """데이터베이스 초기 데이터 생성 - Railway 배포용 완전 초기화"""
+    print("Railway 배포용 초기 데이터 생성 중...")
     
     try:
-        # 슈퍼 어드민 계정만 생성
+        # 1. 슈퍼 어드민 계정 생성
         superuser = await create_superuser(db)
+        
+        # 2. 테스트 사용자들 생성
+        test_users = await create_test_users(db)
+        all_users = [superuser] + test_users
+        
+        # 3. 테스트 캠페인들 생성
+        test_campaigns = await create_test_campaigns(db, all_users)
+        
+        # 4. 테스트 구매요청들 생성
+        test_requests = await create_test_purchase_requests(db, all_users, test_campaigns)
         
         # 커밋
         await db.commit()
         
-        print(f"\n=== 초기 데이터 생성 완료 ===")
-        print(f"슈퍼 어드민 계정이 생성되었습니다.")
-        print(f"이메일: {superuser.email}")
-        print(f"이름: {superuser.name}")
-        print(f"회사: {superuser.company}")
-        print(f"기본 비밀번호: BrandFlow2024!Admin")
-        print(f"(환경변수 SUPERUSER_PASSWORD로 변경 가능)")
+        print(f"\n=== Railway 배포용 초기 데이터 생성 완료 ===")
+        print(f"사용자 수: {len(all_users)}명")
+        print(f"캠페인 수: {len(test_campaigns)}개")
+        print(f"구매요청 수: {len(test_requests)}개")
+        print(f"")
+        print(f"슈퍼 어드민 계정:")
+        print(f"  이메일: {superuser.email}")
+        print(f"  이름: {superuser.name}")
+        print(f"  회사: {superuser.company}")
+        print(f"  기본 비밀번호: BrandFlow2024!Admin")
         print(f"=============================")
         
     except Exception as e:

@@ -15,12 +15,18 @@ async def lifespan(app: FastAPI):
     print("Starting BrandFlow FastAPI v2.3.0...")
     print("Railway deployment mode - Health API enabled")
     
-    # 데이터베이스 초기화 실행 - Railway 안정성 확보
+    # 데이터베이스 초기화 실행 - Railway 배포용 완전 초기화
     try:
         print("Creating database tables...")
         await create_tables()
         print("Database tables created successfully")
-        print("Using existing database data - no initialization needed")
+        
+        # 초기 데이터 생성
+        print("Initializing database data...")
+        async for db in get_async_db():
+            await init_database_data(db)
+            break
+        print("Database data initialization completed")
     except Exception as e:
         print(f"Database initialization failed (non-critical): {str(e)}")
         print("Server will continue without database initialization")
