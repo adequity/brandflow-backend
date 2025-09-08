@@ -97,15 +97,27 @@ async def cors_exception_handler(request: Request, exc: Exception):
     
     # CORS 헤더 수동 추가
     origin = request.headers.get("origin")
-    if origin in [
+    # 🚨 CORS 허용 도메인 확대 (Netlify 서브도메인 포함)
+    allowed_origins = [
         "https://brandflo.netlify.app",
+        "https://brandflow-frontend.netlify.app", 
+        "https://adequate-brandflow.netlify.app",
+        "https://adequity-brandflow.netlify.app",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176", 
+        "http://localhost:5177",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174"
-    ]:
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+        "http://127.0.0.1:5177"
+    ]
+    
+    if origin in allowed_origins or (origin and origin.endswith('.netlify.app')):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD"
