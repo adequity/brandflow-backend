@@ -113,10 +113,22 @@ async def create_campaign(
         # URL 디코딩
         user_role = unquote(user_role).strip()
         
-        # 권한 확인 - 관리자와 직원은 캠페인 생성 가능
-        is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민'] or 
-                    '슈퍼' in user_role or ('대행사' in user_role and '어드민' in user_role))
-        is_staff = (user_role == '직원')
+        # 영어 역할명을 한글로 매핑 (프론트엔드 호환성)
+        english_to_korean_roles = {
+            'super_admin': '슈퍼 어드민',
+            'agency_admin': '대행사 어드민',
+            'staff': '직원',
+            'client': '클라이언트'
+        }
+        
+        # 영어 역할명이면 한글로 변환
+        mapped_role = english_to_korean_roles.get(user_role.lower(), user_role)
+        
+        # 권한 확인 - 관리자와 직원은 캠페인 생성 가능 (한글/영어 역할명 모두 지원)
+        is_admin = (mapped_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민'] or 
+                    '슈퍼' in mapped_role or ('대행사' in mapped_role and '어드민' in mapped_role) or
+                    user_role.lower() in ['super_admin', 'agency_admin'])
+        is_staff = (mapped_role == '직원' or user_role.lower() == 'staff')
         
         if not (is_admin or is_staff):
             raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
