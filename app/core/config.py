@@ -4,10 +4,10 @@ import os
 
 
 class Settings(BaseSettings):
-    # Database Configuration - PostgreSQL by default
-    DATABASE_URL: str = "postgresql+asyncpg://brandflow_user:brandflow_password_2024@localhost:5432/brandflow"
+    # Database Configuration - Railway와 로컬 환경 모두 지원
+    DATABASE_URL: str = "sqlite+aiosqlite:///./database.sqlite"  # 안전한 기본값
     
-    # PostgreSQL specific settings (used when DATABASE_URL points to PostgreSQL)
+    # PostgreSQL specific settings
     POSTGRES_USER: Optional[str] = "brandflow_user"
     POSTGRES_PASSWORD: Optional[str] = "brandflow_password_2024"
     POSTGRES_DB: Optional[str] = "brandflow"
@@ -16,15 +16,22 @@ class Settings(BaseSettings):
     
     @property
     def get_database_url(self) -> str:
-        """Get the appropriate database URL based on environment"""
-        if self.DATABASE_URL.startswith("postgresql"):
-            return self.DATABASE_URL
-        elif self.POSTGRES_HOST and os.getenv("USE_POSTGRESQL", "true").lower() == "true":  # Default to PostgreSQL
-            # Build PostgreSQL URL from components if USE_POSTGRESQL=true
+        """Railway 환경과 로컬 환경을 모두 지원하는 데이터베이스 URL"""
+        # Railway 환경에서는 DATABASE_URL 환경변수가 자동으로 설정됨
+        railway_db_url = os.getenv("DATABASE_URL")
+        if railway_db_url:
+            # Railway PostgreSQL URL 사용
+            if railway_db_url.startswith("postgres://"):
+                # postgres:// → postgresql+asyncpg:// 변환
+                railway_db_url = railway_db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+            return railway_db_url
+        
+        # 로컬 개발 환경: PostgreSQL 우선, 실패시 SQLite
+        if os.getenv("USE_POSTGRESQL", "false").lower() == "true":
             return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        else:
-            # Fallback to original URL
-            return self.DATABASE_URL
+        
+        # SQLite 기본값 (안전한 fallback)
+        return "sqlite+aiosqlite:///./database.sqlite"
     
     # Security
     SECRET_KEY: str = "brandflow-production-secret-key-2024-change-this-in-production"
