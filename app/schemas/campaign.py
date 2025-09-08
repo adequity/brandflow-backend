@@ -15,7 +15,7 @@ class CampaignBase(BaseModel):
 
 
 class CampaignCreate(CampaignBase):
-    pass
+    manager_id: Optional[int] = None
 
 
 class CampaignUpdate(BaseModel):
@@ -32,8 +32,13 @@ class CampaignResponse(CampaignBase):
     id: int
     status: CampaignStatus
     creator_id: int
+    manager_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    
+    # 관계 정보 (선택적)
+    creator_name: Optional[str] = None
+    manager_name: Optional[str] = None
 
     class Config:
         from_attributes = True
