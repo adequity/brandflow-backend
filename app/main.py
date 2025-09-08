@@ -82,20 +82,31 @@ import os
 from app.middleware.simple_performance import SimplePerformanceMiddleware
 app.add_middleware(SimplePerformanceMiddleware)
 
-# CORS 미들웨어 설정 (프로덕션 보안 강화)
+# CORS 미들웨어 설정 (프로덕션 보안 강화 + 인증 지원)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://brandflo.netlify.app",  # 메인 Netlify 도메인
         "http://localhost:3000",        # 로컬 개발
         "http://localhost:5173",        # Vite 개발 서버
+        "http://localhost:5174",        # Vite 대체 포트
         "http://127.0.0.1:3000",        # 로컬 IP 개발
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174"
     ],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
-    expose_headers=["X-Total-Count", "X-Page-Count"],
+    allow_credentials=True,  # 인증 쿠키/토큰 지원
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    allow_headers=[
+        "Content-Type", 
+        "Authorization", 
+        "Accept", 
+        "Origin", 
+        "X-Requested-With",
+        "Access-Control-Allow-Origin",
+        "Access-Control-Allow-Credentials",
+        "X-CSRF-Token"
+    ],
+    expose_headers=["X-Total-Count", "X-Page-Count", "Set-Cookie"],
 )
 
 # API 라우터 등록 - 핵심 기능
