@@ -357,16 +357,25 @@ async def get_campaign_financial_summary(
         if not viewer:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 재무 요약 데이터 (시연용)
+        # 재무 요약 데이터 (캠페인 budget 기반 자동 계산)
+        budget_amount = float(campaign.budget) if campaign.budget else 0.0
+        total_cost = budget_amount * 0.45  # 지출 금액
+        total_revenue = budget_amount  # 매출은 예산과 동일하게 설정
+        
         return {
             "campaign_id": campaign_id,
-            "total_budget": float(campaign.budget) if campaign.budget else 0.0,
-            "spent_amount": float(campaign.budget * 0.45) if campaign.budget else 0.0,
-            "remaining_budget": float(campaign.budget * 0.55) if campaign.budget else 0.0,
+            "campaign_name": campaign.name,
+            "total_budget": budget_amount,
+            "total_revenue": total_revenue,
+            "total_cost": total_cost,
+            "spent_amount": total_cost,
+            "remaining_budget": budget_amount - total_cost,
+            "total_tasks": 10,  # 전체 작업 수 (예시)
+            "completed_tasks": 7,  # 완료된 작업 수 (예시)
             "expense_categories": {
-                "광고비": float(campaign.budget * 0.25) if campaign.budget else 0.0,
-                "제작비": float(campaign.budget * 0.15) if campaign.budget else 0.0,
-                "기타": float(campaign.budget * 0.05) if campaign.budget else 0.0
+                "광고비": budget_amount * 0.25,
+                "제작비": budget_amount * 0.15,
+                "기타": budget_amount * 0.05
             },
             "roi": 2.3,
             "conversion_rate": 0.045
