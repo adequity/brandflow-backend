@@ -10,7 +10,7 @@ from app.db.database import get_async_db
 from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
 from app.api.deps import get_current_active_user
 from app.models.user import User
-from app.models.campaign import Campaign
+from app.models.campaign import Campaign, CampaignStatus
 from app.core.websocket import manager
 
 router = APIRouter()
@@ -142,8 +142,7 @@ async def create_campaign(
             start_date=campaign_data.start_date or datetime.utcnow(),
             end_date=campaign_data.end_date or datetime.utcnow(),
             creator_id=user_id,
-            status='ACTIVE',
-            created_at=datetime.utcnow()
+            status=CampaignStatus.ACTIVE  # Enum 사용
         )
         
         db.add(new_campaign)
