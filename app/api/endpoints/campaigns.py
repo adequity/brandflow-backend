@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from app.db.database import get_async_db
 from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
 from app.api.deps import get_current_active_user
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.campaign import Campaign, CampaignStatus
 from app.core.websocket import manager
 
@@ -374,8 +374,29 @@ async def update_campaign(
         
         for field, value in update_data.items():
             if field == 'user_id':
-                # 클라이언트 ID는 변경 불가
+                # 사용되지 않는 필드 무시
                 continue
+            elif field == 'creator_id' and value:
+                # 담당 직원 변경 (대행사 어드민만 가능)
+                if user_role not in ['대행사 어드민', '대행사어드민'] and not ('대행사' in user_role and '어드민' in user_role):
+                    print(f"[CAMPAIGN-UPDATE] Permission denied: user_role={user_role} cannot change creator_id")
+                    continue
+                
+                # 새로운 담당 직원이 같은 회사인지 확인
+                new_staff_query = select(User).where(User.id == value)
+                new_staff_result = await db.execute(new_staff_query)
+                new_staff = new_staff_result.scalar_one_or_none()
+                
+                if not new_staff:
+                    print(f"[CAMPAIGN-UPDATE] New staff not found: {value}")
+                    continue
+                    
+                if new_staff.company != viewer.company:
+                    print(f"[CAMPAIGN-UPDATE] New staff not in same company: {new_staff.company} != {viewer.company}")
+                    continue
+                    
+                setattr(campaign, field, value)
+                print(f"[CAMPAIGN-UPDATE] Changed creator_id from {campaign.creator_id} to {value} ({new_staff.name})")
             elif field in ['start_date', 'end_date'] and value:
                 # 날짜 필드는 안전하게 파싱
                 try:
@@ -529,4 +550,81 @@ async def get_campaign_posts(
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = await get_current_active_user()
         # TODO: 기존 방식으로 게시물 목록 조회 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.get("/staff-members", response_model=List[dict])
+async def get_staff_members(
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """같은 회사 직원 목록 조회 (대행사 어드민용)"""
+    print(f"[STAFF-MEMBERS] Request from viewerId={viewerId}, viewerRole={viewerRole}")
+    
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        try:
+            user_id = viewerId or adminId
+            user_role = viewerRole or adminRole
+            
+            if not user_id or not user_role:
+                print(f"[STAFF-MEMBERS] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
+                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+            
+            # URL 디코딩
+            user_role = unquote(user_role).strip()
+            print(f"[STAFF-MEMBERS] Processing with user_id={user_id}, user_role='{user_role}'")
+            
+            # 현재 사용자 정보 조회
+            viewer_query = select(User).where(User.id == user_id)
+            viewer_result = await db.execute(viewer_query)
+            viewer = viewer_result.scalar_one_or_none()
+            
+            if not viewer:
+                print(f"[STAFF-MEMBERS] User not found: {user_id}")
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+            
+            print(f"[STAFF-MEMBERS] Found user: {viewer.name}, company={viewer.company}")
+            
+            # 대행사 어드민만 직원 목록 조회 가능
+            if user_role not in ['대행사 어드민', '대행사어드민'] and not ('대행사' in user_role and '어드민' in user_role):
+                raise HTTPException(status_code=403, detail="직원 목록 조회 권한이 없습니다")
+            
+            # 같은 회사의 직원들 조회 (직원 역할만)
+            staff_query = select(User).where(
+                User.company == viewer.company,
+                User.role == UserRole.STAFF,
+                User.is_active == True
+            )
+            result = await db.execute(staff_query)
+            staff_members = result.scalars().all()
+            
+            print(f"[STAFF-MEMBERS] Found {len(staff_members)} staff members")
+            
+            # 직원 정보를 딕셔너리로 변환
+            staff_list = [
+                {
+                    "id": staff.id,
+                    "name": staff.name,
+                    "email": staff.email,
+                    "company": staff.company
+                }
+                for staff in staff_members
+            ]
+            
+            return staff_list
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"[STAFF-MEMBERS] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"직원 목록 조회 중 오류: {str(e)}")
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 직원 목록 조회 구현
         raise HTTPException(status_code=501, detail="Not implemented yet")
