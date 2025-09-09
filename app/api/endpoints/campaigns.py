@@ -102,8 +102,9 @@ async def create_campaign(
 ):
     """새 캠페인 생성 (권한 확인)"""
     # 실제 요청 데이터 로깅
-    print(f"Campaign creation request - Data: {campaign_data}")
-    print(f"Campaign creation request - Query params: viewerId={viewerId}, viewerRole={viewerRole}")
+    print(f"[CAMPAIGN-CREATE] Campaign creation request - Data: {campaign_data}")
+    print(f"[CAMPAIGN-CREATE] Query params: viewerId={viewerId}, viewerRole={viewerRole}")
+    print(f"[CAMPAIGN-CREATE] Request headers available")
     
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
@@ -134,7 +135,10 @@ async def create_campaign(
                     user_role.lower() in ['super_admin', 'agency_admin'])
         is_staff = (mapped_role == '직원' or user_role.lower() == 'staff')
         
+        print(f"[CAMPAIGN-CREATE] Authorization check - user_role={user_role}, mapped_role={mapped_role}, is_admin={is_admin}, is_staff={is_staff}")
+        
         if not (is_admin or is_staff):
+            print(f"[CAMPAIGN-CREATE] ERROR: Insufficient permissions - user_role={user_role}, mapped_role={mapped_role}")
             raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
         
         # 새 캠페인 생성 - 안전한 기본값 처리
@@ -152,12 +156,16 @@ async def create_campaign(
                 status=CampaignStatus.ACTIVE
             )
             
+            print(f"[CAMPAIGN-CREATE] SUCCESS: Creating campaign with data: name='{new_campaign.name}', budget={new_campaign.budget}")
             db.add(new_campaign)
             await db.commit()
             await db.refresh(new_campaign)
+            print(f"[CAMPAIGN-CREATE] SUCCESS: Campaign created with ID {new_campaign.id}")
         except Exception as e:
             await db.rollback()
-            print(f"Campaign creation error: {e}")
+            print(f"[CAMPAIGN-CREATE] ERROR: Database operation failed: {e}")
+            print(f"[CAMPAIGN-CREATE] ERROR: Exception type: {type(e).__name__}")
+            print(f"[CAMPAIGN-CREATE] ERROR: Campaign data that failed: name='{campaign_data.name}', budget={campaign_data.budget}, client_company='{campaign_data.client_company}'")
             raise HTTPException(status_code=500, detail=f"캠페인 생성 중 오류가 발생했습니다: {str(e)}")
         
         # WebSocket 알림 전송 (일시적으로 비활성화)
