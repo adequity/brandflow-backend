@@ -357,13 +357,28 @@ async def update_campaign(
         
         # 캠페인 정보 업데이트
         update_data = campaign_data.model_dump(exclude_unset=True)
+        print(f"[CAMPAIGN-UPDATE] Update data received: {update_data}")
         
         for field, value in update_data.items():
             if field == 'user_id':
                 # 클라이언트 ID는 변경 불가
                 continue
+            elif field in ['start_date', 'end_date'] and value:
+                # 날짜 필드는 안전하게 파싱
+                try:
+                    if isinstance(value, str):
+                        parsed_date = safe_datetime_parse(value)
+                        setattr(campaign, field, parsed_date)
+                        print(f"[CAMPAIGN-UPDATE] Parsed date {field}: {value} -> {parsed_date}")
+                    else:
+                        setattr(campaign, field, value)
+                except Exception as e:
+                    print(f"[CAMPAIGN-UPDATE] Date parsing error for {field}: {e}")
+                    # 날짜 파싱 실패 시 원본 값 사용
+                    setattr(campaign, field, value)
             elif hasattr(campaign, field):
                 setattr(campaign, field, value)
+                print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
         
         # 업데이트 시간과 업데이트한 사용자 정보 추가
         campaign.updated_at = datetime.utcnow()
