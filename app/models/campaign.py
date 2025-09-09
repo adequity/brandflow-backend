@@ -36,7 +36,7 @@ class Campaign(Base, TimestampMixin):
     def creator_name(self) -> Optional[str]:
         """담당자 이름 반환"""
         if self.creator:
-            return self.creator.name or f"{self.creator.first_name or ''} {self.creator.last_name or ''}".strip() or self.creator.username
+            return self.creator.name
         return None
     
     @property

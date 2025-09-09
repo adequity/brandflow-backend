@@ -249,7 +249,7 @@ async def get_campaign_detail(
             print(f"[CAMPAIGN-DETAIL] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
             print(f"[CAMPAIGN-DETAIL] Campaign creator loaded: {campaign.creator is not None}")
             if campaign.creator:
-                print(f"[CAMPAIGN-DETAIL] Creator info: name={campaign.creator.name}, username={campaign.creator.username}")
+                print(f"[CAMPAIGN-DETAIL] Creator info: name={campaign.creator.name}, email={campaign.creator.email}")
             print(f"[CAMPAIGN-DETAIL] Campaign creator_name property: {campaign.creator_name}")
             print(f"[CAMPAIGN-DETAIL] Campaign client_name property: {campaign.client_name}")
             
