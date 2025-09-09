@@ -8,10 +8,10 @@ from app.models.campaign import CampaignStatus
 class CampaignBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    client_company: str = Field(..., min_length=1, max_length=200)
-    budget: float = Field(..., gt=0)
-    start_date: datetime
-    end_date: datetime
+    client_company: Optional[str] = Field(None, max_length=200)
+    budget: Optional[float] = Field(None, ge=0)  # 0 이상 허용, 선택적
+    start_date: Optional[datetime] = None  # 선택적
+    end_date: Optional[datetime] = None    # 선택적
 
 
 class CampaignCreate(CampaignBase):

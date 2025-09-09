@@ -133,21 +133,28 @@ async def create_campaign(
         if not (is_admin or is_staff):
             raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
         
-        # 새 캠페인 생성
-        new_campaign = Campaign(
-            name=campaign_data.name,
-            description=campaign_data.description or '',
-            client_company=campaign_data.client_company or "테스트 클라이언트",
-            budget=campaign_data.budget or 0.0,
-            start_date=campaign_data.start_date.replace(tzinfo=None) if campaign_data.start_date else datetime.now(timezone.utc).replace(tzinfo=None),
-            end_date=campaign_data.end_date.replace(tzinfo=None) if campaign_data.end_date else datetime.now(timezone.utc).replace(tzinfo=None),
-            creator_id=user_id,
-            status=CampaignStatus.ACTIVE  # Enum 사용
-        )
-        
-        db.add(new_campaign)
-        await db.commit()
-        await db.refresh(new_campaign)
+        # 새 캠페인 생성 - 안전한 기본값 처리
+        try:
+            current_time = datetime.now(timezone.utc).replace(tzinfo=None)
+            
+            new_campaign = Campaign(
+                name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
+                description=campaign_data.description or '',
+                client_company=campaign_data.client_company or "기본 클라이언트",
+                budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
+                start_date=campaign_data.start_date.replace(tzinfo=None) if campaign_data.start_date else current_time,
+                end_date=campaign_data.end_date.replace(tzinfo=None) if campaign_data.end_date else current_time,
+                creator_id=user_id,
+                status=CampaignStatus.ACTIVE
+            )
+            
+            db.add(new_campaign)
+            await db.commit()
+            await db.refresh(new_campaign)
+        except Exception as e:
+            await db.rollback()
+            print(f"Campaign creation error: {e}")
+            raise HTTPException(status_code=500, detail=f"캠페인 생성 중 오류가 발생했습니다: {str(e)}")
         
         # WebSocket 알림 전송 (일시적으로 비활성화)
         try:
