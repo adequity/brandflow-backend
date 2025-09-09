@@ -656,6 +656,7 @@ async def get_campaign_financial_summary(
         budget_amount = float(campaign.budget) if campaign.budget else 0.0
         total_cost = budget_amount * 0.45  # 지출 금액
         total_revenue = budget_amount  # 매출은 예산과 동일하게 설정
+        total_profit = total_revenue - total_cost  # 순이익 계산
         
         return {
             "campaign_id": campaign_id,
@@ -663,6 +664,7 @@ async def get_campaign_financial_summary(
             "total_budget": budget_amount,
             "total_revenue": total_revenue,
             "total_cost": total_cost,
+            "total_profit": total_profit,
             "spent_amount": total_cost,
             "remaining_budget": budget_amount - total_cost,
             "total_tasks": 10,  # 전체 작업 수 (예시)
@@ -673,7 +675,9 @@ async def get_campaign_financial_summary(
                 "기타": budget_amount * 0.05
             },
             "roi": 2.3,
-            "conversion_rate": 0.045
+            "conversion_rate": 0.045,
+            "completion_rate": 0.7,  # 완료율
+            "margin_rate": (total_profit / total_revenue) if total_revenue > 0 else 0  # 마진율
         }
     else:
         # 기존 API 모드 (JWT 토큰 기반)
