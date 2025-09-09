@@ -129,13 +129,22 @@ async def cors_exception_handler(request: Request, exc: Exception):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://brandflo.netlify.app",  # 메인 Netlify 도메인
-        "http://localhost:3000",        # 로컬 개발
-        "http://localhost:5173",        # Vite 개발 서버
-        "http://localhost:5174",        # Vite 대체 포트
-        "http://127.0.0.1:3000",        # 로컬 IP 개발
+        "https://brandflo.netlify.app",        # 메인 Netlify 도메인
+        "https://brandflow-frontend.netlify.app",  # 추가 Netlify 서브도메인
+        "https://adequate-brandflow.netlify.app",  # 추가 Netlify 서브도메인
+        "https://adequity-brandflow.netlify.app",  # 추가 Netlify 서브도메인
+        "http://localhost:3000",               # 로컬 개발
+        "http://localhost:5173",               # Vite 개발 서버
+        "http://localhost:5174",               # Vite 대체 포트
+        "http://localhost:5175",
+        "http://localhost:5176", 
+        "http://localhost:5177",
+        "http://127.0.0.1:3000",               # 로컬 IP 개발
         "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174"
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+        "http://127.0.0.1:5177"
     ],
     allow_credentials=True,  # 인증 쿠키/토큰 지원
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
