@@ -29,6 +29,8 @@ async def get_campaigns(
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 목록 조회 (권한별 필터링)"""
+    print(f"[CAMPAIGNS-LIST] Request with viewerId={viewerId}, viewerRole={viewerRole}")
+    
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
         # Node.js API 호환 모드
@@ -63,6 +65,8 @@ async def get_campaigns(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
+        print(f"[CAMPAIGNS-LIST] User found: {current_user.name}, role='{user_role}', company='{current_user.company}'")
+        
         # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화)
         if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
             # 슈퍼 어드민은 모든 캠페인 조회 가능
@@ -79,8 +83,13 @@ async def get_campaigns(
         else:
             query = select(Campaign).options(joinedload(Campaign.creator))
         
+        print(f"[CAMPAIGNS-LIST] Executing query for role: {user_role}")
         result = await db.execute(query)
         campaigns = result.unique().scalars().all()  # unique() 추가로 중복 제거
+        
+        print(f"[CAMPAIGNS-LIST] Found {len(campaigns)} campaigns for user {user_id} (role: {user_role})")
+        for campaign in campaigns:
+            print(f"  - Campaign ID {campaign.id}: {campaign.name} (creator: {campaign.creator_id})")
         
         return campaigns
     else:
