@@ -18,6 +18,7 @@ class Campaign(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
     client_company = Column(String(200), nullable=False)
     budget = Column(Float, nullable=False)
     start_date = Column(DateTime, nullable=False)
@@ -30,11 +31,6 @@ class Campaign(Base, TimestampMixin):
     # 관계 설정
     creator = relationship("User", back_populates="campaigns")
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
-    
-    @property
-    def description(self) -> str:
-        """설명 필드 - DB에 없는 필드이므로 빈 문자열 반환"""
-        return ""
     
     @property
     def creator_name(self) -> Optional[str]:

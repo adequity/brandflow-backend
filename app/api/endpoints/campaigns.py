@@ -264,7 +264,7 @@ async def create_campaign(
             
             new_campaign = Campaign(
                 name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
-                # description 필드는 @property로 처리됨 (빈 문자열 반환)
+                description=campaign_data.description or '',
                 client_company=campaign_data.client_company or "기본 클라이언트",
                 budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
                 start_date=safe_datetime_parse(campaign_data.start_date),
