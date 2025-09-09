@@ -236,17 +236,22 @@ async def get_campaign_detail(
             user_role = unquote(user_role).strip()
             print(f"[CAMPAIGN-DETAIL] Processing with user_id={user_id}, user_role='{user_role}'")
             
-            # 캠페인 찾기
+            # 캠페인 찾기 (creator 관계 포함)
             print(f"[CAMPAIGN-DETAIL] Searching for campaign with ID: {campaign_id}")
-            campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+            campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
             result = await db.execute(campaign_query)
-            campaign = result.scalar_one_or_none()
+            campaign = result.unique().scalar_one_or_none()
             
             if not campaign:
                 print(f"[CAMPAIGN-DETAIL] Campaign not found: {campaign_id}")
                 raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
             
             print(f"[CAMPAIGN-DETAIL] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+            print(f"[CAMPAIGN-DETAIL] Campaign creator loaded: {campaign.creator is not None}")
+            if campaign.creator:
+                print(f"[CAMPAIGN-DETAIL] Creator info: name={campaign.creator.name}, username={campaign.creator.username}")
+            print(f"[CAMPAIGN-DETAIL] Campaign creator_name property: {campaign.creator_name}")
+            print(f"[CAMPAIGN-DETAIL] Campaign client_name property: {campaign.client_name}")
             
             # 권한 확인
             print(f"[CAMPAIGN-DETAIL] Checking user permissions for user_id: {user_id}")
