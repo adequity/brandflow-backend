@@ -26,7 +26,8 @@ class CampaignUpdate(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[CampaignStatus] = None
-    creator_id: Optional[int] = None  # 담당 직원 변경용
+    # creator_id는 기존 필드이므로 여기서 수정 가능하게 추가
+    creator_id: Optional[int] = None
 
 
 class CampaignResponse(CampaignBase):
