@@ -133,9 +133,29 @@ async def get_campaigns(
         for campaign in campaigns:
             print(f"  - Campaign ID {campaign.id}: {campaign.name} (creator: {campaign.creator_id})")
         
+        # Campaign 모델을 CampaignResponse 스키마로 직렬화
+        serialized_campaigns = []
+        for campaign in campaigns:
+            campaign_data = {
+                "id": campaign.id,
+                "name": campaign.name,
+                "description": campaign.description,
+                "client_company": campaign.client_company,
+                "budget": campaign.budget,
+                "start_date": campaign.start_date,
+                "end_date": campaign.end_date,
+                "status": campaign.status,
+                "creator_id": campaign.creator_id,
+                "created_at": campaign.created_at,
+                "updated_at": campaign.updated_at,
+                "creator_name": campaign.creator.name if campaign.creator else None,
+                "client_name": campaign.client_company  # client_name은 client_company와 동일
+            }
+            serialized_campaigns.append(campaign_data)
+        
         # 페이지네이션 정보와 함께 응답
         return {
-            "data": campaigns,
+            "data": serialized_campaigns,
             "pagination": {
                 "current_page": current_page,
                 "page_size": page_size,
