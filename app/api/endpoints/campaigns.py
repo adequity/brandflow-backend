@@ -783,7 +783,11 @@ async def delete_campaign(
             # 권한 검사
             can_delete = False
             
-            if user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            if user_role in ['슈퍼 어드민', '슈퍼어드민'] or ('슈퍼' in user_role and '어드민' in user_role):
+                # 슈퍼 어드민은 모든 캠페인 삭제 가능
+                can_delete = True
+                print(f"[CAMPAIGN-DELETE] Super admin can delete any campaign")
+            elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
                 # 대행사 어드민은 같은 회사의 모든 캠페인 삭제 가능
                 if campaign.creator and campaign.creator.company == viewer.company:
                     can_delete = True
