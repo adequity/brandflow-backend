@@ -145,13 +145,30 @@ async def create_campaign(
         try:
             current_time = datetime.now(timezone.utc).replace(tzinfo=None)
             
+            # 안전한 날짜 처리 함수
+            def safe_datetime_parse(date_input):
+                if date_input is None:
+                    return current_time
+                # 이미 datetime 객체인 경우
+                if isinstance(date_input, datetime):
+                    return date_input.replace(tzinfo=None)
+                # string인 경우 파싱 시도
+                if isinstance(date_input, str):
+                    try:
+                        parsed = datetime.fromisoformat(date_input.replace('Z', '+00:00'))
+                        return parsed.replace(tzinfo=None)
+                    except ValueError:
+                        print(f"[CAMPAIGN-CREATE] WARNING: Failed to parse date string: {date_input}")
+                        return current_time
+                return current_time
+            
             new_campaign = Campaign(
                 name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
                 description=campaign_data.description or '',
                 client_company=campaign_data.client_company or "기본 클라이언트",
                 budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
-                start_date=campaign_data.start_date.replace(tzinfo=None) if campaign_data.start_date else current_time,
-                end_date=campaign_data.end_date.replace(tzinfo=None) if campaign_data.end_date else current_time,
+                start_date=safe_datetime_parse(campaign_data.start_date),
+                end_date=safe_datetime_parse(campaign_data.end_date),
                 creator_id=user_id,
                 status=CampaignStatus.ACTIVE
             )
