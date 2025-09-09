@@ -18,7 +18,7 @@ class Campaign(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
-    description = Column(Text, nullable=True)
+    # description = Column(Text, nullable=True)  # 임시로 주석 처리 - 실제 DB에 컬럼이 없음
     client_company = Column(String(200), nullable=False)
     budget = Column(Float, nullable=False)
     start_date = Column(DateTime, nullable=False)
