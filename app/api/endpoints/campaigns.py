@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from urllib.parse import unquote
@@ -16,16 +16,19 @@ from app.core.websocket import manager
 router = APIRouter()
 
 
-@router.get("/", response_model=List[CampaignResponse])
+@router.get("/", response_model=dict)
 async def get_campaigns(
     # Node.js API 호환성을 위한 쿼리 파라미터
     viewerId: Optional[int] = Query(None, alias="viewerId"),
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    # 기존 파라미터도 지원
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    # 페이지네이션 파라미터
+    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
+    size: int = Query(10, ge=1, le=100, description="페이지당 항목 수"),
+    # 기존 파라미터도 지원 (하위 호환성)
+    skip: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=100),
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 목록 조회 (권한별 필터링)"""
@@ -83,15 +86,66 @@ async def get_campaigns(
         else:
             query = select(Campaign).options(joinedload(Campaign.creator))
         
-        print(f"[CAMPAIGNS-LIST] Executing query for role: {user_role}")
-        result = await db.execute(query)
+        # 페이지네이션 처리 (하위 호환성을 위해 skip/limit도 지원)
+        if skip is not None and limit is not None:
+            # 기존 방식 (skip/limit)
+            offset = skip
+            page_size = limit
+            current_page = (skip // limit) + 1 if limit > 0 else 1
+        else:
+            # 새로운 방식 (page/size)
+            current_page = page
+            page_size = size
+            offset = (page - 1) * size
+        
+        print(f"[CAMPAIGNS-LIST] Pagination - page={current_page}, size={page_size}, offset={offset}")
+        
+        # 전체 개수 조회 (페이지네이션 메타데이터용)
+        count_query = select(func.count(Campaign.id))
+        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+            # 슈퍼 어드민은 모든 캠페인 개수
+            pass
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민은 같은 회사 소속 캠페인 개수
+            count_query = count_query.join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
+        elif user_role == '직원':
+            # 직원은 자신이 생성한 캠페인 개수
+            count_query = count_query.where(Campaign.creator_id == user_id)
+        elif user_role == '클라이언트':
+            # 클라이언트는 자신의 캠페인 개수
+            count_query = count_query.where(Campaign.creator_id == user_id)
+        
+        total_count_result = await db.execute(count_query)
+        total_count = total_count_result.scalar()
+        
+        # 페이지네이션 적용된 쿼리 실행
+        paginated_query = query.offset(offset).limit(page_size).order_by(Campaign.created_at.desc())
+        print(f"[CAMPAIGNS-LIST] Executing paginated query for role: {user_role}")
+        result = await db.execute(paginated_query)
         campaigns = result.unique().scalars().all()  # unique() 추가로 중복 제거
         
-        print(f"[CAMPAIGNS-LIST] Found {len(campaigns)} campaigns for user {user_id} (role: {user_role})")
+        # 페이지네이션 메타데이터 계산
+        total_pages = (total_count + page_size - 1) // page_size  # 올림 계산
+        has_next = current_page < total_pages
+        has_prev = current_page > 1
+        
+        print(f"[CAMPAIGNS-LIST] Found {len(campaigns)} campaigns (page {current_page}/{total_pages}, total: {total_count})")
         for campaign in campaigns:
             print(f"  - Campaign ID {campaign.id}: {campaign.name} (creator: {campaign.creator_id})")
         
-        return campaigns
+        # 페이지네이션 정보와 함께 응답
+        return {
+            "data": campaigns,
+            "pagination": {
+                "current_page": current_page,
+                "page_size": page_size,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev,
+                "offset": offset
+            }
+        }
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = await get_current_active_user()
@@ -636,4 +690,128 @@ async def get_campaign_posts(
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = await get_current_active_user()
         # TODO: 기존 방식으로 게시물 목록 조회 구현
+        raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.delete("/{campaign_id}", status_code=204)
+async def delete_campaign(
+    campaign_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 삭제 (권한별 제한)"""
+    print(f"[CAMPAIGN-DELETE] Request for campaign_id={campaign_id}, viewerId={viewerId}, viewerRole={viewerRole}")
+    
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        try:
+            # Node.js API 호환 모드
+            user_id = viewerId or adminId
+            user_role = viewerRole or adminRole
+            
+            if not user_id or not user_role:
+                print(f"[CAMPAIGN-DELETE] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
+                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+            
+            # URL 디코딩
+            user_role = unquote(user_role).strip()
+            print(f"[CAMPAIGN-DELETE] Processing with user_id={user_id}, user_role='{user_role}'")
+            
+            # 캠페인 찾기 (creator 관계 포함)
+            campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+            result = await db.execute(campaign_query)
+            campaign = result.unique().scalar_one_or_none()
+            
+            if not campaign:
+                print(f"[CAMPAIGN-DELETE] Campaign not found: {campaign_id}")
+                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+            
+            print(f"[CAMPAIGN-DELETE] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+            
+            # 사용자 권한 확인
+            viewer_query = select(User).where(User.id == user_id)
+            viewer_result = await db.execute(viewer_query)
+            viewer = viewer_result.scalar_one_or_none()
+            
+            if not viewer:
+                print(f"[CAMPAIGN-DELETE] User not found: {user_id}")
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+            
+            print(f"[CAMPAIGN-DELETE] Viewer info: {viewer.name}, role={user_role}, company={viewer.company}")
+            
+            # 권한 검사
+            can_delete = False
+            
+            if user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+                # 대행사 어드민은 같은 회사의 모든 캠페인 삭제 가능
+                if campaign.creator and campaign.creator.company == viewer.company:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE] Agency admin can delete campaign from same company")
+                else:
+                    print(f"[CAMPAIGN-DELETE] Agency admin cannot delete - different company")
+            elif user_role == '직원':
+                # 직원은 자신이 생성한 캠페인만 삭제 가능
+                if campaign.creator_id == user_id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE] Staff can delete own campaign")
+                else:
+                    print(f"[CAMPAIGN-DELETE] Staff cannot delete - not creator")
+            elif user_role == '클라이언트':
+                # 클라이언트는 자신의 회사와 연결된 캠페인만 삭제 가능 (제한적)
+                if campaign.creator and campaign.creator.company == viewer.company:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE] Client can delete campaign from same company")
+                else:
+                    print(f"[CAMPAIGN-DELETE] Client cannot delete - different company")
+            
+            if not can_delete:
+                print(f"[CAMPAIGN-DELETE] Permission denied for user_role={user_role}, creator_id={campaign.creator_id}")
+                raise HTTPException(status_code=403, detail="이 캠페인을 삭제할 권한이 없습니다.")
+            
+            # 관련 데이터 확인 (구매요청 등)
+            from app.models.purchase_request import PurchaseRequest
+            purchase_query = select(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
+            purchase_result = await db.execute(purchase_query)
+            purchase_requests = purchase_result.scalars().all()
+            
+            if purchase_requests:
+                print(f"[CAMPAIGN-DELETE] Found {len(purchase_requests)} related purchase requests")
+                # 구매요청이 있는 경우 경고하지만 삭제는 허용 (CASCADE)
+                
+            # 캠페인 삭제 (관련 데이터는 CASCADE로 자동 삭제)
+            await db.delete(campaign)
+            await db.commit()
+            
+            print(f"[CAMPAIGN-DELETE] SUCCESS: Campaign {campaign_id} deleted by user {user_id}")
+            
+            # WebSocket 알림 전송 (선택적)
+            try:
+                await manager.notify_campaign_update(
+                    action="deleted",
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.name,
+                    user_id=user_id,
+                    user_name=viewer.name
+                )
+                print(f"[CAMPAIGN-DELETE] WebSocket notification sent")
+            except Exception as ws_error:
+                print(f"[CAMPAIGN-DELETE] WebSocket notification failed: {ws_error}")
+                # WebSocket 실패는 삭제 작업에 영향 없음
+            
+            return  # 204 No Content
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"[CAMPAIGN-DELETE] Unexpected error: {type(e).__name__}: {e}")
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"캠페인 삭제 중 오류: {str(e)}")
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = await get_current_active_user()
+        # TODO: 기존 방식으로 캠페인 삭제 구현
         raise HTTPException(status_code=501, detail="Not implemented yet")
