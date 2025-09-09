@@ -310,33 +310,46 @@ async def update_campaign(
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 수정"""
+    print(f"[CAMPAIGN-UPDATE] Update request for campaign_id={campaign_id}, viewerId={viewerId}, viewerRole={viewerRole}")
+    
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
-        # Node.js API 호환 모드
-        user_id = viewerId or adminId
-        user_role = viewerRole or adminRole
-        
-        if not user_id or not user_role:
-            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩
-        user_role = unquote(user_role).strip()
-        
-        # 캠페인 찾기
-        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
-        result = await db.execute(campaign_query)
-        campaign = result.scalar_one_or_none()
-        
-        if not campaign:
-            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
-        
-        # 권한 확인
-        viewer_query = select(User).where(User.id == user_id)
-        viewer_result = await db.execute(viewer_query)
-        viewer = viewer_result.scalar_one_or_none()
-        
-        if not viewer:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        try:
+            # Node.js API 호환 모드
+            user_id = viewerId or adminId
+            user_role = viewerRole or adminRole
+            
+            if not user_id or not user_role:
+                print(f"[CAMPAIGN-UPDATE] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
+                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+            
+            # URL 디코딩
+            user_role = unquote(user_role).strip()
+            print(f"[CAMPAIGN-UPDATE] Processing with user_id={user_id}, user_role='{user_role}'")
+            
+            # 캠페인 찾기 (creator 관계 포함)
+            print(f"[CAMPAIGN-UPDATE] Searching for campaign with ID: {campaign_id}")
+            campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+            result = await db.execute(campaign_query)
+            campaign = result.unique().scalar_one_or_none()
+            
+            if not campaign:
+                print(f"[CAMPAIGN-UPDATE] Campaign not found: {campaign_id}")
+                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+            
+            print(f"[CAMPAIGN-UPDATE] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+            
+            # 권한 확인
+            print(f"[CAMPAIGN-UPDATE] Checking user permissions for user_id: {user_id}")
+            viewer_query = select(User).where(User.id == user_id)
+            viewer_result = await db.execute(viewer_query)
+            viewer = viewer_result.scalar_one_or_none()
+            
+            if not viewer:
+                print(f"[CAMPAIGN-UPDATE] User not found: {user_id}")
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+            
+            print(f"[CAMPAIGN-UPDATE] Found user: {viewer.name}, role={user_role}, company={viewer.company}")
         
         if user_role == '클라이언트':
             # 클라이언트는 본인 캠페인만 수정 가능
@@ -380,13 +393,21 @@ async def update_campaign(
                 setattr(campaign, field, value)
                 print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
         
-        # 업데이트 시간과 업데이트한 사용자 정보 추가
-        campaign.updated_at = datetime.utcnow()
-        
-        await db.commit()
-        await db.refresh(campaign)
-        
-        return campaign
+            # 업데이트 시간과 업데이트한 사용자 정보 추가
+            campaign.updated_at = datetime.utcnow()
+            
+            await db.commit()
+            await db.refresh(campaign)
+            
+            print(f"[CAMPAIGN-UPDATE] SUCCESS: Campaign {campaign_id} updated by user {user_id}")
+            return campaign
+            
+        except HTTPException:
+            raise  # HTTPException은 그대로 전달
+        except Exception as e:
+            print(f"[CAMPAIGN-UPDATE] Unexpected error: {type(e).__name__}: {e}")
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"캠페인 수정 중 오류: {str(e)}")
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = await get_current_active_user()
