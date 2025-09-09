@@ -69,7 +69,7 @@ async def get_campaigns(
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
         print(f"[CAMPAIGNS-LIST] User found: {current_user.name}, role='{user_role}', company='{current_user.company}'")
-        print(f"[CAMPAIGNS-LIST] Client matching logic: creator_id={user_id} OR client_company='{current_user.company}' OR client_company LIKE '% (ID: {user_id})'")
+        print(f"[CAMPAIGNS-LIST] Client matching logic: creator_id={user_id} OR client_company='{current_user.company}' OR client_company LIKE '%(ID: {user_id})'")
         
         # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화)
         if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
@@ -87,7 +87,7 @@ async def get_campaigns(
             query = select(Campaign).options(joinedload(Campaign.creator)).where(
                 (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
                 (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
-                (Campaign.client_company.like(f'% (ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
+                (Campaign.client_company.like(f'%(ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
             )
         else:
             query = select(Campaign).options(joinedload(Campaign.creator))
@@ -122,7 +122,7 @@ async def get_campaigns(
             count_query = count_query.where(
                 (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
                 (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
-                (Campaign.client_company.like(f'% (ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
+                (Campaign.client_company.like(f'%(ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
             )
         
         total_count_result = await db.execute(count_query)
