@@ -101,6 +101,10 @@ async def create_campaign(
     db: AsyncSession = Depends(get_async_db)
 ):
     """새 캠페인 생성 (권한 확인)"""
+    # 실제 요청 데이터 로깅
+    print(f"Campaign creation request - Data: {campaign_data}")
+    print(f"Campaign creation request - Query params: viewerId={viewerId}, viewerRole={viewerRole}")
+    
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
         # Node.js API 호환 모드
