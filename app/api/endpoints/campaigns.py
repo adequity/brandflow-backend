@@ -219,33 +219,52 @@ async def get_campaign_detail(
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 상세 조회 (권한별 필터링)"""
+    print(f"[CAMPAIGN-DETAIL] Request for campaign_id={campaign_id}, viewerId={viewerId}, viewerRole={viewerRole}")
+    
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
-        # Node.js API 호환 모드
-        user_id = viewerId or adminId
-        user_role = viewerRole or adminRole
-        
-        if not user_id or not user_role:
-            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩
-        user_role = unquote(user_role).strip()
-        
-        # 캠페인 찾기
-        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
-        result = await db.execute(campaign_query)
-        campaign = result.scalar_one_or_none()
-        
-        if not campaign:
-            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
-        
-        # 권한 확인
-        viewer_query = select(User).where(User.id == user_id)
-        viewer_result = await db.execute(viewer_query)
-        viewer = viewer_result.scalar_one_or_none()
-        
-        if not viewer:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        try:
+            # Node.js API 호환 모드
+            user_id = viewerId or adminId
+            user_role = viewerRole or adminRole
+            
+            if not user_id or not user_role:
+                print(f"[CAMPAIGN-DETAIL] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
+                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+            
+            # URL 디코딩
+            user_role = unquote(user_role).strip()
+            print(f"[CAMPAIGN-DETAIL] Processing with user_id={user_id}, user_role='{user_role}'")
+            
+            # 캠페인 찾기
+            print(f"[CAMPAIGN-DETAIL] Searching for campaign with ID: {campaign_id}")
+            campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+            result = await db.execute(campaign_query)
+            campaign = result.scalar_one_or_none()
+            
+            if not campaign:
+                print(f"[CAMPAIGN-DETAIL] Campaign not found: {campaign_id}")
+                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+            
+            print(f"[CAMPAIGN-DETAIL] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+            
+            # 권한 확인
+            print(f"[CAMPAIGN-DETAIL] Checking user permissions for user_id: {user_id}")
+            viewer_query = select(User).where(User.id == user_id)
+            viewer_result = await db.execute(viewer_query)
+            viewer = viewer_result.scalar_one_or_none()
+            
+            if not viewer:
+                print(f"[CAMPAIGN-DETAIL] User not found: {user_id}")
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+            
+            print(f"[CAMPAIGN-DETAIL] Found user: {viewer.name}, role={user_role}, company={viewer.company}")
+            
+        except HTTPException:
+            raise  # HTTPException은 그대로 전달
+        except Exception as e:
+            print(f"[CAMPAIGN-DETAIL] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"캠페인 조회 중 오류: {str(e)}")
         
         if user_role == '클라이언트':
             # 클라이언트는 본인 캠페인만 조회 가능
@@ -262,8 +281,10 @@ async def get_campaign_detail(
         elif user_role == '직원':
             # 직원은 자신이 생성한 캠페인만 조회 가능
             if campaign.creator_id != user_id:
+                print(f"[CAMPAIGN-DETAIL] Staff permission denied: campaign.creator_id={campaign.creator_id}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
         
+        print(f"[CAMPAIGN-DETAIL] SUCCESS: Returning campaign {campaign.id} to user {user_id}")
         return campaign
     else:
         # 기존 API 모드 (JWT 토큰 기반)
