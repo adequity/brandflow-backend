@@ -133,7 +133,7 @@ async def get_campaigns(
         for campaign in campaigns:
             print(f"  - Campaign ID {campaign.id}: {campaign.name} (creator: {campaign.creator_id})")
         
-        # Campaign 모델을 CampaignResponse 스키마로 직렬화
+        # Campaign 모델을 CampaignResponse 스키마로 직렬화 (프론트엔드 호환성)
         serialized_campaigns = []
         for campaign in campaigns:
             campaign_data = {
@@ -149,7 +149,14 @@ async def get_campaigns(
                 "created_at": campaign.created_at,
                 "updated_at": campaign.updated_at,
                 "creator_name": campaign.creator.name if campaign.creator else None,
-                "client_name": campaign.client_company  # client_name은 client_company와 동일
+                "client_name": campaign.client_company,  # client_name은 client_company와 동일
+                # 프론트엔드 호환성을 위한 필드 매칭
+                "User": {
+                    "id": campaign.creator_id,
+                    "name": campaign.creator.name if campaign.creator else None,
+                    "email": campaign.creator.email if campaign.creator else None
+                } if campaign.creator else None,
+                "posts": []  # posts 필드 추가 (현재는 빈 배열, 향후 구현 시 실제 데이터 추가)
             }
             serialized_campaigns.append(campaign_data)
         
