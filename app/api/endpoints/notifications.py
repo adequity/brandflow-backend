@@ -86,31 +86,44 @@ async def get_unread_notifications_count(
     db: AsyncSession = Depends(get_async_db)
 ):
     """읽지 않은 알림 개수 조회"""
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
-        # Node.js API 호환 모드
-        user_id = viewerId or adminId
-        user_role = viewerRole or adminRole
-        
-        if not user_id or not user_role:
-            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩 및 역할명 매핑
-        user_role = unquote(user_role).strip()
-        user_role = map_english_role_to_korean(user_role)
-        
-        # 캐시된 사용자 조회
-        current_user = await get_user_from_db_cached(user_id, db)
-        
-        if not current_user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-        
-        # 캐시된 알림 개수 조회
-        return await get_unread_count_cached(user_id, user_role)
-    else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        # TODO: JWT 토큰 기반 인증 구현
-        return {"unread_count": 0}
+    print(f"[NOTIFICATIONS] unread-count request: viewerId={viewerId}, viewerRole={viewerRole}")
+    
+    try:
+        # Node.js API 호환 모드인지 확인
+        if viewerId is not None or adminId is not None:
+            # Node.js API 호환 모드
+            user_id = viewerId or adminId
+            user_role = viewerRole or adminRole
+            
+            if not user_id or not user_role:
+                print(f"[NOTIFICATIONS] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
+                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+            
+            # URL 디코딩 및 역할명 매핑
+            user_role = unquote(user_role).strip()
+            user_role = map_english_role_to_korean(user_role)
+            print(f"[NOTIFICATIONS] Processing user_id={user_id}, user_role='{user_role}'")
+            
+            # 캐시된 사용자 조회
+            current_user = await get_user_from_db_cached(user_id, db)
+            
+            if not current_user:
+                print(f"[NOTIFICATIONS] ERROR: User not found - user_id={user_id}")
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+            
+            print(f"[NOTIFICATIONS] Found user: {current_user.name}")
+            
+            # 캐시된 알림 개수 조회
+            result = await get_unread_count_cached(user_id, user_role)
+            print(f"[NOTIFICATIONS] SUCCESS: Returning {result}")
+            return result
+        else:
+            # 기존 API 모드 (JWT 토큰 기반)
+            print("[NOTIFICATIONS] JWT mode - returning default")
+            return {"unread_count": 0}
+    except Exception as e:
+        print(f"[NOTIFICATIONS] Unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"알림 조회 중 오류: {str(e)}")
 
 
 @router.get("/")
