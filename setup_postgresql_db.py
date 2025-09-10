@@ -24,14 +24,14 @@ async def setup_database():
         try:
             print(f"연결 시도: {conn_str.replace(':@', ':<no_password>@').replace(':postgres@', ':<password>@').replace(':admin@', ':<password>@')}")
             conn = await asyncpg.connect(conn_str)
-            print("✅ PostgreSQL 연결 성공!")
+            print("SUCCESS PostgreSQL 연결 성공!")
             break
         except Exception as e:
             print(f"연결 실패: {e}")
             continue
     
     if not conn:
-        print("❌ PostgreSQL에 연결할 수 없습니다.")
+        print("FAILED PostgreSQL에 연결할 수 없습니다.")
         print("\n해결 방법:")
         print("1. PostgreSQL 서비스가 실행 중인지 확인")
         print("2. postgres 사용자의 비밀번호 확인")
@@ -44,11 +44,11 @@ async def setup_database():
             await conn.execute("""
                 CREATE ROLE brandflow_user LOGIN PASSWORD 'brandflow_password_2024'
             """)
-            print("✅ brandflow_user 사용자 생성됨")
+            print("SUCCESS brandflow_user 사용자 생성됨")
         except asyncpg.DuplicateObjectError:
-            print("ℹ️  brandflow_user 사용자가 이미 존재함")
+            print("ℹ  brandflow_user 사용자가 이미 존재함")
         except Exception as e:
-            print(f"⚠️  사용자 생성 중 오류: {e}")
+            print(f"WARNING  사용자 생성 중 오류: {e}")
         
         # brandflow 데이터베이스 생성
         try:
@@ -56,15 +56,15 @@ async def setup_database():
                 CREATE DATABASE brandflow OWNER brandflow_user 
                 ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C'
             """)
-            print("✅ brandflow 데이터베이스 생성됨")
+            print("SUCCESS brandflow 데이터베이스 생성됨")
         except asyncpg.DuplicateDatabaseError:
-            print("ℹ️  brandflow 데이터베이스가 이미 존재함")
+            print("ℹ  brandflow 데이터베이스가 이미 존재함")
         except Exception as e:
-            print(f"⚠️  데이터베이스 생성 중 오류: {e}")
+            print(f"WARNING  데이터베이스 생성 중 오류: {e}")
         
         # 권한 부여
         await conn.execute("GRANT ALL PRIVILEGES ON DATABASE brandflow TO brandflow_user")
-        print("✅ 데이터베이스 권한 부여 완료")
+        print("SUCCESS 데이터베이스 권한 부여 완료")
         
         await conn.close()
         
@@ -81,14 +81,14 @@ async def setup_database():
             await brandflow_conn.execute("""
                 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO brandflow_user
             """)
-            print("✅ 스키마 권한 설정 완료")
+            print("SUCCESS 스키마 권한 설정 완료")
             
             await brandflow_conn.close()
             
         except Exception as e:
-            print(f"⚠️  스키마 권한 설정 중 오류 (무시 가능): {e}")
+            print(f"WARNING  스키마 권한 설정 중 오류 (무시 가능): {e}")
         
-        print("\n🎉 PostgreSQL 데이터베이스 설정 완료!")
+        print("\nPARTY PostgreSQL 데이터베이스 설정 완료!")
         print("연결 정보:")
         print("  호스트: localhost")
         print("  포트: 5432")
@@ -101,7 +101,7 @@ async def setup_database():
         return True
         
     except Exception as e:
-        print(f"❌ 데이터베이스 설정 실패: {e}")
+        print(f"FAILED 데이터베이스 설정 실패: {e}")
         if conn:
             await conn.close()
         return False
@@ -109,7 +109,7 @@ async def setup_database():
 
 async def test_connection():
     """brandflow 데이터베이스 연결 테스트"""
-    print("\n🔧 연결 테스트 중...")
+    print("\nTOOLS 연결 테스트 중...")
     
     try:
         conn = await asyncpg.connect(
@@ -118,7 +118,7 @@ async def test_connection():
         
         # 버전 확인
         version = await conn.fetchval("SELECT version()")
-        print(f"✅ 연결 성공! PostgreSQL 버전: {version.split()[0]} {version.split()[1]}")
+        print(f"SUCCESS 연결 성공! PostgreSQL 버전: {version.split()[0]} {version.split()[1]}")
         
         # 테스트 테이블 생성 및 삭제
         await conn.execute("""
@@ -130,16 +130,16 @@ async def test_connection():
         await conn.execute("INSERT INTO test_table (name) VALUES ('test')")
         
         count = await conn.fetchval("SELECT COUNT(*) FROM test_table")
-        print(f"✅ 테이블 작업 테스트 성공 (레코드 수: {count})")
+        print(f"SUCCESS 테이블 작업 테스트 성공 (레코드 수: {count})")
         
         await conn.execute("DROP TABLE test_table")
-        print("✅ 테스트 테이블 정리 완료")
+        print("SUCCESS 테스트 테이블 정리 완료")
         
         await conn.close()
         return True
         
     except Exception as e:
-        print(f"❌ 연결 테스트 실패: {e}")
+        print(f"FAILED 연결 테스트 실패: {e}")
         return False
 
 
@@ -156,7 +156,7 @@ async def main():
     if not test_success:
         return 1
     
-    print("\n✅ 모든 설정이 완료되었습니다!")
+    print("\nSUCCESS 모든 설정이 완료되었습니다!")
     print("\n다음 단계:")
     print("1. python migrate_to_postgresql.py (기존 SQLite 데이터가 있다면)")
     print("2. copy .env.postgresql .env")

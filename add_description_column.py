@@ -43,7 +43,7 @@ async def add_description_column():
                     ALTER TABLE campaigns 
                     ADD COLUMN description TEXT
                 """))
-                logger.info("✅ campaigns.description 컬럼이 성공적으로 추가되었습니다.")
+                logger.info("SUCCESS campaigns.description 컬럼이 성공적으로 추가되었습니다.")
                 
             except Exception as e:
                 if "duplicate column name" in str(e).lower() or "already exists" in str(e).lower():
@@ -57,10 +57,10 @@ async def add_description_column():
                 SET description = '' 
                 WHERE description IS NULL
             """))
-            logger.info("✅ 기존 레코드의 description 값을 빈 문자열로 업데이트했습니다.")
+            logger.info("SUCCESS 기존 레코드의 description 값을 빈 문자열로 업데이트했습니다.")
             
     except Exception as e:
-        logger.error(f"❌ 마이그레이션 실패: {e}")
+        logger.error(f"FAILED 마이그레이션 실패: {e}")
         raise
 
 async def main():
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     # 마이그레이션 실행
     success = asyncio.run(main())
     if success:
-        print("✅ 마이그레이션이 성공적으로 완료되었습니다.")
+        print("SUCCESS 마이그레이션이 성공적으로 완료되었습니다.")
     else:
-        print("❌ 마이그레이션이 실패했습니다.")
+        print("FAILED 마이그레이션이 실패했습니다.")
         exit(1)

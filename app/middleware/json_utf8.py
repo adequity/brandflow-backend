@@ -34,18 +34,18 @@ class UTF8JSONMiddleware(BaseHTTPMiddleware):
                     
                     # 한글 문자 확인 및 로깅
                     if any('\u3131' <= char <= '\uD79D' for char in decoded_body):
-                        logger.info(f"✅ 한글 문자 감지됨 - UTF-8 처리: {decoded_body[:100]}...")
+                        logger.info(f"SUCCESS 한글 문자 감지됨 - UTF-8 처리: {decoded_body[:100]}...")
                     
                     # JSON 유효성 검사
                     try:
                         parsed_json = json.loads(decoded_body)
-                        logger.info(f"✅ JSON 파싱 성공: {type(parsed_json)}")
+                        logger.info(f"SUCCESS JSON 파싱 성공: {type(parsed_json)}")
                         
                         # 한글 필드 로깅
                         if isinstance(parsed_json, dict):
                             for key, value in parsed_json.items():
                                 if isinstance(value, str) and any('\u3131' <= char <= '\uD79D' for char in value):
-                                    logger.info(f"✅ 한글 필드 확인: {key} = {value}")
+                                    logger.info(f"SUCCESS 한글 필드 확인: {key} = {value}")
                                     
                     except json.JSONDecodeError as e:
                         logger.error(f"JSON parsing failed: {e}")

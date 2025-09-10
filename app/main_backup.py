@@ -12,32 +12,32 @@ from app.api.endpoints import auth, users, campaigns, purchase_requests, company
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup - Railway 배포용 단순화
-    print("🚀 Starting BrandFlow FastAPI v2.2.2...")
-    print("🌐 Railway deployment mode - Health API enabled")
+    print("Starting BrandFlow FastAPI v2.2.2...")
+    print("Railway deployment mode - Health API enabled")
     
     # 데이터베이스 초기화 실행
     try:
-        print("🔄 Creating database tables...")
+        print("Creating database tables...")
         await create_tables()
-        print("✅ Database tables created")
+        print("Database tables created")
         
-        print("🔄 Skipping data initialization - using existing database...")
+        print("Skipping data initialization - using existing database...")
         # 기존 데이터베이스 사용, 초기화 데이터 생성 비활성화
         # async for db in get_async_db():
         #     await init_database_data(db)
         #     break  # 첫 번째 세션만 사용
-        print("✅ Using existing database data")
+        print("Using existing database data")
     except Exception as e:
-        print(f"⚠️ Database initialization failed: {str(e)}")
+        print(f"WARNING: Database initialization failed: {str(e)}")
         import traceback
         print(f"Full error: {traceback.format_exc()}")
         # 초기화 실패해도 서버는 계속 실행
         pass
-    print("✅ BrandFlow FastAPI v2.2.2 ready!")
+    print("BrandFlow FastAPI v2.2.2 ready!")
     
     yield
     # Shutdown
-    print("🛑 BrandFlow server shutdown completed")
+    print("BrandFlow server shutdown completed")
 
 
 app = FastAPI(
@@ -53,7 +53,7 @@ app = FastAPI(
 # app.add_middleware(SimpleCORSMiddleware)  # CORSMiddleware와 중복되어 비활성화
 
 # from app.middleware.json_utf8 import UTF8JSONMiddleware
-# app.add_middleware(UTF8JSONMiddleware)  # ⚠️ 2분 타임아웃 문제로 재비활성화
+# app.add_middleware(UTF8JSONMiddleware)  # WARNING: 2분 타임아웃 문제로 재비활성화
 
 # 보안 미들웨어 추가 (순서가 중요 - 가장 먼저 적용)
 # from app.middleware.security_audit import SecurityAuditMiddleware
@@ -77,7 +77,7 @@ app = FastAPI(
 import os
 # if os.getenv('RAILWAY_ENVIRONMENT_NAME') or os.getenv('PORT'):
 #     app.add_middleware(HTTPSRedirectMiddleware)
-#     print("🔒 HTTPS 리다이렉트 미들웨어 활성화")
+#     print("HTTPS 리다이렉트 미들웨어 활성화")
 
 # 성능 모니터링 미들웨어 추가
 from app.middleware.simple_performance import SimplePerformanceMiddleware

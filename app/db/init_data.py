@@ -170,7 +170,6 @@ async def create_test_campaigns(db: AsyncSession, users: list):
         
         campaign = Campaign(
             name=campaign_data["name"],
-            description=campaign_data["description"],
             client_company=campaign_data["client_company"],
             budget=campaign_data["budget"],
             start_date=start_date,

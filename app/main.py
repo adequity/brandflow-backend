@@ -77,7 +77,7 @@ app = FastAPI(
 import os
 # if os.getenv('RAILWAY_ENVIRONMENT_NAME') or os.getenv('PORT'):
 #     app.add_middleware(HTTPSRedirectMiddleware)
-#     print("🔒 HTTPS 리다이렉트 미들웨어 활성화")
+#     print("HTTPS 리다이렉트 미들웨어 활성화")
 
 # 성능 모니터링 미들웨어 추가
 from app.middleware.simple_performance import SimplePerformanceMiddleware
@@ -97,7 +97,7 @@ async def cors_exception_handler(request: Request, exc: Exception):
     
     # CORS 헤더 수동 추가
     origin = request.headers.get("origin")
-    # 🚨 CORS 허용 도메인 확대 (Netlify 서브도메인 포함)
+    # CORS 허용 도메인 확대 (Netlify 서브도메인 포함)
     allowed_origins = [
         "https://brandflo.netlify.app",
         "https://brandflow-frontend.netlify.app", 
@@ -237,7 +237,7 @@ async def debug_routes():
         "api_routes_count": len(api_routes),
         "api_routes": sorted(api_routes, key=lambda x: x['path']),
         "environment": "railway" if os.getenv("PORT") else "local",
-        "database_url_type": "postgresql" if "postgresql" in settings.get_database_url else "sqlite",
+        "database_url_type": "postgresql" if "postgresql" in settings.get_database_url else "other",
         "database_url": settings.get_database_url,
         "raw_database_url": os.getenv("DATABASE_URL", "NOT_SET"),
         "railway_env": os.getenv("RAILWAY_ENVIRONMENT_NAME", "NOT_SET")

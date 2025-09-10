@@ -38,24 +38,24 @@ class DatabaseMigrator:
         try:
             conn = await asyncpg.connect(self.postgres_url)
             await conn.close()
-            print("✅ PostgreSQL 연결 성공")
+            print("SUCCESS PostgreSQL 연결 성공")
             return True
         except Exception as e:
-            print(f"❌ PostgreSQL 연결 실패: {e}")
+            print(f"FAILED PostgreSQL 연결 실패: {e}")
             print(f"PostgreSQL 서버가 실행 중인지 확인하고 docker-compose up -d postgres를 실행하세요.")
             return False
     
     def check_sqlite_exists(self) -> bool:
         """SQLite 데이터베이스 존재 확인"""
         if not os.path.exists(self.sqlite_db):
-            print(f"❌ SQLite 데이터베이스를 찾을 수 없습니다: {self.sqlite_db}")
+            print(f"FAILED SQLite 데이터베이스를 찾을 수 없습니다: {self.sqlite_db}")
             return False
-        print(f"✅ SQLite 데이터베이스 발견: {self.sqlite_db}")
+        print(f"SUCCESS SQLite 데이터베이스 발견: {self.sqlite_db}")
         return True
     
     async def create_postgresql_schema(self):
         """PostgreSQL에 스키마 생성"""
-        print("🔧 PostgreSQL 스키마 생성 중...")
+        print("TOOLS PostgreSQL 스키마 생성 중...")
         
         engine = create_async_engine(self.postgres_url.replace("postgresql://", "postgresql+asyncpg://"))
         
@@ -68,11 +68,11 @@ class DatabaseMigrator:
             await conn.run_sync(Base.metadata.create_all)
         
         await engine.dispose()
-        print("✅ PostgreSQL 스키마 생성 완료")
+        print("SUCCESS PostgreSQL 스키마 생성 완료")
     
     def extract_sqlite_data(self) -> Dict[str, List[Dict]]:
         """SQLite에서 데이터 추출"""
-        print("📊 SQLite 데이터 추출 중...")
+        print("ANALYTICS SQLite 데이터 추출 중...")
         
         conn = sqlite3.connect(self.sqlite_db)
         conn.row_factory = sqlite3.Row  # dict-like access
@@ -91,12 +91,12 @@ class DatabaseMigrator:
             print(f"  - {table}: {len(rows)}개 레코드")
         
         conn.close()
-        print(f"✅ SQLite 데이터 추출 완료 ({len(tables)}개 테이블)")
+        print(f"SUCCESS SQLite 데이터 추출 완료 ({len(tables)}개 테이블)")
         return data
     
     async def insert_postgresql_data(self, data: Dict[str, List[Dict]]):
         """PostgreSQL에 데이터 삽입"""
-        print("📝 PostgreSQL에 데이터 삽입 중...")
+        print(" PostgreSQL에 데이터 삽입 중...")
         
         conn = await asyncpg.connect(self.postgres_url)
         
@@ -143,16 +143,16 @@ class DatabaseMigrator:
                 
                 try:
                     await conn.executemany(query, values)
-                    print(f"    ✅ {table} 완료")
+                    print(f"    SUCCESS {table} 완료")
                 except Exception as e:
-                    print(f"    ❌ {table} 실패: {e}")
+                    print(f"    FAILED {table} 실패: {e}")
         
         await conn.close()
-        print("✅ PostgreSQL 데이터 삽입 완료")
+        print("SUCCESS PostgreSQL 데이터 삽입 완료")
     
     async def verify_migration(self, original_data: Dict[str, List[Dict]]):
         """마이그레이션 결과 검증"""
-        print("🔍 마이그레이션 결과 검증 중...")
+        print("SEARCH 마이그레이션 결과 검증 중...")
         
         conn = await asyncpg.connect(self.postgres_url)
         
@@ -165,16 +165,16 @@ class DatabaseMigrator:
             original_count = len(original_records)
             
             if pg_count == original_count:
-                print(f"  ✅ {table}: {pg_count}/{original_count}")
+                print(f"  SUCCESS {table}: {pg_count}/{original_count}")
             else:
-                print(f"  ⚠️  {table}: {pg_count}/{original_count} (불일치)")
+                print(f"  WARNING  {table}: {pg_count}/{original_count} (불일치)")
         
         await conn.close()
-        print("✅ 검증 완료")
+        print("SUCCESS 검증 완료")
     
     async def run_migration(self):
         """전체 마이그레이션 실행"""
-        print("🚀 BrandFlow PostgreSQL 마이그레이션 시작")
+        print("LAUNCH BrandFlow PostgreSQL 마이그레이션 시작")
         print("="*50)
         
         # 1. 연결 확인
@@ -197,7 +197,7 @@ class DatabaseMigrator:
         await self.verify_migration(original_data)
         
         print("="*50)
-        print("🎉 마이그레이션 완료!")
+        print("PARTY 마이그레이션 완료!")
         print("\n다음 단계:")
         print("1. .env.postgresql 파일을 .env로 복사")
         print("2. FastAPI 서버 재시작")

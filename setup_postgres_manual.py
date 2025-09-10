@@ -127,7 +127,7 @@ SELECT current_database() as database, current_user as user;
     with open('brandflow_setup.sql', 'w', encoding='utf-8') as f:
         f.write(sql_content)
     
-    print("✅ SQL 설정 파일이 생성되었습니다: brandflow_setup.sql")
+    print("SUCCESS SQL 설정 파일이 생성되었습니다: brandflow_setup.sql")
     print()
     print("사용 방법:")
     print('1. pgAdmin에서 파일 열기 후 실행')

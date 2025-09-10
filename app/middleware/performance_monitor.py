@@ -125,7 +125,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
             
             # 느린 요청 경고
             if duration > 1.0:  # 1초 이상
-                print(f"🐌 느린 요청 감지: {method} {endpoint} - {duration:.3f}s")
+                print(f" 느린 요청 감지: {method} {endpoint} - {duration:.3f}s")
             
             return response
             
@@ -154,4 +154,4 @@ def receive_after_cursor_execute(conn, cursor, statement, parameters, context, e
             'timestamp': datetime.now().isoformat(),
             'parameters': str(parameters)[:100] if parameters else None
         })
-        print(f"🐌 느린 쿼리: {total:.3f}s - {statement[:100]}...")
+        print(f" 느린 쿼리: {total:.3f}s - {statement[:100]}...")

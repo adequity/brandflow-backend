@@ -109,12 +109,12 @@ class DatabaseMigrator:
             );
         """)
         
-        print("✅ PostgreSQL 테이블 생성 완료")
+        print("SUCCESS PostgreSQL 테이블 생성 완료")
     
     async def migrate_table_data(self, pg_conn, table_name: str, data: List[Dict[str, Any]]):
         """테이블 데이터를 PostgreSQL로 마이그레이션"""
         if not data:
-            print(f"⚠️  {table_name} 테이블에 마이그레이션할 데이터가 없습니다.")
+            print(f"WARNING  {table_name} 테이블에 마이그레이션할 데이터가 없습니다.")
             return
         
         # 데이터 타입 변환 및 정리
@@ -213,7 +213,7 @@ class DatabaseMigrator:
                     row['created_at'], row['updated_at']
                 )
         
-        print(f"✅ {table_name} 테이블 데이터 마이그레이션 완료: {len(cleaned_data)}건")
+        print(f"SUCCESS {table_name} 테이블 데이터 마이그레이션 완료: {len(cleaned_data)}건")
     
     async def update_sequences(self, pg_conn):
         """시퀀스 값을 현재 최대값으로 업데이트"""
@@ -225,21 +225,21 @@ class DatabaseMigrator:
             
             if max_id > 0:
                 await pg_conn.execute(f"SELECT setval('{table}_id_seq', {max_id})")
-                print(f"✅ {table} 시퀀스 업데이트 완료: {max_id}")
+                print(f"SUCCESS {table} 시퀀스 업데이트 완료: {max_id}")
     
     async def run_migration(self):
         """전체 마이그레이션 실행"""
-        print("🚀 SQLite → PostgreSQL 마이그레이션 시작")
+        print("LAUNCH SQLite → PostgreSQL 마이그레이션 시작")
         
         # SQLite 파일 존재 확인
         if not os.path.exists(self.sqlite_path):
-            print(f"❌ SQLite 파일을 찾을 수 없습니다: {self.sqlite_path}")
+            print(f"FAILED SQLite 파일을 찾을 수 없습니다: {self.sqlite_path}")
             return
         
         try:
             # PostgreSQL 연결
             pg_conn = await asyncpg.connect(**self.pg_config)
-            print("✅ PostgreSQL 연결 성공")
+            print("SUCCESS PostgreSQL 연결 성공")
             
             # 테이블 생성
             await self.create_postgresql_tables(pg_conn)
@@ -248,7 +248,7 @@ class DatabaseMigrator:
             tables_to_migrate = ['users', 'campaigns', 'purchase_requests']
             
             for table_name in tables_to_migrate:
-                print(f"\n📊 {table_name} 테이블 마이그레이션 중...")
+                print(f"\nANALYTICS {table_name} 테이블 마이그레이션 중...")
                 sqlite_data = self.get_sqlite_data(table_name)
                 await self.migrate_table_data(pg_conn, table_name, sqlite_data)
             
@@ -256,10 +256,10 @@ class DatabaseMigrator:
             await self.update_sequences(pg_conn)
             
             await pg_conn.close()
-            print("\n🎉 마이그레이션 완료!")
+            print("\nPARTY 마이그레이션 완료!")
             
         except Exception as e:
-            print(f"❌ 마이그레이션 오류: {e}")
+            print(f"FAILED 마이그레이션 오류: {e}")
             raise
 
 

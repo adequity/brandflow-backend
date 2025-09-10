@@ -175,7 +175,7 @@ class AuditLogger:
     
     def _print_critical_event(self, event: AuditEvent):
         """중요 이벤트 즉시 출력"""
-        print(f"🚨 CRITICAL AUDIT EVENT: {event.event_type.value}")
+        print(f" CRITICAL AUDIT EVENT: {event.event_type.value}")
         print(f"   User: {event.user_email} ({event.user_role})")
         print(f"   IP: {event.user_ip}")
         print(f"   Action: {event.action}")

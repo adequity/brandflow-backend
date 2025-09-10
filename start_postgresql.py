@@ -30,7 +30,7 @@ def check_postgresql_running():
         if 'postgres' in proc.info['name'].lower():
             for conn in proc.info['connections'] or []:
                 if conn.laddr.port == 5432:
-                    print(f"✅ PostgreSQL이 이미 실행 중입니다 (PID: {proc.info['pid']})")
+                    print(f"SUCCESS PostgreSQL이 이미 실행 중입니다 (PID: {proc.info['pid']})")
                     return True
     return False
 
@@ -38,17 +38,17 @@ def check_postgresql_running():
 def start_with_docker():
     """Docker Compose를 사용하여 PostgreSQL 시작"""
     if not os.path.exists('docker-compose.yml'):
-        print("❌ docker-compose.yml 파일을 찾을 수 없습니다.")
+        print("FAILED docker-compose.yml 파일을 찾을 수 없습니다.")
         return False
     
     try:
-        print("🐳 Docker Compose로 PostgreSQL 시작 중...")
+        print(" Docker Compose로 PostgreSQL 시작 중...")
         
         # PostgreSQL만 시작
         result = subprocess.run(['docker-compose', 'up', '-d', 'postgres'], 
                               check=True, capture_output=True, text=True)
         
-        print("📊 PostgreSQL 컨테이너 상태 확인 중...")
+        print("ANALYTICS PostgreSQL 컨테이너 상태 확인 중...")
         time.sleep(5)  # 시작 시간 대기
         
         # 헬스체크 대기
@@ -56,17 +56,17 @@ def start_with_docker():
             result = subprocess.run(['docker-compose', 'ps', 'postgres'], 
                                   capture_output=True, text=True)
             if 'healthy' in result.stdout or '(healthy)' in result.stdout:
-                print("✅ PostgreSQL이 성공적으로 시작되었습니다!")
+                print("SUCCESS PostgreSQL이 성공적으로 시작되었습니다!")
                 return True
             elif i < 29:
-                print(f"⏳ PostgreSQL 시작 대기 중... ({i+1}/30)")
+                print(f"WAITING PostgreSQL 시작 대기 중... ({i+1}/30)")
                 time.sleep(1)
         
-        print("⚠️  PostgreSQL이 시작되었지만 헬스체크가 완료되지 않았습니다.")
+        print("WARNING  PostgreSQL이 시작되었지만 헬스체크가 완료되지 않았습니다.")
         return True
         
     except subprocess.CalledProcessError as e:
-        print(f"❌ Docker Compose 실행 실패: {e}")
+        print(f"FAILED Docker Compose 실행 실패: {e}")
         print(f"오류 출력: {e.stderr}")
         return False
 
@@ -74,7 +74,7 @@ def start_with_docker():
 def show_connection_info():
     """연결 정보 표시"""
     print("\n" + "="*50)
-    print("📋 PostgreSQL 연결 정보:")
+    print("LIST PostgreSQL 연결 정보:")
     print("="*50)
     print("호스트: localhost")
     print("포트: 5432")
@@ -88,7 +88,7 @@ def show_connection_info():
 
 def show_next_steps():
     """다음 단계 안내"""
-    print("\n🚀 다음 단계:")
+    print("\nLAUNCH 다음 단계:")
     print("1. PostgreSQL이 실행되면 마이그레이션을 실행하세요:")
     print("   python migrate_to_postgresql.py")
     print("\n2. 마이그레이션 완료 후 환경 설정을 변경하세요:")
@@ -99,7 +99,7 @@ def show_next_steps():
 
 def show_alternatives():
     """대안 방법들 안내"""
-    print("\n💡 대안 방법들:")
+    print("\nIDEA 대안 방법들:")
     print("="*50)
     
     print("\n1. 로컬 PostgreSQL 설치:")
@@ -125,7 +125,7 @@ def main():
     # PostgreSQL이 이미 실행 중인지 확인
     if check_postgresql_running():
         show_connection_info()
-        print("\n✅ PostgreSQL이 이미 실행 중입니다. 마이그레이션을 진행할 수 있습니다.")
+        print("\nSUCCESS PostgreSQL이 이미 실행 중입니다. 마이그레이션을 진행할 수 있습니다.")
         show_next_steps()
         return 0
     
@@ -136,12 +136,12 @@ def main():
             show_next_steps()
             return 0
         else:
-            print("\n❌ Docker로 PostgreSQL 시작에 실패했습니다.")
+            print("\nFAILED Docker로 PostgreSQL 시작에 실패했습니다.")
     
     # 대안 방법들 안내
     show_alternatives()
     
-    print("\n📝 참고:")
+    print("\n 참고:")
     print("PostgreSQL을 다른 방법으로 설치한 후에는")
     print(".env.postgresql 파일의 연결 정보를 수정해주세요.")
     

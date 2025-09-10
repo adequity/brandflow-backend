@@ -44,7 +44,7 @@ async def try_connection_methods():
             print(f"  시도 {i}: {display_url}")
             
             conn = await asyncpg.connect(conn_str)
-            print(f"  ✓ 연결 성공!")
+            print(f"   연결 성공!")
             
             # 데이터베이스 설정
             await setup_database(conn)
@@ -52,7 +52,7 @@ async def try_connection_methods():
             return True
             
         except Exception as e:
-            print(f"  ✗ 실패: {e}")
+            print(f"   실패: {e}")
             continue
     
     print("\n모든 자동 연결 시도가 실패했습니다.")
@@ -64,14 +64,14 @@ async def try_connection_methods():
         
         print("수동 입력된 비밀번호로 연결 시도...")
         conn = await asyncpg.connect(conn_str)
-        print("✓ 연결 성공!")
+        print(" 연결 성공!")
         
         await setup_database(conn)
         await conn.close()
         return True
         
     except Exception as e:
-        print(f"✗ 수동 연결도 실패: {e}")
+        print(f" 수동 연결도 실패: {e}")
         return False
 
 
@@ -85,7 +85,7 @@ async def setup_database(conn):
             await conn.execute("""
                 CREATE USER brandflow_user WITH PASSWORD 'brandflow_password_2024'
             """)
-            print("  ✓ brandflow_user 사용자 생성")
+            print("   brandflow_user 사용자 생성")
         except asyncpg.DuplicateObjectError:
             print("  ℹ brandflow_user가 이미 존재합니다")
         except Exception as e:
@@ -97,7 +97,7 @@ async def setup_database(conn):
                 CREATE DATABASE brandflow OWNER brandflow_user 
                 ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C'
             """)
-            print("  ✓ brandflow 데이터베이스 생성")
+            print("   brandflow 데이터베이스 생성")
         except asyncpg.DuplicateDatabaseError:
             print("  ℹ brandflow 데이터베이스가 이미 존재합니다")
         except Exception as e:
@@ -106,7 +106,7 @@ async def setup_database(conn):
         # 권한 부여
         try:
             await conn.execute("GRANT ALL PRIVILEGES ON DATABASE brandflow TO brandflow_user")
-            print("  ✓ 권한 부여 완료")
+            print("   권한 부여 완료")
         except Exception as e:
             print(f"  ! 권한 부여 중 오류: {e}")
     
@@ -126,7 +126,7 @@ async def test_brandflow_connection():
         
         # 테스트 쿼리
         version = await conn.fetchval("SELECT version()")
-        print(f"  ✓ 연결 성공! PostgreSQL 버전: {version.split()[1]}")
+        print(f"   연결 성공! PostgreSQL 버전: {version.split()[1]}")
         
         # 테스트 테이블 생성/삭제
         await conn.execute("CREATE TABLE IF NOT EXISTS test_table (id SERIAL PRIMARY KEY, name VARCHAR(100))")
@@ -134,13 +134,13 @@ async def test_brandflow_connection():
         count = await conn.fetchval("SELECT COUNT(*) FROM test_table")
         await conn.execute("DROP TABLE test_table")
         
-        print(f"  ✓ 테이블 작업 테스트 성공 (레코드: {count}개)")
+        print(f"   테이블 작업 테스트 성공 (레코드: {count}개)")
         
         await conn.close()
         return True
         
     except Exception as e:
-        print(f"  ✗ brandflow 데이터베이스 연결 실패: {e}")
+        print(f"   brandflow 데이터베이스 연결 실패: {e}")
         return False
 
 
@@ -149,7 +149,7 @@ async def main():
     
     # PostgreSQL 연결 및 설정
     if not await try_connection_methods():
-        print("\n❌ PostgreSQL 연결에 실패했습니다.")
+        print("\nFAILED PostgreSQL 연결에 실패했습니다.")
         print("\n해결 방법:")
         print("1. PostgreSQL 서비스가 실행 중인지 확인")
         print("2. postgres 사용자의 비밀번호 확인")
@@ -158,7 +158,7 @@ async def main():
     
     # brandflow 데이터베이스 연결 테스트
     if await test_brandflow_connection():
-        print("\n🎉 PostgreSQL 데이터베이스 설정이 완료되었습니다!")
+        print("\nPARTY PostgreSQL 데이터베이스 설정이 완료되었습니다!")
         print("\n연결 정보:")
         print("  - 호스트: localhost")
         print("  - 포트: 5432") 
@@ -171,7 +171,7 @@ async def main():
         print("3. FastAPI 서버 재시작")
         return 0
     else:
-        print("\n❌ brandflow 데이터베이스 설정에 문제가 있습니다.")
+        print("\nFAILED brandflow 데이터베이스 설정에 문제가 있습니다.")
         return 1
 
 

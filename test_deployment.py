@@ -30,21 +30,21 @@ class DeploymentTester:
                         "response": data,
                         "response_time": response.headers.get('X-Response-Time', 'N/A')
                     }
-                    print("✅ Health Check: PASS")
+                    print("SUCCESS Health Check: PASS")
                     return True
                 else:
                     self.results["tests"]["health_check"] = {
                         "status": "FAIL",
                         "error": f"HTTP {response.status}"
                     }
-                    print(f"❌ Health Check: FAIL (HTTP {response.status})")
+                    print(f"FAILED Health Check: FAIL (HTTP {response.status})")
                     return False
         except Exception as e:
             self.results["tests"]["health_check"] = {
                 "status": "ERROR",
                 "error": str(e)
             }
-            print(f"❌ Health Check: ERROR - {e}")
+            print(f"FAILED Health Check: ERROR - {e}")
             return False
     
     async def test_api_docs(self, session):
@@ -56,21 +56,21 @@ class DeploymentTester:
                         "status": "PASS",
                         "url": f"{self.base_url}/docs"
                     }
-                    print("✅ API Documentation: PASS")
+                    print("SUCCESS API Documentation: PASS")
                     return True
                 else:
                     self.results["tests"]["api_docs"] = {
                         "status": "FAIL",
                         "error": f"HTTP {response.status}"
                     }
-                    print(f"❌ API Documentation: FAIL")
+                    print(f"FAILED API Documentation: FAIL")
                     return False
         except Exception as e:
             self.results["tests"]["api_docs"] = {
                 "status": "ERROR",
                 "error": str(e)
             }
-            print(f"❌ API Documentation: ERROR - {e}")
+            print(f"FAILED API Documentation: ERROR - {e}")
             return False
     
     async def test_api_endpoints(self, session):
@@ -95,12 +95,12 @@ class DeploymentTester:
                 async with session.get(f"{self.base_url}{endpoint}") as response:
                     # 인증이 필요한 엔드포인트는 401이 정상
                     if response.status in [200, 401]:
-                        print(f"✅ {endpoint}: PASS (HTTP {response.status})")
+                        print(f"SUCCESS {endpoint}: PASS (HTTP {response.status})")
                         passed += 1
                     else:
-                        print(f"❌ {endpoint}: FAIL (HTTP {response.status})")
+                        print(f"FAILED {endpoint}: FAIL (HTTP {response.status})")
             except Exception as e:
-                print(f"❌ {endpoint}: ERROR - {e}")
+                print(f"FAILED {endpoint}: ERROR - {e}")
         
         self.results["tests"]["api_endpoints"] = {
             "status": "PASS" if passed == total else "PARTIAL",
@@ -121,7 +121,7 @@ class DeploymentTester:
             
             try:
                 async with websockets.connect(uri) as websocket:
-                    print("✅ WebSocket: Connection possible")
+                    print("SUCCESS WebSocket: Connection possible")
                     self.results["tests"]["websocket"] = {
                         "status": "PASS",
                         "message": "WebSocket server is running"
@@ -129,7 +129,7 @@ class DeploymentTester:
                     return True
             except websockets.exceptions.ConnectionClosedError as e:
                 if "Authentication required" in str(e) or "policy violation" in str(e).lower():
-                    print("✅ WebSocket: Server running (Authentication required as expected)")
+                    print("SUCCESS WebSocket: Server running (Authentication required as expected)")
                     self.results["tests"]["websocket"] = {
                         "status": "PASS",
                         "message": "WebSocket server is running with proper authentication"
@@ -139,14 +139,14 @@ class DeploymentTester:
                     raise e
                     
         except ImportError:
-            print("⚠️  WebSocket: websockets library not available for testing")
+            print("WARNING  WebSocket: websockets library not available for testing")
             self.results["tests"]["websocket"] = {
                 "status": "SKIP",
                 "message": "websockets library not available"
             }
             return True
         except Exception as e:
-            print(f"❌ WebSocket: ERROR - {e}")
+            print(f"FAILED WebSocket: ERROR - {e}")
             self.results["tests"]["websocket"] = {
                 "status": "ERROR",
                 "error": str(e)
@@ -163,7 +163,7 @@ class DeploymentTester:
                 # 간단한 쿼리 실행
                 result = await session.execute(text("SELECT 1"))
                 if result.scalar() == 1:
-                    print("✅ Database: Connection successful")
+                    print("SUCCESS Database: Connection successful")
                     self.results["tests"]["database"] = {
                         "status": "PASS",
                         "message": "Database connection successful"
@@ -173,7 +173,7 @@ class DeploymentTester:
                     raise Exception("Query returned unexpected result")
                     
         except Exception as e:
-            print(f"❌ Database: ERROR - {e}")
+            print(f"FAILED Database: ERROR - {e}")
             self.results["tests"]["database"] = {
                 "status": "ERROR",
                 "error": str(e)
@@ -202,10 +202,10 @@ class DeploymentTester:
                 test_file.write_text("test")
                 test_file.unlink()  # 삭제
                 
-                print(f"✅ Directory {dir_name}: PASS")
+                print(f"SUCCESS Directory {dir_name}: PASS")
                 passed += 1
             except Exception as e:
-                print(f"❌ Directory {dir_name}: ERROR - {e}")
+                print(f"FAILED Directory {dir_name}: ERROR - {e}")
         
         self.results["tests"]["file_system"] = {
             "status": "PASS" if passed == len(test_dirs) else "PARTIAL",
@@ -217,28 +217,28 @@ class DeploymentTester:
     
     async def run_all_tests(self):
         """모든 테스트 실행"""
-        print("🚀 Starting BrandFlow Deployment Testing...")
+        print("LAUNCH Starting BrandFlow Deployment Testing...")
         print("=" * 50)
         
         start_time = time.time()
         
         # 파일 시스템 테스트 (동기)
-        print("\n📁 Testing File System...")
+        print("\n Testing File System...")
         fs_result = await self.test_file_system()
         
         # 데이터베이스 테스트 (동기)
-        print("\n🗄️  Testing Database...")
+        print("\n  Testing Database...")
         db_result = await self.test_database_connection()
         
         # HTTP 테스트 (비동기)
-        print("\n🌐 Testing HTTP Endpoints...")
+        print("\nWEB Testing HTTP Endpoints...")
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             health_result = await self.test_health_check(session)
             docs_result = await self.test_api_docs(session)
             api_result = await self.test_api_endpoints(session)
         
         # WebSocket 테스트
-        print("\n🔌 Testing WebSocket...")
+        print("\n Testing WebSocket...")
         ws_result = await self.test_websocket_connection()
         
         # 결과 요약
@@ -259,19 +259,19 @@ class DeploymentTester:
         }
         
         print("\n" + "=" * 50)
-        print("📊 Test Summary:")
+        print("ANALYTICS Test Summary:")
         print(f"   Total Tests: {total_tests}")
         print(f"   Passed: {passed_tests}")
         print(f"   Failed: {total_tests - passed_tests}")
         print(f"   Success Rate: {passed_tests/total_tests*100:.1f}%")
         print(f"   Duration: {test_duration:.2f}s")
-        print(f"   Overall Status: {'✅ PASS' if passed_tests >= total_tests * 0.8 else '❌ FAIL'}")
+        print(f"   Overall Status: {'SUCCESS PASS' if passed_tests >= total_tests * 0.8 else 'FAILED FAIL'}")
         
         # 결과 파일로 저장
         with open("deployment_test_results.json", "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, ensure_ascii=False)
         
-        print(f"\n📋 Detailed results saved to: deployment_test_results.json")
+        print(f"\nLIST Detailed results saved to: deployment_test_results.json")
         
         return self.results
 
