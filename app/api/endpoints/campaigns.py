@@ -185,9 +185,19 @@ async def get_campaigns(
         }
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 캠페인 조회 구현
-        return []
+        print("[CAMPAIGNS-LIST] Using legacy JWT mode")
+        return {
+            "data": [],
+            "pagination": {
+                "page": 1,
+                "size": 0,
+                "total": 0,
+                "total_pages": 0,
+                "has_next": False,
+                "has_prev": False,
+                "offset": 0
+            }
+        }
 
 
 @router.post("/", response_model=CampaignResponse)
