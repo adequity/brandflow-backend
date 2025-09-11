@@ -586,6 +586,22 @@ async def update_campaign(
                     print(f"[CAMPAIGN-UPDATE] Changed creator_id from {campaign.creator_id} to {value} ({new_staff.name})")
                 elif field in ['start_date', 'end_date'] and value:
                     # 날짜 필드는 안전하게 파싱
+                    def safe_datetime_parse(date_input):
+                        if date_input is None:
+                            return datetime.now(timezone.utc).replace(tzinfo=None)
+                        # 이미 datetime 객체인 경우
+                        if isinstance(date_input, datetime):
+                            return date_input.replace(tzinfo=None)
+                        # string인 경우 파싱 시도
+                        if isinstance(date_input, str):
+                            try:
+                                parsed = datetime.fromisoformat(date_input.replace('Z', '+00:00'))
+                                return parsed.replace(tzinfo=None)
+                            except ValueError:
+                                print(f"[CAMPAIGN-UPDATE] WARNING: Failed to parse date string: {date_input}")
+                                return datetime.now(timezone.utc).replace(tzinfo=None)
+                        return datetime.now(timezone.utc).replace(tzinfo=None)
+                    
                     try:
                         if isinstance(value, str):
                             parsed_date = safe_datetime_parse(value)
