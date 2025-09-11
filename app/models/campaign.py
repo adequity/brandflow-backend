@@ -18,7 +18,7 @@ class Campaign(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
-    # description = Column(Text, nullable=True)  # TODO: Add after Railway migration
+    description = Column(Text, nullable=True)  # Add description field for frontend compatibility
     client_company = Column(String(200), nullable=False)
     budget = Column(Float, nullable=False)
     start_date = Column(DateTime, nullable=False)
