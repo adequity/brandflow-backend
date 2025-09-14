@@ -129,7 +129,7 @@ async def cors_exception_handler(request: Request, exc: Exception):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # HTTP 0 에러 해결을 위한 임시 전체 허용
-    allow_credentials=True,  # 인증 쿠키/토큰 지원
+    allow_credentials=False,  # allow_origins=["*"]와 충돌 방지
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=[
         "Content-Type", 
