@@ -6,6 +6,7 @@ from urllib.parse import unquote
 from pydantic import BaseModel
 
 from app.db.database import get_async_db
+from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.core.cache import cached
 
@@ -83,7 +84,8 @@ async def get_unread_notifications_count(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """읽지 않은 알림 개수 조회"""
     print(f"[NOTIFICATIONS] unread-count request: viewerId={viewerId}, viewerRole={viewerRole}")
@@ -119,8 +121,21 @@ async def get_unread_notifications_count(
             return result
         else:
             # 기존 API 모드 (JWT 토큰 기반)
-            print("[NOTIFICATIONS] JWT mode - returning default")
-            return {"unread_count": 0}
+            current_user = jwt_user
+            print(f"[NOTIFICATIONS-UNREAD-COUNT-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
+            
+            try:
+                # JWT 기반 알림 개수 조회
+                user_role = current_user.role.value
+                result = await get_unread_count_cached(current_user.id, user_role)
+                
+                print(f"[NOTIFICATIONS-UNREAD-COUNT-JWT] SUCCESS: Returning {result} for user {current_user.id}")
+                return result
+                
+            except Exception as e:
+                print(f"[NOTIFICATIONS-UNREAD-COUNT-JWT] Unexpected error: {type(e).__name__}: {e}")
+                # 오류 시 기본값 반환
+                return {"unread_count": 0}
     except Exception as e:
         print(f"[NOTIFICATIONS] Unexpected error: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=f"알림 조회 중 오류: {str(e)}")
@@ -136,7 +151,8 @@ async def get_notifications(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """알림 목록 조회"""
     
@@ -157,15 +173,36 @@ async def get_notifications(
         
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    
-    # 현재는 빈 알림 목록 반환 (실제 알림 시스템 구현 시 DB에서 조회)
-    notifications = []
-    
-    return NotificationsListResponse(
-        notifications=notifications,
-        unreadCount=0,
-        total=0
-    )
+        
+        # 현재는 빈 알림 목록 반환 (실제 알림 시스템 구현 시 DB에서 조회)
+        notifications = []
+        
+        return NotificationsListResponse(
+            notifications=notifications,
+            unreadCount=0,
+            total=0
+        )
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = jwt_user
+        print(f"[NOTIFICATIONS-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
+        
+        try:
+            # JWT 기반 알림 목록 조회
+            # 현재는 빈 목록 반환 (실제 알림 시스템 구현 시 DB에서 조회)
+            notifications = []
+            
+            print(f"[NOTIFICATIONS-LIST-JWT] SUCCESS: Returning {len(notifications)} notifications for user {current_user.id}")
+            
+            return NotificationsListResponse(
+                notifications=notifications,
+                unreadCount=0,
+                total=0
+            )
+            
+        except Exception as e:
+            print(f"[NOTIFICATIONS-LIST-JWT] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"알림 조회 중 오류: {str(e)}")
 
 
 @router.put("/{notification_id}/read")
@@ -176,7 +213,8 @@ async def mark_notification_as_read(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """알림을 읽음으로 표시"""
     
@@ -197,9 +235,24 @@ async def mark_notification_as_read(
         
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    
-    # 현재는 성공 응답만 반환 (실제 알림 시스템 구현 시 DB 업데이트)
-    return {"message": "알림이 읽음으로 표시되었습니다", "notificationId": notification_id}
+        
+        # 현재는 성공 응답만 반환 (실제 알림 시스템 구현 시 DB 업데이트)
+        return {"message": "알림이 읽음으로 표시되었습니다", "notificationId": notification_id}
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = jwt_user
+        print(f"[NOTIFICATIONS-MARK-READ-JWT] Request from user_id={current_user.id}, notification_id={notification_id}")
+        
+        try:
+            # JWT 기반 알림 읽음 처리
+            # 현재는 성공 응답만 반환 (실제 알림 시스템 구현 시 DB 업데이트)
+            
+            print(f"[NOTIFICATIONS-MARK-READ-JWT] SUCCESS: Marked notification {notification_id} as read for user {current_user.id}")
+            return {"message": "알림이 읽음으로 표시되었습니다", "notificationId": notification_id}
+            
+        except Exception as e:
+            print(f"[NOTIFICATIONS-MARK-READ-JWT] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"알림 업데이트 중 오류: {str(e)}")
 
 
 @router.put("/read-all")
@@ -209,7 +262,8 @@ async def mark_all_notifications_as_read(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """모든 알림을 읽음으로 표시"""
     
@@ -230,6 +284,21 @@ async def mark_all_notifications_as_read(
         
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    
-    # 현재는 성공 응답만 반환 (실제 알림 시스템 구현 시 DB에서 모든 알림 업데이트)
-    return {"message": "모든 알림이 읽음으로 표시되었습니다", "updatedCount": 0}
+        
+        # 현재는 성공 응답만 반환 (실제 알림 시스템 구현 시 DB에서 모든 알림 업데이트)
+        return {"message": "모든 알림이 읽음으로 표시되었습니다", "updatedCount": 0}
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = jwt_user
+        print(f"[NOTIFICATIONS-MARK-ALL-READ-JWT] Request from user_id={current_user.id}")
+        
+        try:
+            # JWT 기반 모든 알림 읽음 처리
+            # 현재는 성공 응답만 반환 (실제 알림 시스템 구현 시 DB에서 모든 알림 업데이트)
+            
+            print(f"[NOTIFICATIONS-MARK-ALL-READ-JWT] SUCCESS: Marked all notifications as read for user {current_user.id}")
+            return {"message": "모든 알림이 읽음으로 표시되었습니다", "updatedCount": 0}
+            
+        except Exception as e:
+            print(f"[NOTIFICATIONS-MARK-ALL-READ-JWT] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"알림 업데이트 중 오류: {str(e)}")

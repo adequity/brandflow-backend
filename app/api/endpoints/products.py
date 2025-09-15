@@ -19,7 +19,8 @@ async def get_products(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """상품 목록 조회"""
     # Node.js API 호환 모드인지 확인
@@ -70,6 +71,39 @@ async def get_products(
         return products_data
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 상품 조회 구현
-        return []
+        current_user = jwt_user
+        print(f"[PRODUCTS-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
+        
+        try:
+            # JWT 기반 상품 목록 조회
+            query = select(Product)
+            result = await db.execute(query)
+            products = result.scalars().all()
+            
+            # 응답 데이터 구성
+            products_data = []
+            for product in products:
+                product_data = {
+                    "id": product.id,
+                    "name": product.name,
+                    "description": product.description,
+                    "category": product.category,
+                    "price": product.price,
+                    "isActive": product.is_active,
+                    "createdAt": product.created_at.isoformat() if product.created_at else None
+                }
+                
+                # 추가 필드가 있다면 포함
+                if hasattr(product, 'selling_price') and product.selling_price:
+                    product_data["sellingPrice"] = product.selling_price
+                if hasattr(product, 'cost_price') and product.cost_price:
+                    product_data["costPrice"] = product.cost_price
+                    
+                products_data.append(product_data)
+            
+            print(f"[PRODUCTS-LIST-JWT] SUCCESS: Returning {len(products_data)} products")
+            return products_data
+            
+        except Exception as e:
+            print(f"[PRODUCTS-LIST-JWT] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"상품 목록 조회 중 오류: {str(e)}")

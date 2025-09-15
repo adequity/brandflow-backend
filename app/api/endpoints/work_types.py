@@ -5,6 +5,7 @@ from typing import Optional, List
 from urllib.parse import unquote
 
 from app.db.database import get_async_db
+from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.models.work_type import WorkType
 
@@ -18,7 +19,8 @@ async def get_work_types(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """작업 유형 목록 조회"""
     # Node.js API 호환 모드인지 확인
@@ -40,42 +42,92 @@ async def get_work_types(
         
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    
-    # 작업 유형 조회
-    query = select(WorkType).where(WorkType.is_active == True)
-    result = await db.execute(query)
-    work_types = result.scalars().all()
-    
-    # 기본 작업 유형이 없으면 생성
-    if not work_types:
-        default_types = [
-            {"name": "블로그 포스트", "description": "블로그 콘텐츠 작성"},
-            {"name": "인스타그램 포스트", "description": "인스타그램 콘텐츠 제작"},
-            {"name": "유튜브 영상", "description": "유튜브 동영상 제작"},
-            {"name": "페이스북 광고", "description": "페이스북 광고 콘텐츠"},
-            {"name": "카카오 채널", "description": "카카오톡 채널 운영"},
-            {"name": "네이버 블로그", "description": "네이버 블로그 포스팅"},
-            {"name": "기타", "description": "기타 마케팅 업무"}
-        ]
         
-        for type_data in default_types:
-            work_type = WorkType(**type_data)
-            db.add(work_type)
-        
-        await db.commit()
-        
-        # 새로 생성된 작업 유형 조회
+        # 작업 유형 조회 (Node.js API 모드)
+        query = select(WorkType).where(WorkType.is_active == True)
         result = await db.execute(query)
         work_types = result.scalars().all()
-    
-    return [
-        {
-            "id": wt.id,
-            "name": wt.name,
-            "description": wt.description,
-            "is_active": wt.is_active,
-            "created_at": wt.created_at.isoformat() if wt.created_at else None,
-            "updated_at": wt.updated_at.isoformat() if wt.updated_at else None
-        }
-        for wt in work_types
-    ]
+        
+        # 기본 작업 유형이 없으면 생성
+        if not work_types:
+            default_types = [
+                {"name": "블로그 포스트", "description": "블로그 콘텐츠 작성"},
+                {"name": "인스타그램 포스트", "description": "인스타그램 콘텐츠 제작"},
+                {"name": "유튜브 영상", "description": "유튜브 동영상 제작"},
+                {"name": "페이스북 광고", "description": "페이스북 광고 콘텐츠"},
+                {"name": "카카오 채널", "description": "카카오톡 채널 운영"},
+                {"name": "네이버 블로그", "description": "네이버 블로그 포스팅"},
+                {"name": "기타", "description": "기타 마케팅 업무"}
+            ]
+            
+            for type_data in default_types:
+                work_type = WorkType(**type_data)
+                db.add(work_type)
+            
+            await db.commit()
+            
+            # 새로 생성된 작업 유형 조회
+            result = await db.execute(query)
+            work_types = result.scalars().all()
+        
+        return [
+            {
+                "id": wt.id,
+                "name": wt.name,
+                "description": wt.description,
+                "is_active": wt.is_active,
+                "created_at": wt.created_at.isoformat() if wt.created_at else None,
+                "updated_at": wt.updated_at.isoformat() if wt.updated_at else None
+            }
+            for wt in work_types
+        ]
+    else:
+        # 기존 API 모드 (JWT 토큰 기반)
+        current_user = jwt_user
+        print(f"[WORK-TYPES-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
+        
+        try:
+            # JWT 기반 작업 유형 목록 조회 (모든 역할이 조회 가능)
+            query = select(WorkType).where(WorkType.is_active == True)
+            result = await db.execute(query)
+            work_types = result.scalars().all()
+            
+            # 기본 작업 유형이 없으면 생성
+            if not work_types:
+                default_types = [
+                    {"name": "블로그 포스트", "description": "블로그 콘텐츠 작성"},
+                    {"name": "인스타그램 포스트", "description": "인스타그램 콘텐츠 제작"},
+                    {"name": "유튜브 영상", "description": "유튜브 동영상 제작"},
+                    {"name": "페이스북 광고", "description": "페이스북 광고 콘텐츠"},
+                    {"name": "카카오 채널", "description": "카카오톡 채널 운영"},
+                    {"name": "네이버 블로그", "description": "네이버 블로그 포스팅"},
+                    {"name": "기타", "description": "기타 마케팅 업무"}
+                ]
+                
+                for type_data in default_types:
+                    work_type = WorkType(**type_data)
+                    db.add(work_type)
+                
+                await db.commit()
+                
+                # 새로 생성된 작업 유형 조회
+                result = await db.execute(query)
+                work_types = result.scalars().all()
+            
+            print(f"[WORK-TYPES-LIST-JWT] SUCCESS: Found {len(work_types)} work types for user {current_user.id}")
+            
+            return [
+                {
+                    "id": wt.id,
+                    "name": wt.name,
+                    "description": wt.description,
+                    "is_active": wt.is_active,
+                    "created_at": wt.created_at.isoformat() if wt.created_at else None,
+                    "updated_at": wt.updated_at.isoformat() if wt.updated_at else None
+                }
+                for wt in work_types
+            ]
+            
+        except Exception as e:
+            print(f"[WORK-TYPES-LIST-JWT] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"작업 유형 조회 중 오류: {str(e)}")
