@@ -656,7 +656,6 @@ async def update_campaign(
                 elif field in ['start_date', 'end_date']:
                     if value is None or value == '':
                         if getattr(campaign, field) is None:
-                            from datetime import datetime
                             default_date = datetime.now()
                             setattr(campaign, field, default_date)
                             print(f"[CAMPAIGN-UPDATE] Set default {field}: {default_date}")
@@ -664,7 +663,6 @@ async def update_campaign(
                             print(f"[CAMPAIGN-UPDATE] Keeping existing {field}: {getattr(campaign, field)}")
                     else:
                         try:
-                            from datetime import datetime
                             if isinstance(value, str):
                                 parsed_date = datetime.fromisoformat(value.replace('Z', '+00:00'))
                             else:
@@ -701,7 +699,6 @@ async def update_campaign(
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
             
             # 업데이트 시간 설정
-            from datetime import datetime
             campaign.updated_at = datetime.utcnow()
             
             await db.commit()
