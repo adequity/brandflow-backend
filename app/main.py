@@ -12,27 +12,31 @@ from app.api.endpoints import auth, users, campaigns, purchase_requests, company
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup - Railway 배포용 단순화
+    # Startup - Railway 배포용 안전한 시작
     print("Starting BrandFlow FastAPI v2.3.0...")
     print("Railway deployment mode - Health API enabled")
     
-    # 데이터베이스 초기화 실행 - Railway 배포용 완전 초기화
+    # Railway에서 안전한 데이터베이스 초기화
     try:
-        print("Creating database tables...")
+        print("Attempting database connection...")
         await create_tables()
         print("Database tables created successfully")
         
-        # 초기 데이터 생성
-        print("Initializing database data...")
-        async for db in get_async_db():
-            await init_database_data(db)
-            break
-        print("Database data initialization completed")
-    except Exception as e:
-        print(f"Database initialization failed (non-critical): {str(e)}")
-        print("Server will continue without database initialization")
-        # 예외를 삼켜서 서버 시작 계속
-        pass
+        # 초기 데이터 생성 (선택적)
+        try:
+            print("Initializing database data...")
+            async for db in get_async_db():
+                await init_database_data(db)
+                break
+            print("Database data initialization completed")
+        except Exception as data_error:
+            print(f"Database data initialization failed (non-critical): {str(data_error)}")
+            
+    except Exception as db_error:
+        print(f"Database connection failed: {str(db_error)}")
+        print("Server starting in offline mode - API endpoints will return appropriate errors")
+        # Railway에서도 서버가 시작되도록 모든 DB 에러를 무시
+    
     print("BrandFlow FastAPI v2.3.0 ready!")
     
     yield
