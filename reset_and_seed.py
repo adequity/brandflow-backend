@@ -13,16 +13,10 @@ from app.db.init_data import init_database_data
 
 
 async def reset_database():
-    """데이터베이스 초기화 (SQLite 파일 삭제)"""
+    """Railway PostgreSQL 데이터베이스 초기화"""
     
-    # SQLite 데이터베이스 파일 경로
-    db_path = Path("brandflow.db")
-    
-    if db_path.exists():
-        print(f"기존 데이터베이스 파일 삭제: {db_path}")
-        os.remove(db_path)
-    else:
-        print("기존 데이터베이스 파일이 없습니다.")
+    print("Railway PostgreSQL 데이터베이스 사용 중...")
+    print("Note: PostgreSQL 데이터는 직접 삭제되지 않습니다. 테이블만 재생성합니다.")
     
     # 테이블 재생성
     print("데이터베이스 테이블 재생성...")

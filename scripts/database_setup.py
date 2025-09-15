@@ -45,19 +45,12 @@ async def check_database_status():
     from sqlalchemy import text
     
     async with async_engine.begin() as conn:
-        # 테이블 목록 조회
-        if settings.get_database_url.startswith("sqlite"):
-            result = await conn.execute(text("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name NOT LIKE 'sqlite_%'
-                ORDER BY name
-            """))
-        else:  # PostgreSQL
-            result = await conn.execute(text("""
-                SELECT tablename FROM pg_tables 
-                WHERE schemaname = 'public'
-                ORDER BY tablename
-            """))
+        # 테이블 목록 조회 (PostgreSQL 전용)
+        result = await conn.execute(text("""
+            SELECT tablename FROM pg_tables 
+            WHERE schemaname = 'public'
+            ORDER BY tablename
+        """))
         
         tables = result.fetchall()
         

@@ -4,9 +4,8 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
-# Database
+# Database - PostgreSQL Only
 SQLAlchemy==2.0.23
-aiosqlite==0.19.0
 
 # Authentication & Security  
 python-jose[cryptography]==3.3.0
@@ -25,7 +24,7 @@ email-validator==2.1.0
 Pillow==10.1.0
 aiofiles==23.2.0
 
-# PostgreSQL (optional)
+# PostgreSQL (Railway Database)
 asyncpg==0.29.0
 psycopg2-binary==2.9.9
 

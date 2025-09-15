@@ -16,7 +16,7 @@ async def health_check():
             "message": "BrandFlow FastAPI v2.2.2 Health Check",
             "database": {
                 "status": "connected",
-                "type": "SQLite"
+                "type": "PostgreSQL"
             },
             "api_endpoints": {
                 "auth": "/api/auth",

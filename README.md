@@ -59,19 +59,15 @@ docker-compose up -d postgres
 python start_postgresql.py
 ```
 
-#### SQLite에서 PostgreSQL로 마이그레이션
+#### Railway PostgreSQL 사용 (현재 설정)
 
 ```bash
-# 1. PostgreSQL 시작
-docker-compose up -d postgres
+# Railway PostgreSQL이 이미 설정되어 있습니다
+# .env 파일에 Railway PostgreSQL URL이 구성됨
+DATABASE_URL=postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@junction.proxy.rlwy.net:21652/railway
 
-# 2. 마이그레이션 실행 (기존 SQLite 데이터가 있는 경우)
-python migrate_to_postgresql.py
-
-# 3. 환경설정을 PostgreSQL로 변경
-copy .env.postgresql .env
-
-# 4. FastAPI 서버 재시작
+# FastAPI 서버 시작
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 3. Python 환경 설정

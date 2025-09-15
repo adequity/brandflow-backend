@@ -50,20 +50,17 @@ async def get_users(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 권한별 필터링 (한글/영어 역할명 모두 지원)
-        if (user_role in ['슈퍼 어드민', '슈퍼어드민', 'super_admin'] or 
-            '슈퍼' in user_role or 'super' in user_role.lower()):
+        # 권한별 필터링 (UserRole enum 값 사용)
+        if user_role == UserRole.SUPER_ADMIN.value or 'super' in user_role.lower():
             # 슈퍼 어드민은 모든 사용자 조회 가능
             query = select(User)
-        elif (user_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or 
-              ('대행사' in user_role and '어드민' in user_role) or 
-              ('agency' in user_role.lower() and 'admin' in user_role.lower())):
+        elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
             # 대행사 어드민은 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == current_user.company)
-        elif user_role in ['클라이언트', 'client']:
+        elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == user_id)
-        elif user_role in ['직원', 'staff']:
+        elif user_role == UserRole.STAFF.value:
             # 직원은 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == current_user.company)
         else:
@@ -115,15 +112,16 @@ async def get_clients(
         # 클라이언트만 필터링
         query = select(User).where(User.role == UserRole.CLIENT)
         
-        # 권한별 추가 필터링 (한글/영어 역할명 모두 지원)
-        if (user_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or 
-            ('대행사' in user_role and '어드민' in user_role) or 
-            ('agency' in user_role.lower() and 'admin' in user_role.lower())):
+        # 권한별 추가 필터링 (UserRole enum 값 사용)
+        if user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
             # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
             query = query.where(User.company == current_user.company)
-        elif user_role in ['클라이언트', 'client']:
+        elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
+        elif user_role == UserRole.STAFF.value:
+            # 직원은 같은 회사 클라이언트 조회 가능
+            query = query.where(User.company == current_user.company)
         # 슈퍼 어드민은 모든 클라이언트 조회 가능 (추가 필터링 없음)
         
         result = await db.execute(query)
@@ -141,16 +139,19 @@ async def get_clients(
         # 클라이언트만 필터링
         query = select(User).where(User.role == UserRole.CLIENT)
         
-        # JWT 기반 권한별 필터링
-        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+        # JWT 기반 권한별 필터링 (UserRole enum 값 사용)
+        if user_role == UserRole.SUPER_ADMIN.value:
             # 슈퍼 어드민은 모든 클라이언트 조회 가능
             pass
-        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+        elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
             query = query.where(User.company == current_user.company)
-        elif user_role == '클라이언트':
+        elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
+        elif user_role == UserRole.STAFF.value:
+            # 직원은 같은 회사 클라이언트 조회 가능
+            query = query.where(User.company == current_user.company)
         else:
             # 기타 역할은 클라이언트 조회 불가
             return []

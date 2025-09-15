@@ -82,7 +82,7 @@ async def create_performance_indexes(engine):
     from sqlalchemy import text
     
     async with engine.begin() as conn:
-        # SQLite는 CREATE INDEX IF NOT EXISTS를 지원하므로 안전하게 생성 가능
+        # PostgreSQL CREATE INDEX IF NOT EXISTS로 안전하게 생성
         
         # User 테이블 인덱스
         await conn.execute(text("""
@@ -175,13 +175,13 @@ async def analyze_index_usage(engine):
     from sqlalchemy import text
     
     async with engine.begin() as conn:
-        # SQLite에서 인덱스 목록 조회
+        # PostgreSQL에서 인덱스 목록 조회
         result = await conn.execute(text("""
-            SELECT name, tbl_name, sql 
-            FROM sqlite_master 
-            WHERE type = 'index' 
-            AND name LIKE 'ix_%'
-            ORDER BY tbl_name, name
+            SELECT indexname as name, tablename as tbl_name, indexdef as sql
+            FROM pg_indexes 
+            WHERE schemaname = 'public'
+            AND indexname LIKE 'ix_%'
+            ORDER BY tablename, indexname
         """))
         
         indexes = result.fetchall()
@@ -201,8 +201,8 @@ async def explain_query_performance(engine, query_sql: str):
     from sqlalchemy import text
     
     async with engine.begin() as conn:
-        # SQLite EXPLAIN QUERY PLAN
-        result = await conn.execute(text(f"EXPLAIN QUERY PLAN {query_sql}"))
+        # PostgreSQL EXPLAIN
+        result = await conn.execute(text(f"EXPLAIN ANALYZE {query_sql}"))
         plan = result.fetchall()
         
         print("Query Performance Analysis")

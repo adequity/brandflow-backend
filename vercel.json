@@ -13,7 +13,7 @@
     }
   ],
   "env": {
-    "DATABASE_URL": "sqlite+aiosqlite:///./data/brandflow.db",
+    "DATABASE_URL": "postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@junction.proxy.rlwy.net:21652/railway",
     "ENVIRONMENT": "production"
   }
 }

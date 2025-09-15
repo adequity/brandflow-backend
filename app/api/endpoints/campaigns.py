@@ -73,17 +73,17 @@ async def get_campaigns(
         print(f"[CAMPAIGNS-LIST] User found: {current_user.name}, role='{user_role}', company='{current_user.company}'")
         print(f"[CAMPAIGNS-LIST] Client matching logic: creator_id={user_id} OR client_company='{current_user.company}' OR client_company LIKE '%(ID: {user_id})'")
         
-        # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화)
-        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+        # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화) - 영어->한글 변환 후 UserRole enum 값으로 비교
+        if user_role == UserRole.SUPER_ADMIN.value:
             # 슈퍼 어드민은 모든 캠페인 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator))
-        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+        elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 소속 캠페인만
             query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-        elif user_role == '직원':
+        elif user_role == UserRole.STAFF.value:
             # 직원은 자신이 생성한 캠페인만 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
-        elif user_role == '클라이언트':
+        elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 조회 가능
             # client_company 매칭: 직접 매칭 또는 "이름 (ID: user_id)" 형태에서 ID 추출 매칭
             query = select(Campaign).options(joinedload(Campaign.creator)).where(
@@ -108,18 +108,18 @@ async def get_campaigns(
         
         print(f"[CAMPAIGNS-LIST] Pagination - page={current_page}, size={page_size}, offset={offset}")
         
-        # 전체 개수 조회 (페이지네이션 메타데이터용)
+        # 전체 개수 조회 (페이지네이션 메타데이터용) - UserRole enum 값 사용
         count_query = select(func.count(Campaign.id))
-        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+        if user_role == UserRole.SUPER_ADMIN.value:
             # 슈퍼 어드민은 모든 캠페인 개수
             pass
-        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+        elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 소속 캠페인 개수
             count_query = count_query.join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-        elif user_role == '직원':
+        elif user_role == UserRole.STAFF.value:
             # 직원은 자신이 생성한 캠페인 개수
             count_query = count_query.where(Campaign.creator_id == user_id)
-        elif user_role == '클라이언트':
+        elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 개수
             count_query = count_query.where(
                 (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
@@ -203,20 +203,20 @@ async def get_campaigns(
             page_size = size
             offset = (page - 1) * size
         
-        # JWT 기반 권한별 필터링
-        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+        # JWT 기반 권한별 필터링 (UserRole enum 값 사용)
+        if user_role == UserRole.SUPER_ADMIN.value:
             # 슈퍼 어드민은 모든 캠페인 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator))
             count_query = select(func.count(Campaign.id))
-        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+        elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 소속 캠페인만
             query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
             count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-        elif user_role == '직원':
+        elif user_role == UserRole.STAFF.value:
             # 직원은 자신이 생성한 캠페인만 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
             count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
-        elif user_role == '클라이언트':
+        elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 조회 가능
             query = select(Campaign).options(joinedload(Campaign.creator)).where(
                 (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
@@ -323,11 +323,10 @@ async def create_campaign(
         # 영어 역할명이면 한글로 변환
         mapped_role = english_to_korean_roles.get(user_role.lower(), user_role)
         
-        # 권한 확인 - 관리자와 직원은 캠페인 생성 가능 (한글/영어 역할명 모두 지원)
-        is_admin = (mapped_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민'] or 
-                    '슈퍼' in mapped_role or ('대행사' in mapped_role and '어드민' in mapped_role) or
+        # 권한 확인 - 관리자와 직원은 캠페인 생성 가능 (UserRole enum 값 사용)
+        is_admin = (mapped_role in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value] or 
                     user_role.lower() in ['super_admin', 'agency_admin'])
-        is_staff = (mapped_role == '직원' or user_role.lower() == 'staff')
+        is_staff = (mapped_role == UserRole.STAFF.value or user_role.lower() == 'staff')
         
         print(f"[CAMPAIGN-CREATE] Authorization check - user_role={user_role}, mapped_role={mapped_role}, is_admin={is_admin}, is_staff={is_staff}")
         
@@ -439,8 +438,8 @@ async def get_staff_members(
             
             print(f"[STAFF-MEMBERS] Found user: {viewer.name}, company={viewer.company}")
             
-            # 대행사 어드민만 직원 목록 조회 가능
-            if user_role not in ['대행사 어드민', '대행사어드민'] and not ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민만 직원 목록 조회 가능 (UserRole enum 값 사용)
+            if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()):
                 raise HTTPException(status_code=403, detail="직원 목록 조회 권한이 없습니다")
             
             # 같은 회사의 직원들 조회 (직원 역할만)
@@ -543,11 +542,11 @@ async def get_campaign_detail(
             print(f"[CAMPAIGN-DETAIL] Unexpected error: {type(e).__name__}: {e}")
             raise HTTPException(status_code=500, detail=f"캠페인 조회 중 오류: {str(e)}")
         
-        if user_role == '클라이언트':
+        if user_role == UserRole.CLIENT.value:
             # 클라이언트는 본인 캠페인만 조회 가능
             if campaign.creator_id != user_id:
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+        elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
             # 대행사 어드민은 같은 회사 캠페인만 조회 가능
             client_query = select(User).where(User.id == campaign.creator_id)
             client_result = await db.execute(client_query)
@@ -555,7 +554,7 @@ async def get_campaign_detail(
             
             if not client or client.company != viewer.company:
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-        elif user_role == '직원':
+        elif user_role == UserRole.STAFF.value:
             # 직원은 자신이 생성한 캠페인만 조회 가능
             if campaign.creator_id != user_id:
                 print(f"[CAMPAIGN-DETAIL] Staff permission denied: campaign.creator_id={campaign.creator_id}, user_id={user_id}")
@@ -583,17 +582,17 @@ async def get_campaign_detail(
             # JWT 기반 권한 확인
             user_role = current_user.role.value
             
-            if user_role == '클라이언트':
+            if user_role == UserRole.CLIENT.value:
                 # 클라이언트는 본인 캠페인 또는 자신을 대상으로 한 캠페인만 조회 가능
                 if (campaign.creator_id != current_user.id and 
                     campaign.client_company != current_user.company and 
                     not campaign.client_company.like(f'%(ID: {current_user.id})')):
                     raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-            elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            elif user_role == UserRole.AGENCY_ADMIN.value:
                 # 대행사 어드민은 같은 회사 캠페인만 조회 가능
                 if campaign.creator and campaign.creator.company != current_user.company:
                     raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-            elif user_role == '직원':
+            elif user_role == UserRole.STAFF.value:
                 # 직원은 자신이 생성한 캠페인만 조회 가능
                 if campaign.creator_id != current_user.id:
                     raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
@@ -664,11 +663,11 @@ async def update_campaign(
             
             print(f"[CAMPAIGN-UPDATE] Found user: {viewer.name}, role={user_role}, company={viewer.company}")
             
-            if user_role == '클라이언트':
+            if user_role == UserRole.CLIENT.value:
                 # 클라이언트는 본인 캠페인만 수정 가능
                 if campaign.creator_id != user_id:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
-            elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
                 # 대행사 어드민은 같은 회사 캠페인만 수정 가능
                 client_query = select(User).where(User.id == campaign.creator_id)
                 client_result = await db.execute(client_query)
@@ -676,7 +675,7 @@ async def update_campaign(
                 
                 if not client or client.company != viewer.company:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
-            elif user_role == '직원':
+            elif user_role == UserRole.STAFF.value:
                 # 직원은 자신이 생성한 캠페인만 수정 가능
                 if campaign.creator_id != user_id:
                     raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 수정할 수 있습니다.")
@@ -690,8 +689,8 @@ async def update_campaign(
                     # 사용되지 않는 필드 무시
                     continue
                 elif field == 'creator_id' and value:
-                    # 담당 직원 변경 (대행사 어드민만 가능)
-                    if user_role not in ['대행사 어드민', '대행사어드민'] and not ('대행사' in user_role and '어드민' in user_role):
+                    # 담당 직원 변경 (대행사 어드민만 가능) - UserRole enum 값 사용
+                    if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()):
                         print(f"[CAMPAIGN-UPDATE] Permission denied: user_role={user_role} cannot change creator_id")
                         continue
                     
@@ -936,28 +935,28 @@ async def delete_campaign(
             
             print(f"[CAMPAIGN-DELETE] Viewer info: {viewer.name}, role={user_role}, company={viewer.company}")
             
-            # 권한 검사
+            # 권한 검사 (UserRole enum 값 사용)
             can_delete = False
             
-            if user_role in ['슈퍼 어드민', '슈퍼어드민'] or ('슈퍼' in user_role and '어드민' in user_role):
+            if user_role == UserRole.SUPER_ADMIN.value or 'super' in user_role.lower():
                 # 슈퍼 어드민은 모든 캠페인 삭제 가능
                 can_delete = True
                 print(f"[CAMPAIGN-DELETE] Super admin can delete any campaign")
-            elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
                 # 대행사 어드민은 같은 회사의 모든 캠페인 삭제 가능
                 if campaign.creator and campaign.creator.company == viewer.company:
                     can_delete = True
                     print(f"[CAMPAIGN-DELETE] Agency admin can delete campaign from same company")
                 else:
                     print(f"[CAMPAIGN-DELETE] Agency admin cannot delete - different company")
-            elif user_role == '직원':
+            elif user_role == UserRole.STAFF.value:
                 # 직원은 자신이 생성한 캠페인만 삭제 가능
                 if campaign.creator_id == user_id:
                     can_delete = True
                     print(f"[CAMPAIGN-DELETE] Staff can delete own campaign")
                 else:
                     print(f"[CAMPAIGN-DELETE] Staff cannot delete - not creator")
-            elif user_role == '클라이언트':
+            elif user_role == UserRole.CLIENT.value:
                 # 클라이언트는 자신의 회사와 연결된 캠페인만 삭제 가능 (제한적)
                 if campaign.creator and campaign.creator.company == viewer.company:
                     can_delete = True

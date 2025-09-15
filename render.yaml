@@ -8,7 +8,7 @@ services:
       - key: PORT
         value: 8000
       - key: DATABASE_URL
-        value: "sqlite+aiosqlite:///./data/brandflow.db"
+        value: "postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@junction.proxy.rlwy.net:21652/railway"
       - key: SECRET_KEY
         generateValue: true
       - key: ENVIRONMENT

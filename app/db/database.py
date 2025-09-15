@@ -13,42 +13,28 @@ from app.models.product import Product
 from app.models.work_type import WorkType
 
 
-# 데이터베이스 URL 가져오기
-database_url = settings.get_database_url
+# Railway PostgreSQL 데이터베이스 URL 가져오기
+database_url = settings.get_database_url  # 프로퍼티 호출
 
-# 데이터베이스별 엔진 설정
-if database_url.startswith("sqlite"):
-    # SQLite용 동기 엔진
-    sync_engine = create_engine(
-        database_url.replace("sqlite+aiosqlite://", "sqlite://"),
-        connect_args={"check_same_thread": False}
-    )
-    
-    # SQLite용 비동기 엔진  
-    async_engine = create_async_engine(
-        database_url,
-        echo=False,  # Railway 배포 시 로깅 비활성화
-        future=True,
-        connect_args={"check_same_thread": False}
-    )
-elif database_url.startswith("postgresql"):
-    # PostgreSQL용 동기 엔진
-    sync_engine = create_engine(
-        database_url.replace("postgresql+asyncpg://", "postgresql://"),
-        pool_pre_ping=True,
-        pool_recycle=300,
-    )
-    
-    # PostgreSQL용 비동기 엔진
-    async_engine = create_async_engine(
-        database_url,
-        echo=True,
-        future=True,
-        pool_pre_ping=True,
-        pool_recycle=300,
-    )
-else:
-    raise ValueError(f"Unsupported database URL: {database_url}")
+# Railway PostgreSQL 전용 엔진 설정
+print(f"Database URL: {database_url}")
+
+# PostgreSQL용 동기 엔진
+sync_engine = create_engine(
+    database_url.replace("postgresql+asyncpg://", "postgresql://"),
+    pool_pre_ping=True,
+    pool_recycle=300,
+    echo=True
+)
+
+# PostgreSQL용 비동기 엔진
+async_engine = create_async_engine(
+    database_url,
+    echo=True,
+    future=True,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 
 # 세션 생성기
 AsyncSessionLocal = async_sessionmaker(
