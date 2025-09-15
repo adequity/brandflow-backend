@@ -287,6 +287,53 @@ async def get_staff_members(
         raise HTTPException(status_code=500, detail=f"직원 목록 조회 중 오류: {str(e)}")
 
 
+@router.get("/client-list", response_model=List[dict])
+async def get_client_members(
+    request: Request,
+    # JWT 인증된 사용자
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """같은 회사 클라이언트 목록 조회 (JWT 인증 기반)"""
+    user_id = current_user.id
+    user_role = current_user.role.value
+    
+    print(f"[CLIENT-MEMBERS-JWT] Request from user_id={user_id}, user_role={user_role}")
+    
+    try:
+        print(f"[CLIENT-MEMBERS-JWT] Found user: {current_user.name}, company={current_user.company}")
+        
+        # 같은 회사의 클라이언트들 조회 (클라이언트 역할만)
+        client_query = select(User).where(
+            User.company == current_user.company,
+            User.role == UserRole.CLIENT,
+            User.is_active == True
+        )
+        result = await db.execute(client_query)
+        client_members = result.scalars().all()
+        
+        print(f"[CLIENT-MEMBERS-JWT] Found {len(client_members)} client members")
+        
+        # 클라이언트 정보를 딕셔너리로 변환
+        client_list = [
+            {
+                "id": client.id,
+                "name": client.name,
+                "email": client.email,
+                "company": client.company
+            }
+            for client in client_members
+        ]
+        
+        return client_list
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CLIENT-MEMBERS-JWT] Unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"클라이언트 목록 조회 중 오류: {str(e)}")
+
+
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign_detail(
     request: Request,
