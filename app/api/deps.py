@@ -10,7 +10,7 @@ from app.services.user_service import UserService
 from app.models.user import User, UserRole
 from app.core.logging import security_logger
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=True)
 
 
 async def get_current_user(

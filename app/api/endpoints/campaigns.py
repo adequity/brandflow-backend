@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
@@ -18,594 +18,305 @@ router = APIRouter()
 
 @router.get("/", response_model=dict)
 async def get_campaigns(
-    # Node.js API 호환성을 위한 쿼리 파라미터 (보안상 제거 예정)
-    viewerId: Optional[int] = Query(None, alias="viewerId"),
-    adminId: Optional[int] = Query(None, alias="adminId"),
-    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
-    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    request: Request,
     # 페이지네이션 파라미터
     page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
     size: int = Query(10, ge=1, le=100, description="페이지당 항목 수"),
-    # 기존 파라미터도 지원 (하위 호환성)
-    skip: Optional[int] = Query(None, ge=0),
-    limit: Optional[int] = Query(None, ge=1, le=100),
     # JWT 인증된 사용자
-    jwt_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """캠페인 목록 조회 (권한별 필터링)"""
-    print(f"[CAMPAIGNS-LIST] Request with viewerId={viewerId}, viewerRole={viewerRole}")
+    """캠페인 목록 조회 (JWT 인증 기반 권한별 필터링)"""
+    print(f"[CAMPAIGNS-LIST] JWT User: {current_user.name}, Role: {current_user.role.value}, Company: {current_user.company}")
     
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
-        # Node.js API 호환 모드
-        user_id = viewerId or adminId
-        user_role = viewerRole or adminRole
-        
-        if not user_id or not user_role:
-            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩
-        user_role = unquote(user_role).strip()
-        
-        # 영어 역할명을 한글로 매핑 (프론트엔드 호환성)
-        english_to_korean_roles = {
-            'super_admin': '슈퍼 어드민',
-            'agency_admin': '대행사 어드민',
-            'agency_staff': '대행사 직원',
-            'staff': '직원',
-            'client': '클라이언트',
-            'admin': '어드민'
-        }
-        
-        # 영어 역할명이면 한글로 변환
-        if user_role in english_to_korean_roles:
-            user_role = english_to_korean_roles[user_role]
-        
-        # 현재 사용자 조회
-        current_user_query = select(User).where(User.id == user_id)
-        result = await db.execute(current_user_query)
-        current_user = result.scalar_one_or_none()
-        
-        if not current_user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-        
-        print(f"[CAMPAIGNS-LIST] User found: {current_user.name}, role='{user_role}', company='{current_user.company}'")
-        print(f"[CAMPAIGNS-LIST] Client matching logic: creator_id={user_id} OR client_company='{current_user.company}' OR client_company LIKE '%(ID: {user_id})'")
-        
-        # 권한별 필터링 (N+1 문제 해결을 위한 JOIN 최적화) - 영어->한글 변환 후 UserRole enum 값으로 비교
-        if user_role == UserRole.SUPER_ADMIN.value:
-            # 슈퍼 어드민은 모든 캠페인 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator))
-        elif user_role == UserRole.AGENCY_ADMIN.value:
-            # 대행사 어드민은 같은 회사 소속 캠페인만
-            query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-        elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 캠페인만 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
-        elif user_role == UserRole.CLIENT.value:
-            # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 조회 가능
-            # client_company 매칭: 직접 매칭 또는 "이름 (ID: user_id)" 형태에서 ID 추출 매칭
-            query = select(Campaign).options(joinedload(Campaign.creator)).where(
-                (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
-                (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
-                (Campaign.client_company.like(f'%(ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
-            )
-        else:
-            query = select(Campaign).options(joinedload(Campaign.creator))
-        
-        # 페이지네이션 처리 (하위 호환성을 위해 skip/limit도 지원)
-        if skip is not None and limit is not None:
-            # 기존 방식 (skip/limit)
-            offset = skip
-            page_size = limit
-            current_page = (skip // limit) + 1 if limit > 0 else 1
-        else:
-            # 새로운 방식 (page/size)
-            current_page = page
-            page_size = size
-            offset = (page - 1) * size
-        
-        print(f"[CAMPAIGNS-LIST] Pagination - page={current_page}, size={page_size}, offset={offset}")
-        
-        # 전체 개수 조회 (페이지네이션 메타데이터용) - UserRole enum 값 사용
+    user_id = current_user.id
+    user_role = current_user.role.value
+    
+    # 페이지네이션 처리
+    current_page = page
+    page_size = size
+    offset = (page - 1) * size
+    
+    print(f"[CAMPAIGNS-LIST] Pagination - page={current_page}, size={page_size}, offset={offset}")
+    
+    # JWT 기반 권한별 필터링 (UserRole enum 값 사용)
+    # 사용자 요구사항: campaign.client_company 기반 필터링 (STAFF 제외)
+    if user_role == UserRole.SUPER_ADMIN.value:
+        # 슈퍼 어드민은 모든 캠페인 조회 가능
+        query = select(Campaign).options(joinedload(Campaign.creator))
         count_query = select(func.count(Campaign.id))
-        if user_role == UserRole.SUPER_ADMIN.value:
-            # 슈퍼 어드민은 모든 캠페인 개수
-            pass
-        elif user_role == UserRole.AGENCY_ADMIN.value:
-            # 대행사 어드민은 같은 회사 소속 캠페인 개수
-            count_query = count_query.join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-        elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 캠페인 개수
-            count_query = count_query.where(Campaign.creator_id == user_id)
-        elif user_role == UserRole.CLIENT.value:
-            # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 개수
-            count_query = count_query.where(
-                (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
-                (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
-                (Campaign.client_company.like(f'%(ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
-            )
-        
-        total_count_result = await db.execute(count_query)
-        total_count = total_count_result.scalar()
-        
-        # 페이지네이션 적용된 쿼리 실행
-        paginated_query = query.offset(offset).limit(page_size).order_by(Campaign.created_at.desc())
-        print(f"[CAMPAIGNS-LIST] Executing paginated query for role: {user_role}")
-        result = await db.execute(paginated_query)
-        campaigns = result.unique().scalars().all()  # unique() 추가로 중복 제거
-        
-        # 페이지네이션 메타데이터 계산
-        total_pages = (total_count + page_size - 1) // page_size  # 올림 계산
-        has_next = current_page < total_pages
-        has_prev = current_page > 1
-        
-        print(f"[CAMPAIGNS-LIST] Found {len(campaigns)} campaigns (page {current_page}/{total_pages}, total: {total_count})")
-        for campaign in campaigns:
-            print(f"  - Campaign ID {campaign.id}: {campaign.name} (creator: {campaign.creator_id})")
-        
-        # Campaign 모델을 CampaignResponse 스키마로 직렬화 (프론트엔드 호환성)
-        serialized_campaigns = []
-        for campaign in campaigns:
-            campaign_data = {
-                "id": campaign.id,
-                "name": campaign.name,
-                "description": campaign.description,
-                "client_company": campaign.client_company,
-                "budget": campaign.budget,
-                "start_date": campaign.start_date,
-                "end_date": campaign.end_date,
-                "status": campaign.status,
-                "creator_id": campaign.creator_id,
-                "created_at": campaign.created_at,
-                "updated_at": campaign.updated_at,
-                "creator_name": campaign.creator.name if campaign.creator else None,
-                "client_name": campaign.client_company,  # client_name은 client_company와 동일
-                # 프론트엔드 호환성을 위한 필드 매칭
-                "User": {
-                    "id": campaign.creator_id,
-                    "name": campaign.creator.name if campaign.creator else None,
-                    "email": campaign.creator.email if campaign.creator else None
-                } if campaign.creator else None,
-                "posts": []  # posts 필드 추가 (현재는 빈 배열, 향후 구현 시 실제 데이터 추가)
-            }
-            serialized_campaigns.append(campaign_data)
-        
-        # 페이지네이션 정보와 함께 응답
-        return {
-            "data": serialized_campaigns,
-            "pagination": {
-                "current_page": current_page,
-                "page_size": page_size,
-                "total_count": total_count,
-                "total_pages": total_pages,
-                "has_next": has_next,
-                "has_prev": has_prev,
-                "offset": offset
-            }
-        }
+    elif user_role == UserRole.AGENCY_ADMIN.value:
+        # 대행사 어드민은 client_company 기반으로 필터링 (여러 형태 지원)
+        query = select(Campaign).options(joinedload(Campaign.creator)).where(
+            (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
+            (Campaign.client_company.like(f'%{current_user.company}%'))  # 부분 매칭
+        )
+        count_query = select(func.count(Campaign.id)).where(
+            (Campaign.client_company == current_user.company) |
+            (Campaign.client_company.like(f'%{current_user.company}%'))
+        )
+    elif user_role == UserRole.CLIENT.value:
+        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (본인 ID가 포함된 캠페인)
+        query = select(Campaign).options(joinedload(Campaign.creator)).where(
+            Campaign.client_company.like(f'%(ID: {user_id})')  # "이름 (ID: user_id)" 형태 매칭
+        )
+        count_query = select(func.count(Campaign.id)).where(
+            Campaign.client_company.like(f'%(ID: {user_id})')
+        )
+    elif user_role == UserRole.STAFF.value:
+        # 직원은 자신이 생성한 캠페인만 조회 가능 (creator_id 기준)
+        query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
+        count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
     else:
-        # JWT 인증 기반 모드 (보안 강화)
-        print(f"[CAMPAIGNS-LIST] Using JWT mode - User: {jwt_user.name}, Role: {jwt_user.role.value}, Company: {jwt_user.company}")
-        
-        current_user = jwt_user
-        user_id = current_user.id
-        user_role = current_user.role.value
-        
-        # 페이지네이션 처리
-        if skip is not None and limit is not None:
-            current_page = (skip // limit) + 1 if limit > 0 else 1
-            page_size = limit
-            offset = skip
-        else:
-            current_page = page
-            page_size = size
-            offset = (page - 1) * size
-        
-        # JWT 기반 권한별 필터링 (UserRole enum 값 사용)
-        if user_role == UserRole.SUPER_ADMIN.value:
-            # 슈퍼 어드민은 모든 캠페인 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator))
-            count_query = select(func.count(Campaign.id))
-        elif user_role == UserRole.AGENCY_ADMIN.value:
-            # 대행사 어드민은 같은 회사 소속 캠페인만
-            query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-            count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
-        elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 캠페인만 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
-            count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
-        elif user_role == UserRole.CLIENT.value:
-            # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 조회 가능
-            query = select(Campaign).options(joinedload(Campaign.creator)).where(
-                (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
-                (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
-                (Campaign.client_company.like(f'%(ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
-            )
-            count_query = select(func.count(Campaign.id)).where(
-                (Campaign.creator_id == user_id) |
-                (Campaign.client_company == current_user.company) |
-                (Campaign.client_company.like(f'%(ID: {user_id})'))
-            )
-        else:
-            # 기본적으로는 자신이 생성한 캠페인만
-            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
-            count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
-        
-        # 전체 개수 조회
-        total_count_result = await db.execute(count_query)
-        total_count = total_count_result.scalar()
-        
-        # 페이지네이션 적용된 쿼리 실행
-        paginated_query = query.offset(offset).limit(page_size).order_by(Campaign.created_at.desc())
-        result = await db.execute(paginated_query)
-        campaigns = result.unique().scalars().all()
-        
-        # 페이지네이션 메타데이터 계산
-        total_pages = (total_count + page_size - 1) // page_size
-        has_next = current_page < total_pages
-        has_prev = current_page > 1
-        
-        print(f"[CAMPAIGNS-LIST-JWT] Found {len(campaigns)} campaigns (page {current_page}/{total_pages}, total: {total_count})")
-        
-        # Campaign 모델을 CampaignResponse 스키마로 직렬화
-        serialized_campaigns = []
-        for campaign in campaigns:
-            campaign_data = {
-                "id": campaign.id,
-                "name": campaign.name,
-                "description": campaign.description,
-                "status": campaign.status.value if campaign.status else None,
-                "client_company": campaign.client_company,
-                "manager_name": campaign.manager_name,
-                "creator_id": campaign.creator_id,
-                "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
-                "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
-                "User": {
-                    "id": campaign.creator.id,
-                    "name": campaign.creator.name,
-                    "role": campaign.creator.role.value
-                } if campaign.creator else None
-            }
-            serialized_campaigns.append(campaign_data)
-        
-        return {
-            "data": serialized_campaigns,
-            "pagination": {
-                "page": current_page,
-                "size": page_size,
-                "total": total_count,
-                "total_pages": total_pages,
-                "has_next": has_next,
-                "has_prev": has_prev,
-                "offset": offset
-            }
+        # 기본적으로는 client_company 기준 필터링 (여러 형태 지원)
+        query = select(Campaign).options(joinedload(Campaign.creator)).where(
+            (Campaign.client_company == current_user.company) |
+            (Campaign.client_company.like(f'%{current_user.company}%'))
+        )
+        count_query = select(func.count(Campaign.id)).where(
+            (Campaign.client_company == current_user.company) |
+            (Campaign.client_company.like(f'%{current_user.company}%'))
+        )
+    
+    # 전체 개수 조회
+    total_count_result = await db.execute(count_query)
+    total_count = total_count_result.scalar()
+    
+    # 페이지네이션 적용된 쿼리 실행
+    paginated_query = query.offset(offset).limit(page_size).order_by(Campaign.created_at.desc())
+    result = await db.execute(paginated_query)
+    campaigns = result.unique().scalars().all()
+    
+    # 페이지네이션 메타데이터 계산
+    total_pages = (total_count + page_size - 1) // page_size
+    has_next = current_page < total_pages
+    has_prev = current_page > 1
+    
+    print(f"[CAMPAIGNS-LIST-JWT] Found {len(campaigns)} campaigns (page {current_page}/{total_pages}, total: {total_count})")
+    
+    # Campaign 모델을 CampaignResponse 스키마로 직렬화
+    serialized_campaigns = []
+    for campaign in campaigns:
+        campaign_data = {
+            "id": campaign.id,
+            "name": campaign.name,
+            "description": campaign.description,
+            "status": campaign.status.value if campaign.status else None,
+            "client_company": campaign.client_company,
+            "manager_name": campaign.manager_name,
+            "creator_id": campaign.creator_id,
+            "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+            "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+            "User": {
+                "id": campaign.creator.id,
+                "name": campaign.creator.name,
+                "role": campaign.creator.role.value
+            } if campaign.creator else None
         }
+        serialized_campaigns.append(campaign_data)
+    
+    return {
+        "data": serialized_campaigns,
+        "pagination": {
+            "page": current_page,
+            "size": page_size,
+            "total": total_count,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_prev": has_prev,
+            "offset": offset
+        }
+    }
 
 
 @router.post("/", response_model=CampaignResponse)
 async def create_campaign(
+    request: Request,
     campaign_data: CampaignCreate,
-    # Node.js API 호환성을 위한 쿼리 파라미터
-    viewerId: Optional[int] = Query(None, alias="viewerId"),
-    adminId: Optional[int] = Query(None, alias="adminId"),
-    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
-    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    # JWT 인증된 사용자
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """새 캠페인 생성 (권한 확인)"""
-    # 실제 요청 데이터 로깅
-    print(f"[CAMPAIGN-CREATE] Campaign creation request - Data: {campaign_data}")
-    print(f"[CAMPAIGN-CREATE] Query params: viewerId={viewerId}, viewerRole={viewerRole}")
-    print(f"[CAMPAIGN-CREATE] Request headers available")
+    """새 캠페인 생성 (JWT 인증 기반 권한 확인)"""
+    user_id = current_user.id
+    user_role = current_user.role.value
     
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
-        # Node.js API 호환 모드
-        user_id = viewerId or adminId
-        user_role = viewerRole or adminRole
+    print(f"[CAMPAIGN-CREATE-JWT] Campaign creation request - User ID: {user_id}, Role: {user_role}")
+    print(f"[CAMPAIGN-CREATE-JWT] Campaign data: {campaign_data}")
+    
+    # 권한 확인 - 관리자와 직원은 캠페인 생성 가능
+    if user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.STAFF.value]:
+        print(f"[CAMPAIGN-CREATE-JWT] ERROR: Insufficient permissions - user_role={user_role}")
+        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
+    
+    # 새 캠페인 생성 - 안전한 기본값 처리
+    try:
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None)
         
-        if not user_id or not user_role:
-            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩
-        user_role = unquote(user_role).strip()
-        
-        # 영어 역할명을 한글로 매핑 (프론트엔드 호환성)
-        english_to_korean_roles = {
-            'super_admin': '슈퍼 어드민',
-            'agency_admin': '대행사 어드민',
-            'staff': '직원',
-            'client': '클라이언트'
-        }
-        
-        # 영어 역할명이면 한글로 변환
-        mapped_role = english_to_korean_roles.get(user_role.lower(), user_role)
-        
-        # 권한 확인 - 관리자와 직원은 캠페인 생성 가능 (UserRole enum 값 사용)
-        is_admin = (mapped_role in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value] or 
-                    user_role.lower() in ['super_admin', 'agency_admin'])
-        is_staff = (mapped_role == UserRole.STAFF.value or user_role.lower() == 'staff')
-        
-        print(f"[CAMPAIGN-CREATE] Authorization check - user_role={user_role}, mapped_role={mapped_role}, is_admin={is_admin}, is_staff={is_staff}")
-        
-        if not (is_admin or is_staff):
-            print(f"[CAMPAIGN-CREATE] ERROR: Insufficient permissions - user_role={user_role}, mapped_role={mapped_role}")
-            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
-        
-        # 새 캠페인 생성 - 안전한 기본값 처리
-        try:
-            current_time = datetime.now(timezone.utc).replace(tzinfo=None)
-            
-            # 안전한 날짜 처리 함수
-            def safe_datetime_parse(date_input):
-                if date_input is None:
-                    return current_time
-                # 이미 datetime 객체인 경우
-                if isinstance(date_input, datetime):
-                    return date_input.replace(tzinfo=None)
-                # string인 경우 파싱 시도
-                if isinstance(date_input, str):
-                    try:
-                        parsed = datetime.fromisoformat(date_input.replace('Z', '+00:00'))
-                        return parsed.replace(tzinfo=None)
-                    except ValueError:
-                        print(f"[CAMPAIGN-CREATE] WARNING: Failed to parse date string: {date_input}")
-                        return current_time
+        # 안전한 날짜 처리 함수
+        def safe_datetime_parse(date_input):
+            if date_input is None:
                 return current_time
-            
-            new_campaign = Campaign(
-                name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
-                description=campaign_data.description or '',
-                client_company=campaign_data.client_company or "기본 클라이언트",
-                budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
-                start_date=safe_datetime_parse(campaign_data.start_date),
-                end_date=safe_datetime_parse(campaign_data.end_date),
-                creator_id=user_id,
-                status=CampaignStatus.ACTIVE
-            )
-            
-            print(f"[CAMPAIGN-CREATE] SUCCESS: Creating campaign with data: name='{new_campaign.name}', budget={new_campaign.budget}")
-            db.add(new_campaign)
-            await db.commit()
-            await db.refresh(new_campaign)
-            print(f"[CAMPAIGN-CREATE] SUCCESS: Campaign created with ID {new_campaign.id}")
-        except Exception as e:
-            await db.rollback()
-            print(f"[CAMPAIGN-CREATE] ERROR: Database operation failed: {e}")
-            print(f"[CAMPAIGN-CREATE] ERROR: Exception type: {type(e).__name__}")
-            print(f"[CAMPAIGN-CREATE] ERROR: Campaign data that failed: name='{campaign_data.name}', budget={campaign_data.budget}, client_company='{campaign_data.client_company}'")
-            raise HTTPException(status_code=500, detail=f"캠페인 생성 중 오류가 발생했습니다: {str(e)}")
+            # 이미 datetime 객체인 경우
+            if isinstance(date_input, datetime):
+                return date_input.replace(tzinfo=None)
+            # string인 경우 파싱 시도
+            if isinstance(date_input, str):
+                try:
+                    parsed = datetime.fromisoformat(date_input.replace('Z', '+00:00'))
+                    return parsed.replace(tzinfo=None)
+                except ValueError:
+                    print(f"[CAMPAIGN-CREATE-JWT] WARNING: Failed to parse date string: {date_input}")
+                    return current_time
+            return current_time
         
-        # WebSocket 알림 전송 (일시적으로 비활성화)
-        try:
-            await manager.notify_campaign_update(
-                campaign_id=new_campaign.id,
-                update_type="생성",
-                data={
-                    "name": new_campaign.name,
-                    "client_company": new_campaign.client_company,
-                    "budget": new_campaign.budget
-                }
-            )
-        except Exception as e:
-            # WebSocket 에러는 무시하고 계속 진행
-            print(f"WebSocket notification failed: {e}")
+        new_campaign = Campaign(
+            name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
+            description=campaign_data.description or '',
+            client_company=campaign_data.client_company or "기본 클라이언트",
+            budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
+            start_date=safe_datetime_parse(campaign_data.start_date),
+            end_date=safe_datetime_parse(campaign_data.end_date),
+            creator_id=user_id,
+            status=CampaignStatus.ACTIVE
+        )
         
-        return new_campaign
-    else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 캠페인 생성 구현
-        raise HTTPException(status_code=501, detail="Not implemented yet")
+        print(f"[CAMPAIGN-CREATE-JWT] SUCCESS: Creating campaign with data: name='{new_campaign.name}', budget={new_campaign.budget}")
+        db.add(new_campaign)
+        await db.commit()
+        await db.refresh(new_campaign)
+        print(f"[CAMPAIGN-CREATE-JWT] SUCCESS: Campaign created with ID {new_campaign.id}")
+    except Exception as e:
+        await db.rollback()
+        print(f"[CAMPAIGN-CREATE-JWT] ERROR: Database operation failed: {e}")
+        print(f"[CAMPAIGN-CREATE-JWT] ERROR: Exception type: {type(e).__name__}")
+        print(f"[CAMPAIGN-CREATE-JWT] ERROR: Campaign data that failed: name='{campaign_data.name}', budget={campaign_data.budget}, client_company='{campaign_data.client_company}'")
+        raise HTTPException(status_code=500, detail=f"캠페인 생성 중 오류가 발생했습니다: {str(e)}")
+    
+    # WebSocket 알림 전송 (일시적으로 비활성화)
+    try:
+        await manager.notify_campaign_update(
+            campaign_id=new_campaign.id,
+            update_type="생성",
+            data={
+                "name": new_campaign.name,
+                "client_company": new_campaign.client_company,
+                "budget": new_campaign.budget
+            }
+        )
+    except Exception as e:
+        # WebSocket 에러는 무시하고 계속 진행
+        print(f"WebSocket notification failed: {e}")
+    
+    return new_campaign
 
 
 @router.get("/staff-list", response_model=List[dict])
 async def get_staff_members(
-    # Node.js API 호환성을 위한 쿼리 파라미터
-    viewerId: Optional[int] = Query(None, alias="viewerId"),
-    adminId: Optional[int] = Query(None, alias="adminId"),
-    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
-    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    request: Request,
+    # JWT 인증된 사용자
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """같은 회사 직원 목록 조회 (대행사 어드민용)"""
-    print(f"[STAFF-MEMBERS] Request from viewerId={viewerId}, viewerRole={viewerRole}")
+    """같은 회사 직원 목록 조회 (JWT 인증 기반 대행사 어드민용)"""
+    user_id = current_user.id
+    user_role = current_user.role.value
     
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
-        try:
-            user_id = viewerId or adminId
-            user_role = viewerRole or adminRole
-            
-            if not user_id or not user_role:
-                print(f"[STAFF-MEMBERS] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
-                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-            
-            # URL 디코딩
-            user_role = unquote(user_role).strip()
-            print(f"[STAFF-MEMBERS] Processing with user_id={user_id}, user_role='{user_role}'")
-            
-            # 현재 사용자 정보 조회
-            viewer_query = select(User).where(User.id == user_id)
-            viewer_result = await db.execute(viewer_query)
-            viewer = viewer_result.scalar_one_or_none()
-            
-            if not viewer:
-                print(f"[STAFF-MEMBERS] User not found: {user_id}")
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-            
-            print(f"[STAFF-MEMBERS] Found user: {viewer.name}, company={viewer.company}")
-            
-            # 대행사 어드민만 직원 목록 조회 가능 (UserRole enum 값 사용)
-            if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()):
-                raise HTTPException(status_code=403, detail="직원 목록 조회 권한이 없습니다")
-            
-            # 같은 회사의 직원들 조회 (직원 역할만)
-            staff_query = select(User).where(
-                User.company == viewer.company,
-                User.role == UserRole.STAFF,
-                User.is_active == True
-            )
-            result = await db.execute(staff_query)
-            staff_members = result.scalars().all()
-            
-            print(f"[STAFF-MEMBERS] Found {len(staff_members)} staff members")
-            
-            # 직원 정보를 딕셔너리로 변환
-            staff_list = [
-                {
-                    "id": staff.id,
-                    "name": staff.name,
-                    "email": staff.email,
-                    "company": staff.company
-                }
-                for staff in staff_members
-            ]
-            
-            return staff_list
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            print(f"[STAFF-MEMBERS] Unexpected error: {type(e).__name__}: {e}")
-            raise HTTPException(status_code=500, detail=f"직원 목록 조회 중 오류: {str(e)}")
-    else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 직원 목록 조회 구현
-        raise HTTPException(status_code=501, detail="Not implemented yet")
+    print(f"[STAFF-MEMBERS-JWT] Request from user_id={user_id}, user_role={user_role}")
+    
+    # 대행사 어드민만 직원 목록 조회 가능
+    if user_role != UserRole.AGENCY_ADMIN.value:
+        print(f"[STAFF-MEMBERS-JWT] ERROR: Insufficient permissions - user_role={user_role}")
+        raise HTTPException(status_code=403, detail="직원 목록 조회 권한이 없습니다. 대행사 어드민만 접근 가능합니다.")
+    
+    try:
+        print(f"[STAFF-MEMBERS-JWT] Found user: {current_user.name}, company={current_user.company}")
+        
+        # 같은 회사의 직원들 조회 (직원 역할만)
+        staff_query = select(User).where(
+            User.company == current_user.company,
+            User.role == UserRole.STAFF,
+            User.is_active == True
+        )
+        result = await db.execute(staff_query)
+        staff_members = result.scalars().all()
+        
+        print(f"[STAFF-MEMBERS-JWT] Found {len(staff_members)} staff members")
+        
+        # 직원 정보를 딕셔너리로 변환
+        staff_list = [
+            {
+                "id": staff.id,
+                "name": staff.name,
+                "email": staff.email,
+                "company": staff.company
+            }
+            for staff in staff_members
+        ]
+        
+        return staff_list
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[STAFF-MEMBERS-JWT] Unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"직원 목록 조회 중 오류: {str(e)}")
 
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign_detail(
+    request: Request,
     campaign_id: int,
-    # Node.js API 호환성을 위한 쿼리 파라미터
-    viewerId: Optional[int] = Query(None, alias="viewerId"),
-    adminId: Optional[int] = Query(None, alias="adminId"),
-    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
-    adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db),
-    jwt_user: User = Depends(get_current_active_user)
+    # JWT 인증된 사용자
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
-    """캠페인 상세 조회 (권한별 필터링)"""
-    print(f"[CAMPAIGN-DETAIL] Request for campaign_id={campaign_id}, viewerId={viewerId}, viewerRole={viewerRole}")
+    """캠페인 상세 조회 (JWT 인증 기반 권한별 필터링)"""
+    user_id = current_user.id
+    user_role = current_user.role.value
     
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
-        try:
-            # Node.js API 호환 모드
-            user_id = viewerId or adminId
-            user_role = viewerRole or adminRole
-            
-            if not user_id or not user_role:
-                print(f"[CAMPAIGN-DETAIL] ERROR: Missing params - user_id={user_id}, user_role={user_role}")
-                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-            
-            # URL 디코딩
-            user_role = unquote(user_role).strip()
-            print(f"[CAMPAIGN-DETAIL] Processing with user_id={user_id}, user_role='{user_role}'")
-            
-            # 캠페인 찾기 (creator 관계 포함)
-            print(f"[CAMPAIGN-DETAIL] Searching for campaign with ID: {campaign_id}")
-            campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
-            result = await db.execute(campaign_query)
-            campaign = result.unique().scalar_one_or_none()
-            
-            if not campaign:
-                print(f"[CAMPAIGN-DETAIL] Campaign not found: {campaign_id}")
-                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
-            
-            print(f"[CAMPAIGN-DETAIL] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
-            print(f"[CAMPAIGN-DETAIL] Campaign creator loaded: {campaign.creator is not None}")
-            if campaign.creator:
-                print(f"[CAMPAIGN-DETAIL] Creator info: name={campaign.creator.name}, email={campaign.creator.email}")
-            print(f"[CAMPAIGN-DETAIL] Campaign creator_name property: {campaign.creator_name}")
-            print(f"[CAMPAIGN-DETAIL] Campaign client_name property: {campaign.client_name}")
-            
-            # 권한 확인
-            print(f"[CAMPAIGN-DETAIL] Checking user permissions for user_id: {user_id}")
-            viewer_query = select(User).where(User.id == user_id)
-            viewer_result = await db.execute(viewer_query)
-            viewer = viewer_result.scalar_one_or_none()
-            
-            if not viewer:
-                print(f"[CAMPAIGN-DETAIL] User not found: {user_id}")
-                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-            
-            print(f"[CAMPAIGN-DETAIL] Found user: {viewer.name}, role={user_role}, company={viewer.company}")
-            
-        except HTTPException:
-            raise  # HTTPException은 그대로 전달
-        except Exception as e:
-            print(f"[CAMPAIGN-DETAIL] Unexpected error: {type(e).__name__}: {e}")
-            raise HTTPException(status_code=500, detail=f"캠페인 조회 중 오류: {str(e)}")
+    print(f"[CAMPAIGN-DETAIL-JWT] Request for campaign_id={campaign_id}, user_id={user_id}, user_role={user_role}")
+    
+    try:
+        # 캠페인 찾기 (creator 관계 포함)
+        query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        campaign = result.scalar_one_or_none()
         
-        if user_role == UserRole.CLIENT.value:
-            # 클라이언트는 본인 캠페인만 조회 가능
-            if campaign.creator_id != user_id:
+        if not campaign:
+            print(f"[CAMPAIGN-DETAIL-JWT] Campaign {campaign_id} not found")
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+        
+        print(f"[CAMPAIGN-DETAIL-JWT] Found campaign: {campaign.name}")
+        
+        # JWT 기반 권한 확인
+        if user_role == UserRole.SUPER_ADMIN.value:
+            # 슈퍼 어드민은 모든 캠페인 접근 가능
+            pass
+        elif user_role == UserRole.CLIENT.value:
+            # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능
+            if not (campaign.client_company and f'(ID: {user_id})' in campaign.client_company):
+                print(f"[CAMPAIGN-DETAIL-JWT] CLIENT permission denied: client_company={campaign.client_company}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-        elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
+        elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 캠페인만 조회 가능
-            client_query = select(User).where(User.id == campaign.creator_id)
-            client_result = await db.execute(client_query)
-            client = client_result.scalar_one_or_none()
-            
-            if not client or client.company != viewer.company:
+            if campaign.creator and campaign.creator.company != current_user.company:
+                print(f"[CAMPAIGN-DETAIL-JWT] AGENCY_ADMIN permission denied: creator.company={campaign.creator.company}, user.company={current_user.company}")
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
         elif user_role == UserRole.STAFF.value:
             # 직원은 자신이 생성한 캠페인만 조회 가능
             if campaign.creator_id != user_id:
-                print(f"[CAMPAIGN-DETAIL] Staff permission denied: campaign.creator_id={campaign.creator_id}, user_id={user_id}")
+                print(f"[CAMPAIGN-DETAIL-JWT] STAFF permission denied: campaign.creator_id={campaign.creator_id}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
         
-        print(f"[CAMPAIGN-DETAIL] SUCCESS: Returning campaign {campaign.id} to user {user_id}")
+        print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {user_id}")
         return campaign
-    else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        current_user = jwt_user
-        print(f"[CAMPAIGN-DETAIL-JWT] Request for campaign_id={campaign_id}, user_id={current_user.id}, user_role={current_user.role}")
         
-        try:
-            # 캠페인 찾기 (creator 관계 포함)
-            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
-            result = await db.execute(query)
-            campaign = result.scalar_one_or_none()
-            
-            if not campaign:
-                print(f"[CAMPAIGN-DETAIL-JWT] Campaign {campaign_id} not found")
-                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
-            
-            print(f"[CAMPAIGN-DETAIL-JWT] Found campaign: {campaign.name}")
-            
-            # JWT 기반 권한 확인
-            user_role = current_user.role.value
-            
-            if user_role == UserRole.CLIENT.value:
-                # 클라이언트는 본인 캠페인 또는 자신을 대상으로 한 캠페인만 조회 가능
-                if (campaign.creator_id != current_user.id and 
-                    campaign.client_company != current_user.company and 
-                    not campaign.client_company.like(f'%(ID: {current_user.id})')):
-                    raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-            elif user_role == UserRole.AGENCY_ADMIN.value:
-                # 대행사 어드민은 같은 회사 캠페인만 조회 가능
-                if campaign.creator and campaign.creator.company != current_user.company:
-                    raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
-            elif user_role == UserRole.STAFF.value:
-                # 직원은 자신이 생성한 캠페인만 조회 가능
-                if campaign.creator_id != current_user.id:
-                    raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
-            # 슈퍼 어드민은 모든 캠페인 접근 가능
-            
-            print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {current_user.id}")
-            return campaign
-            
-        except HTTPException:
-            raise  # HTTPException은 그대로 전달
-        except Exception as e:
-            print(f"[CAMPAIGN-DETAIL-JWT] Unexpected error: {type(e).__name__}: {e}")
-            raise HTTPException(status_code=500, detail=f"캠페인 조회 중 오류: {str(e)}")
+    except HTTPException:
+        raise  # HTTPException은 그대로 전달
+    except Exception as e:
+        print(f"[CAMPAIGN-DETAIL-JWT] Unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"캠페인 조회 중 오류: {str(e)}")
 
 
 @router.put("/{campaign_id}", response_model=CampaignResponse)
