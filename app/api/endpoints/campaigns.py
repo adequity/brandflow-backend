@@ -930,6 +930,8 @@ async def delete_campaign(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
+    # JWT 기반 인증
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 삭제 (권한별 제한)"""
@@ -1046,7 +1048,6 @@ async def delete_campaign(
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         try:
-            current_user = await get_current_active_user()
             print(f"[CAMPAIGN-DELETE-JWT] Request from user: {current_user.name}, role: {current_user.role.value}")
 
             # 캠페인 찾기 (creator 관계 포함)
