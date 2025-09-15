@@ -138,19 +138,31 @@ async def migrate_client_company_to_user_id():
             updated_count = result.rowcount
             print(f"✅ Successfully migrated {updated_count} campaigns with client_user_id")
             
-            # 마이그레이션 결과 확인
-            check_result = await conn.execute(
+            # 마이그레이션 결과 확인 (컬럼 존재 여부 다시 확인)
+            column_check = await conn.execute(
                 """
-                SELECT COUNT(*) as total_campaigns,
-                       COUNT(client_user_id) as with_client_user_id,
-                       COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
-                FROM campaigns
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'campaigns' AND column_name = 'client_user_id'
                 """
             )
-            stats = check_result.fetchone()
-            print(f"Migration stats: {stats.total_campaigns} total campaigns, "
-                  f"{stats.with_client_user_id} with client_user_id, "
-                  f"{stats.with_id_pattern} with ID pattern")
+            column_exists_after = column_check.fetchone() is not None
+            
+            if column_exists_after:
+                check_result = await conn.execute(
+                    """
+                    SELECT COUNT(*) as total_campaigns,
+                           COUNT(client_user_id) as with_client_user_id,
+                           COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
+                    FROM campaigns
+                    """
+                )
+                stats = check_result.fetchone()
+                print(f"Migration stats: {stats.total_campaigns} total campaigns, "
+                      f"{stats.with_client_user_id} with client_user_id, "
+                      f"{stats.with_id_pattern} with ID pattern")
+            else:
+                print("Warning: client_user_id column still not found after migration")
                 
     except Exception as e:
         print(f"⚠️ Failed to migrate client_company data: {e}")
