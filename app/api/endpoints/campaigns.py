@@ -403,7 +403,8 @@ async def get_campaign_detail(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """캠페인 상세 조회 (권한별 필터링)"""
     print(f"[CAMPAIGN-DETAIL] Request for campaign_id={campaign_id}, viewerId={viewerId}, viewerRole={viewerRole}")
@@ -480,9 +481,28 @@ async def get_campaign_detail(
         return campaign
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 캠페인 상세 조회 구현
-        raise HTTPException(status_code=501, detail="Not implemented yet")
+        current_user = jwt_user
+        print(f"[CAMPAIGN-DETAIL-JWT] Request for campaign_id={campaign_id}, user_id={current_user.id}, user_role={current_user.role}")
+        
+        try:
+            # 캠페인 찾기 (creator 관계 포함)
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+            result = await db.execute(query)
+            campaign = result.scalar_one_or_none()
+            
+            if not campaign:
+                print(f"[CAMPAIGN-DETAIL-JWT] Campaign {campaign_id} not found")
+                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+            
+            print(f"[CAMPAIGN-DETAIL-JWT] Found campaign: {campaign.title}")
+            print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {current_user.id}")
+            return campaign
+            
+        except HTTPException:
+            raise  # HTTPException은 그대로 전달
+        except Exception as e:
+            print(f"[CAMPAIGN-DETAIL-JWT] Unexpected error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail=f"캠페인 조회 중 오류: {str(e)}")
 
 
 @router.put("/{campaign_id}", response_model=CampaignResponse)
