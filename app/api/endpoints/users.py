@@ -82,50 +82,84 @@ async def get_users(
 
 @router.get("/clients", response_model=List[UserResponse])
 async def get_clients(
-    # Node.js API 호환성을 위한 쿼리 파라미터
+    # Node.js API 호환성을 위한 쿼리 파라미터 (보안상 제거 예정)
     viewerId: Optional[int] = Query(None, alias="viewerId"),
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
+    # JWT 인증된 사용자
+    jwt_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
     """클라이언트 목록 조회 (권한별 필터링)"""
-    # 파라미터 정리
-    user_id = viewerId or adminId
-    user_role = viewerRole or adminRole
-    
-    if not user_id or not user_role:
-        raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-    
-    # URL 디코딩
-    user_role = unquote(user_role).strip()
-    
-    # 현재 사용자 조회
-    current_user_query = select(User).where(User.id == user_id)
-    result = await db.execute(current_user_query)
-    current_user = result.scalar_one_or_none()
-    
-    if not current_user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    
-    # 클라이언트만 필터링
-    query = select(User).where(User.role == UserRole.CLIENT)
-    
-    # 권한별 추가 필터링 (한글/영어 역할명 모두 지원)
-    if (user_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or 
-        ('대행사' in user_role and '어드민' in user_role) or 
-        ('agency' in user_role.lower() and 'admin' in user_role.lower())):
-        # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
-        query = query.where(User.company == current_user.company)
-    elif user_role in ['클라이언트', 'client']:
-        # 클라이언트는 자신만 조회 가능
-        query = query.where(User.id == user_id)
-    # 슈퍼 어드민은 모든 클라이언트 조회 가능 (추가 필터링 없음)
-    
-    result = await db.execute(query)
-    clients = result.scalars().all()
-    
-    return clients
+    # 기존 API 호환 모드 vs JWT 모드 구분
+    if viewerId is not None or adminId is not None:
+        # 기존 API 호환 모드 (보안상 제거 예정)
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+        
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+        
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+        
+        # 현재 사용자 조회
+        current_user_query = select(User).where(User.id == user_id)
+        result = await db.execute(current_user_query)
+        current_user = result.scalar_one_or_none()
+        
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        
+        # 클라이언트만 필터링
+        query = select(User).where(User.role == UserRole.CLIENT)
+        
+        # 권한별 추가 필터링 (한글/영어 역할명 모두 지원)
+        if (user_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or 
+            ('대행사' in user_role and '어드민' in user_role) or 
+            ('agency' in user_role.lower() and 'admin' in user_role.lower())):
+            # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
+            query = query.where(User.company == current_user.company)
+        elif user_role in ['클라이언트', 'client']:
+            # 클라이언트는 자신만 조회 가능
+            query = query.where(User.id == user_id)
+        # 슈퍼 어드민은 모든 클라이언트 조회 가능 (추가 필터링 없음)
+        
+        result = await db.execute(query)
+        clients = result.scalars().all()
+        
+        return clients
+    else:
+        # JWT 인증 기반 모드 (보안 강화)
+        current_user = jwt_user
+        user_id = current_user.id
+        user_role = current_user.role.value
+        
+        print(f"[USERS-CLIENTS-JWT] User: {current_user.name}, Role: {user_role}, Company: {current_user.company}")
+        
+        # 클라이언트만 필터링
+        query = select(User).where(User.role == UserRole.CLIENT)
+        
+        # JWT 기반 권한별 필터링
+        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+            # 슈퍼 어드민은 모든 클라이언트 조회 가능
+            pass
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
+            query = query.where(User.company == current_user.company)
+        elif user_role == '클라이언트':
+            # 클라이언트는 자신만 조회 가능
+            query = query.where(User.id == user_id)
+        else:
+            # 기타 역할은 클라이언트 조회 불가
+            return []
+        
+        result = await db.execute(query)
+        clients = result.scalars().all()
+        
+        print(f"[USERS-CLIENTS-JWT] Found {len(clients)} clients")
+        return clients
 
 
 @router.get("/me", response_model=UserResponse)

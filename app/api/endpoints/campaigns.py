@@ -18,7 +18,7 @@ router = APIRouter()
 
 @router.get("/", response_model=dict)
 async def get_campaigns(
-    # Node.js API 호환성을 위한 쿼리 파라미터
+    # Node.js API 호환성을 위한 쿼리 파라미터 (보안상 제거 예정)
     viewerId: Optional[int] = Query(None, alias="viewerId"),
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
@@ -29,6 +29,8 @@ async def get_campaigns(
     # 기존 파라미터도 지원 (하위 호환성)
     skip: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=100),
+    # JWT 인증된 사용자
+    jwt_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 목록 조회 (권한별 필터링)"""
@@ -184,18 +186,100 @@ async def get_campaigns(
             }
         }
     else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        print("[CAMPAIGNS-LIST] Using legacy JWT mode")
+        # JWT 인증 기반 모드 (보안 강화)
+        print(f"[CAMPAIGNS-LIST] Using JWT mode - User: {jwt_user.name}, Role: {jwt_user.role.value}, Company: {jwt_user.company}")
+        
+        current_user = jwt_user
+        user_id = current_user.id
+        user_role = current_user.role.value
+        
+        # 페이지네이션 처리
+        if skip is not None and limit is not None:
+            current_page = (skip // limit) + 1 if limit > 0 else 1
+            page_size = limit
+            offset = skip
+        else:
+            current_page = page
+            page_size = size
+            offset = (page - 1) * size
+        
+        # JWT 기반 권한별 필터링
+        if user_role in ['슈퍼 어드민', '슈퍼어드민'] or '슈퍼' in user_role:
+            # 슈퍼 어드민은 모든 캠페인 조회 가능
+            query = select(Campaign).options(joinedload(Campaign.creator))
+            count_query = select(func.count(Campaign.id))
+        elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+            # 대행사 어드민은 같은 회사 소속 캠페인만
+            query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
+            count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(User.company == current_user.company)
+        elif user_role == '직원':
+            # 직원은 자신이 생성한 캠페인만 조회 가능
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
+            count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
+        elif user_role == '클라이언트':
+            # 클라이언트는 자신이 생성한 캠페인 + 자신을 대상으로 한 캠페인 조회 가능
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(
+                (Campaign.creator_id == user_id) |  # 자신이 생성한 캠페인
+                (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
+                (Campaign.client_company.like(f'%(ID: {user_id})'))  # "이름 (ID: user_id)" 형태 매칭
+            )
+            count_query = select(func.count(Campaign.id)).where(
+                (Campaign.creator_id == user_id) |
+                (Campaign.client_company == current_user.company) |
+                (Campaign.client_company.like(f'%(ID: {user_id})'))
+            )
+        else:
+            # 기본적으로는 자신이 생성한 캠페인만
+            query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
+            count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
+        
+        # 전체 개수 조회
+        total_count_result = await db.execute(count_query)
+        total_count = total_count_result.scalar()
+        
+        # 페이지네이션 적용된 쿼리 실행
+        paginated_query = query.offset(offset).limit(page_size).order_by(Campaign.created_at.desc())
+        result = await db.execute(paginated_query)
+        campaigns = result.unique().scalars().all()
+        
+        # 페이지네이션 메타데이터 계산
+        total_pages = (total_count + page_size - 1) // page_size
+        has_next = current_page < total_pages
+        has_prev = current_page > 1
+        
+        print(f"[CAMPAIGNS-LIST-JWT] Found {len(campaigns)} campaigns (page {current_page}/{total_pages}, total: {total_count})")
+        
+        # Campaign 모델을 CampaignResponse 스키마로 직렬화
+        serialized_campaigns = []
+        for campaign in campaigns:
+            campaign_data = {
+                "id": campaign.id,
+                "name": campaign.name,
+                "description": campaign.description,
+                "status": campaign.status.value if campaign.status else None,
+                "client_company": campaign.client_company,
+                "manager_name": campaign.manager_name,
+                "creator_id": campaign.creator_id,
+                "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+                "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+                "User": {
+                    "id": campaign.creator.id,
+                    "name": campaign.creator.name,
+                    "role": campaign.creator.role.value
+                } if campaign.creator else None
+            }
+            serialized_campaigns.append(campaign_data)
+        
         return {
-            "data": [],
+            "data": serialized_campaigns,
             "pagination": {
-                "page": 1,
-                "size": 0,
-                "total": 0,
-                "total_pages": 0,
-                "has_next": False,
-                "has_prev": False,
-                "offset": 0
+                "page": current_page,
+                "size": page_size,
+                "total": total_count,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev,
+                "offset": offset
             }
         }
 
