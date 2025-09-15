@@ -230,3 +230,75 @@ async def create_product(
         print(f"[PRODUCT-CREATE] Unexpected error: {type(e).__name__}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"상품 생성 중 오류: {str(e)}")
+
+
+@router.delete("/{product_id}", status_code=204)
+async def delete_product(
+    product_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """상품 삭제 (소프트 삭제)"""
+    print(f"[PRODUCT-DELETE] Deleting product ID: {product_id}")
+
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+
+        # 현재 사용자 조회
+        current_user_query = select(User).where(User.id == user_id)
+        result = await db.execute(current_user_query)
+        current_user = result.scalar_one_or_none()
+
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+
+        print(f"[PRODUCT-DELETE] Node.js API mode - user_id={user_id}, role={user_role}")
+
+    else:
+        # JWT 기반 모드
+        current_user = jwt_user
+        user_role = current_user.role.value
+
+        print(f"[PRODUCT-DELETE] JWT mode - user_id={current_user.id}, role={user_role}")
+
+    try:
+        # 상품 존재 확인
+        product_query = select(Product).where(Product.id == product_id)
+        result = await db.execute(product_query)
+        product = result.scalar_one_or_none()
+
+        if not product:
+            raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다")
+
+        if not product.is_active:
+            raise HTTPException(status_code=404, detail="이미 삭제된 상품입니다")
+
+        # 소프트 삭제 (is_active를 False로 설정)
+        product.is_active = False
+        await db.commit()
+
+        print(f"[PRODUCT-DELETE] SUCCESS: Soft deleted product {product_id} by user {current_user.id}")
+
+        # 204 No Content 응답 (응답 바디 없음)
+        return
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PRODUCT-DELETE] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"상품 삭제 중 오류: {str(e)}")
