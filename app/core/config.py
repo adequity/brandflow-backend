@@ -16,10 +16,19 @@ class Settings(BaseSettings):
     
     @property
     def get_database_url(self) -> str:
-        """Railway PostgreSQL 전용 연결 - SQLite 사용 안함"""
-        # Railway PostgreSQL 직접 연결 (제공받은 환경변수)
+        """Railway PostgreSQL 전용 연결 - 환경변수 우선 사용"""
+        # Railway 환경변수에서 DATABASE_URL 가져오기 (우선순위)
+        railway_env_url = os.getenv("DATABASE_URL")
+        if railway_env_url:
+            # PostgreSQL URL을 asyncpg 형식으로 변환
+            if railway_env_url.startswith("postgresql://"):
+                railway_env_url = railway_env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            print(f"Using Railway Environment DATABASE_URL: {railway_env_url[:50]}...")
+            return railway_env_url
+        
+        # Fallback: 하드코딩된 Railway URL
         railway_url = "postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@junction.proxy.rlwy.net:21652/railway"
-        print(f"Using Railway PostgreSQL: postgres@junction.proxy.rlwy.net:21652/railway")
+        print(f"Using Railway PostgreSQL fallback: postgres@junction.proxy.rlwy.net:21652/railway")
         return railway_url
     
     # Security
