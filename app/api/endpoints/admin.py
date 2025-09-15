@@ -112,3 +112,121 @@ async def get_system_status(
             status_code=500,
             detail=f"시스템 상태 조회 중 오류가 발생했습니다: {str(e)}"
         )
+
+
+@router.post("/migrate-database")
+async def migrate_database_endpoint(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """데이터베이스 스키마 마이그레이션 실행 (슈퍼 어드민 전용)"""
+    
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 데이터베이스 마이그레이션을 실행할 수 있습니다."
+        )
+    
+    try:
+        from sqlalchemy import text
+        from app.db.database import add_client_user_id_column, migrate_client_company_to_user_id
+        
+        # 1. client_user_id 컬럼 추가
+        await add_client_user_id_column()
+        
+        # 2. 기존 데이터 마이그레이션
+        await migrate_client_company_to_user_id()
+        
+        # 3. 마이그레이션 결과 확인
+        check_result = await db.execute(text("""
+            SELECT COUNT(*) as total_campaigns,
+                   COUNT(client_user_id) as with_client_user_id,
+                   COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
+            FROM campaigns
+        """))
+        stats = check_result.fetchone()
+        
+        return {
+            "message": "데이터베이스 마이그레이션이 성공적으로 완료되었습니다.",
+            "details": {
+                "client_user_id_column_added": True,
+                "data_migration_completed": True,
+                "migration_stats": {
+                    "total_campaigns": stats[0],
+                    "campaigns_with_client_user_id": stats[1],
+                    "campaigns_with_id_pattern": stats[2]
+                }
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"데이터베이스 마이그레이션 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.get("/schema-status")
+async def get_schema_status(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """데이터베이스 스키마 상태 확인 (슈퍼 어드민 전용)"""
+    
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 스키마 상태를 조회할 수 있습니다."
+        )
+    
+    try:
+        from sqlalchemy import text
+        
+        # 1. client_user_id 컬럼 존재 여부 확인
+        column_result = await db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'campaigns' AND column_name = 'client_user_id'
+        """))
+        client_user_id_exists = column_result.fetchone() is not None
+        
+        # 2. campaigns 테이블 통계
+        stats_result = await db.execute(text("""
+            SELECT COUNT(*) as total_campaigns,
+                   COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
+            FROM campaigns
+        """))
+        stats = stats_result.fetchone()
+        
+        # 3. client_user_id가 있는 경우 추가 통계
+        client_user_id_stats = None
+        if client_user_id_exists:
+            client_stats_result = await db.execute(text("""
+                SELECT COUNT(client_user_id) as with_client_user_id
+                FROM campaigns
+                WHERE client_user_id IS NOT NULL
+            """))
+            client_user_id_stats = client_stats_result.fetchone()[0]
+        
+        return {
+            "schema_status": {
+                "client_user_id_column_exists": client_user_id_exists,
+                "migration_needed": not client_user_id_exists or (client_user_id_stats == 0 and stats[1] > 0)
+            },
+            "campaign_statistics": {
+                "total_campaigns": stats[0],
+                "campaigns_with_id_pattern": stats[1],
+                "campaigns_with_client_user_id": client_user_id_stats if client_user_id_exists else 0
+            },
+            "recommendations": {
+                "run_migration": not client_user_id_exists or (client_user_id_stats == 0 and stats[1] > 0)
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"스키마 상태 조회 중 오류가 발생했습니다: {str(e)}"
+        )

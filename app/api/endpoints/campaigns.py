@@ -54,18 +54,12 @@ async def get_campaigns(
             User.company == current_user.company
         )
     elif user_role == UserRole.CLIENT.value:
-        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_user_id 우선, fallback으로 client_company 패턴)
+        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_company 패턴 매칭)
         query = select(Campaign).options(joinedload(Campaign.creator)).where(
-            or_(
-                Campaign.client_user_id == user_id,
-                Campaign.client_company.like(f'%(ID: {user_id})')
-            )
+            Campaign.client_company.like(f'%(ID: {user_id})')
         )
         count_query = select(func.count(Campaign.id)).where(
-            or_(
-                Campaign.client_user_id == user_id,
-                Campaign.client_company.like(f'%(ID: {user_id})')
-            )
+            Campaign.client_company.like(f'%(ID: {user_id})')
         )
     elif user_role == UserRole.STAFF.value:
         # 직원은 자신이 생성한 캠페인만 조회 가능 (creator_id 기준)
@@ -187,17 +181,30 @@ async def create_campaign(
             except (ValueError, AttributeError) as e:
                 print(f"[CAMPAIGN-CREATE-JWT] Failed to extract client_user_id: {e}")
 
-        new_campaign = Campaign(
-            name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
-            description=campaign_data.description or '',
-            client_company=client_company,
-            client_user_id=client_user_id,  # 새로운 필드 설정
-            budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
-            start_date=safe_datetime_parse(campaign_data.start_date),
-            end_date=safe_datetime_parse(campaign_data.end_date),
-            creator_id=user_id,
-            status=CampaignStatus.ACTIVE
-        )
+        # 캠페인 생성 - client_user_id는 스키마 동기화 후에만 사용
+        campaign_kwargs = {
+            "name": campaign_data.name.strip() if campaign_data.name else "새 캠페인",
+            "description": campaign_data.description or '',
+            "client_company": client_company,
+            "budget": float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
+            "start_date": safe_datetime_parse(campaign_data.start_date),
+            "end_date": safe_datetime_parse(campaign_data.end_date),
+            "creator_id": user_id,
+            "status": CampaignStatus.ACTIVE
+        }
+        
+        # client_user_id 필드가 존재하는지 확인 후 설정 (스키마 동기화 대응)
+        try:
+            # Campaign 모델에 client_user_id 속성이 있는지 확인
+            if hasattr(Campaign, 'client_user_id'):
+                campaign_kwargs["client_user_id"] = client_user_id
+                print(f"[CAMPAIGN-CREATE-JWT] client_user_id field available, set to: {client_user_id}")
+            else:
+                print("[CAMPAIGN-CREATE-JWT] client_user_id field not available, skipping")
+        except Exception as e:
+            print(f"[CAMPAIGN-CREATE-JWT] Warning: Could not set client_user_id: {e}")
+
+        new_campaign = Campaign(**campaign_kwargs)
         
         print(f"[CAMPAIGN-CREATE-JWT] SUCCESS: Creating campaign with data: name='{new_campaign.name}', budget={new_campaign.budget}")
         db.add(new_campaign)
@@ -479,22 +486,27 @@ async def update_campaign(
                             match = re.search(r'\(ID: (\d+)\)', value)
                             if match:
                                 client_user_id = int(match.group(1))
-                                setattr(campaign, 'client_user_id', client_user_id)
                                 print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
-                                print(f"[CAMPAIGN-UPDATE] Extracted and updated client_user_id: {client_user_id}")
+                                print(f"[CAMPAIGN-UPDATE] Extracted client_user_id: {client_user_id}")
                             else:
-                                # ID 패턴이 없으면 client_user_id를 None으로 설정
-                                setattr(campaign, 'client_user_id', None)
                                 print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
-                                print(f"[CAMPAIGN-UPDATE] No ID pattern found, set client_user_id to None")
+                                print(f"[CAMPAIGN-UPDATE] No ID pattern found, client_user_id will be None")
                         except (ValueError, AttributeError) as e:
                             print(f"[CAMPAIGN-UPDATE] Failed to extract client_user_id: {e}")
-                            setattr(campaign, 'client_user_id', None)
                     else:
                         # client_company가 None이거나 빈 문자열인 경우
-                        setattr(campaign, 'client_user_id', None)
                         print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
                         print(f"[CAMPAIGN-UPDATE] Set client_user_id to None (no value or pattern)")
+                    
+                    # client_user_id 필드가 존재하는지 확인 후 설정 (스키마 동기화 대응)
+                    try:
+                        if hasattr(campaign, 'client_user_id'):
+                            setattr(campaign, 'client_user_id', client_user_id)
+                            print(f"[CAMPAIGN-UPDATE] client_user_id field available, updated to: {client_user_id}")
+                        else:
+                            print("[CAMPAIGN-UPDATE] client_user_id field not available, skipping")
+                    except Exception as e:
+                        print(f"[CAMPAIGN-UPDATE] Warning: Could not update client_user_id: {e}")
                 elif hasattr(campaign, field):
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
