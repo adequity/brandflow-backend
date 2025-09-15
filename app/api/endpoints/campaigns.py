@@ -575,10 +575,147 @@ async def update_campaign(
             await db.rollback()
             raise HTTPException(status_code=500, detail=f"캠페인 수정 중 오류: {str(e)}")
     else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 캠페인 수정 구현
-        raise HTTPException(status_code=501, detail="Not implemented yet")
+        # JWT 토큰 기반 API 모드
+        print(f"[CAMPAIGN-UPDATE] JWT 토큰 기반 수정 요청: campaign_id={campaign_id}")
+        
+        # JWT 토큰에서 사용자 정보 추출
+        user_id = jwt_user.id
+        user_role = jwt_user.role
+        
+        print(f"[CAMPAIGN-UPDATE] JWT User: id={user_id}, role={user_role}")
+        
+        # 동일한 수정 로직 사용 (Query parameter 방식과 동일)
+        try:
+            # 캠페인 조회
+            campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+            result = await db.execute(campaign_query)
+            campaign = result.unique().scalar_one_or_none()
+            
+            if not campaign:
+                print(f"[CAMPAIGN-UPDATE] Campaign not found: {campaign_id}")
+                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+            
+            print(f"[CAMPAIGN-UPDATE] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+            
+            # 권한 확인 (Query parameter 방식과 동일한 로직)
+            if user_role == UserRole.SUPER_ADMIN.value:
+                print(f"[CAMPAIGN-UPDATE] Super admin can edit any campaign")
+                pass
+            elif user_role == UserRole.CLIENT.value:
+                can_edit = False
+                if campaign.creator_id == user_id:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] CLIENT can edit: own created campaign")
+                elif campaign.client_user_id == user_id:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] CLIENT can edit: campaign created for them")
+                
+                if not can_edit:
+                    raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
+            elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
+                can_edit = False
+                creator_query = select(User).where(User.id == campaign.creator_id)
+                creator_result = await db.execute(creator_query)
+                creator = creator_result.scalar_one_or_none()
+                
+                if creator and creator.company == jwt_user.company:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: same company campaign")
+                elif campaign.client_user_id:
+                    client_query = select(User).where(User.id == campaign.client_user_id)
+                    client_result = await db.execute(client_query)
+                    client = client_result.scalar_one_or_none()
+                    if client and client.company == jwt_user.company:
+                        can_edit = True
+                        print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: client from same company")
+                
+                if not can_edit:
+                    raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
+            else:
+                raise HTTPException(status_code=403, detail="캠페인 수정 권한이 없습니다.")
+            
+            # 캠페인 데이터 업데이트 (Query parameter 방식과 동일한 로직)
+            update_data = campaign_data.dict(exclude_unset=True)
+            print(f"[CAMPAIGN-UPDATE] Update data: {update_data}")
+            
+            for field, value in update_data.items():
+                if field == 'budget':
+                    if value is None or value == '' or value == 0:
+                        if campaign.budget is None:
+                            setattr(campaign, field, 1000000.0)
+                            print(f"[CAMPAIGN-UPDATE] Set default budget: 1000000.0")
+                        else:
+                            print(f"[CAMPAIGN-UPDATE] Keeping existing budget: {campaign.budget}")
+                    else:
+                        try:
+                            budget_value = float(value)
+                            setattr(campaign, field, budget_value)
+                            print(f"[CAMPAIGN-UPDATE] Updated budget: {budget_value}")
+                        except (ValueError, TypeError) as e:
+                            print(f"[CAMPAIGN-UPDATE] Invalid budget value: {value}, keeping existing: {campaign.budget}")
+                elif field in ['start_date', 'end_date']:
+                    if value is None or value == '':
+                        if getattr(campaign, field) is None:
+                            from datetime import datetime
+                            default_date = datetime.now()
+                            setattr(campaign, field, default_date)
+                            print(f"[CAMPAIGN-UPDATE] Set default {field}: {default_date}")
+                        else:
+                            print(f"[CAMPAIGN-UPDATE] Keeping existing {field}: {getattr(campaign, field)}")
+                    else:
+                        try:
+                            from datetime import datetime
+                            if isinstance(value, str):
+                                parsed_date = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                            else:
+                                parsed_date = value
+                            setattr(campaign, field, parsed_date)
+                            print(f"[CAMPAIGN-UPDATE] Updated {field}: {value} -> {parsed_date}")
+                        except Exception as e:
+                            print(f"[CAMPAIGN-UPDATE] Date parsing error for {field}: {e}")
+                            setattr(campaign, field, None)
+                elif field == 'client_company' and value:
+                    setattr(campaign, field, value)
+                    client_user_id = None
+                    if value and '(ID: ' in value and ')' in value:
+                        try:
+                            import re
+                            match = re.search(r'\(ID: (\d+)\)', value)
+                            if match:
+                                client_user_id = int(match.group(1))
+                                print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
+                                print(f"[CAMPAIGN-UPDATE] Extracted client_user_id: {client_user_id}")
+                        except (ValueError, AttributeError) as e:
+                            print(f"[CAMPAIGN-UPDATE] Failed to extract client_user_id: {e}")
+                    
+                    try:
+                        if hasattr(campaign, 'client_user_id'):
+                            setattr(campaign, 'client_user_id', client_user_id)
+                            print(f"[CAMPAIGN-UPDATE] client_user_id field available, updated to: {client_user_id}")
+                        else:
+                            print("[CAMPAIGN-UPDATE] client_user_id field not available, skipping")
+                    except Exception as e:
+                        print(f"[CAMPAIGN-UPDATE] Warning: Could not update client_user_id: {e}")
+                elif hasattr(campaign, field):
+                    setattr(campaign, field, value)
+                    print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
+            
+            # 업데이트 시간 설정
+            from datetime import datetime
+            campaign.updated_at = datetime.utcnow()
+            
+            await db.commit()
+            await db.refresh(campaign)
+            
+            print(f"[CAMPAIGN-UPDATE] SUCCESS: Campaign {campaign_id} updated by JWT user {user_id}")
+            return campaign
+            
+        except HTTPException:
+            raise  # HTTPException은 그대로 전달
+        except Exception as e:
+            print(f"[CAMPAIGN-UPDATE] Unexpected error in JWT mode: {type(e).__name__}: {e}")
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"캠페인 수정 중 오류: {str(e)}")
 
 
 @router.get("/{campaign_id}/financial_summary/", response_model=dict)
