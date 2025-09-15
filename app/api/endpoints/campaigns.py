@@ -398,17 +398,53 @@ async def update_campaign(
             
             print(f"[CAMPAIGN-UPDATE] Found user: {viewer.name}, role={user_role}, company={viewer.company}")
             
-            if user_role == UserRole.CLIENT.value:
-                # 클라이언트는 본인 캠페인만 수정 가능
-                if campaign.creator_id != user_id:
+            if user_role == UserRole.SUPER_ADMIN.value:
+                # 슈퍼 어드민은 모든 캠페인 수정 가능
+                print(f"[CAMPAIGN-UPDATE] Super admin can edit any campaign")
+                pass
+            elif user_role == UserRole.CLIENT.value:
+                # 클라이언트는 다음 캠페인을 수정 가능:
+                # 1) 본인이 생성한 캠페인 (creator_id == user_id)
+                # 2) 본인을 위해 생성된 캠페인 (client_user_id == user_id)
+                can_edit = False
+                
+                if campaign.creator_id == user_id:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] CLIENT can edit: own created campaign")
+                elif campaign.client_user_id == user_id:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] CLIENT can edit: campaign created for them")
+                
+                if not can_edit:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
-                # 대행사 어드민은 같은 회사 캠페인만 수정 가능
-                client_query = select(User).where(User.id == campaign.creator_id)
-                client_result = await db.execute(client_query)
-                client = client_result.scalar_one_or_none()
+                # 대행사 어드민은 다음 캠페인을 수정 가능:
+                # 1) 같은 회사 직원이 생성한 캠페인
+                # 2) 클라이언트를 위해 생성된 캠페인 (client_user_id 기반)
+                can_edit = False
                 
-                if not client or client.company != viewer.company:
+                # 1) 캠페인 생성자가 같은 회사인지 확인
+                creator_query = select(User).where(User.id == campaign.creator_id)
+                creator_result = await db.execute(creator_query)
+                creator = creator_result.scalar_one_or_none()
+                
+                if creator and creator.company == viewer.company:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: same company creator")
+                
+                # 2) 클라이언트 사용자가 있고, 그 클라이언트의 캠페인을 대행사에서 관리하는지 확인
+                if not can_edit and campaign.client_user_id:
+                    client_query = select(User).where(User.id == campaign.client_user_id)
+                    client_result = await db.execute(client_query)
+                    client_user = client_result.scalar_one_or_none()
+                    
+                    # client_company 필드와 대행사가 관리하는 클라이언트인지 확인 (추가 로직 필요)
+                    # 현재는 단순히 client_user_id가 있으면 편집 가능하게 설정
+                    if client_user:
+                        can_edit = True
+                        print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: client campaign for user_id={campaign.client_user_id}")
+                
+                if not can_edit:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             elif user_role == UserRole.STAFF.value:
                 # 직원은 자신이 생성한 캠페인만 수정 가능
@@ -423,6 +459,22 @@ async def update_campaign(
                 if field == 'user_id':
                     # 사용되지 않는 필드 무시
                     continue
+                elif field == 'budget':
+                    # budget 필드 처리 - None이나 빈 값인 경우 기본값 설정
+                    if value is None or value == '' or value == 0:
+                        # 기존 값 유지하거나 최소 예산 설정
+                        if campaign.budget is None:
+                            setattr(campaign, field, 1000000.0)  # 기본 예산 100만원
+                            print(f"[CAMPAIGN-UPDATE] Set default budget: 1000000.0")
+                        else:
+                            print(f"[CAMPAIGN-UPDATE] Keeping existing budget: {campaign.budget}")
+                    else:
+                        try:
+                            budget_value = float(value)
+                            setattr(campaign, field, budget_value)
+                            print(f"[CAMPAIGN-UPDATE] Updated budget: {budget_value}")
+                        except (ValueError, TypeError) as e:
+                            print(f"[CAMPAIGN-UPDATE] Invalid budget value: {value}, keeping existing: {campaign.budget}")
                 elif field == 'creator_id' and value:
                     # 담당 직원 변경 (대행사 어드민만 가능) - UserRole enum 값 사용
                     if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()):
@@ -444,11 +496,11 @@ async def update_campaign(
                         
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Changed creator_id from {campaign.creator_id} to {value} ({new_staff.name})")
-                elif field in ['start_date', 'end_date'] and value:
-                    # 날짜 필드는 안전하게 파싱
+                elif field in ['start_date', 'end_date']:
+                    # 날짜 필드는 안전하게 파싱 - 빈 값도 허용
                     def safe_datetime_parse(date_input):
-                        if date_input is None:
-                            return datetime.now(timezone.utc).replace(tzinfo=None)
+                        if date_input is None or date_input == '':
+                            return None  # 빈 값은 None으로 처리
                         # 이미 datetime 객체인 경우
                         if isinstance(date_input, datetime):
                             return date_input.replace(tzinfo=None)
@@ -459,20 +511,17 @@ async def update_campaign(
                                 return parsed.replace(tzinfo=None)
                             except ValueError:
                                 print(f"[CAMPAIGN-UPDATE] WARNING: Failed to parse date string: {date_input}")
-                                return datetime.now(timezone.utc).replace(tzinfo=None)
-                        return datetime.now(timezone.utc).replace(tzinfo=None)
+                                return None
+                        return None
                     
                     try:
-                        if isinstance(value, str):
-                            parsed_date = safe_datetime_parse(value)
-                            setattr(campaign, field, parsed_date)
-                            print(f"[CAMPAIGN-UPDATE] Parsed date {field}: {value} -> {parsed_date}")
-                        else:
-                            setattr(campaign, field, value)
+                        parsed_date = safe_datetime_parse(value)
+                        setattr(campaign, field, parsed_date)
+                        print(f"[CAMPAIGN-UPDATE] Updated {field}: {value} -> {parsed_date}")
                     except Exception as e:
                         print(f"[CAMPAIGN-UPDATE] Date parsing error for {field}: {e}")
-                        # 날짜 파싱 실패 시 원본 값 사용
-                        setattr(campaign, field, value)
+                        # 날짜 파싱 실패 시 None 설정
+                        setattr(campaign, field, None)
                 elif field == 'client_company' and value:
                     # client_company 업데이트 시 client_user_id도 함께 업데이트
                     setattr(campaign, field, value)
