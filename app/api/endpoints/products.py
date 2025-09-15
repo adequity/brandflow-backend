@@ -75,7 +75,7 @@ async def get_products(
                 "description": product.description,
                 "price": product.price,
                 "category": product.category,
-                "status": product.status
+                "isActive": product.is_active
             }
             
             # selling_price나 cost_price가 있으면 추가
