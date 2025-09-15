@@ -88,26 +88,23 @@ async def create_performance_indexes():
 async def add_client_user_id_column():
     """campaigns 테이블에 client_user_id 컬럼 추가"""
     try:
+        from sqlalchemy import text
         async with async_engine.begin() as conn:
             # 컬럼 존재 여부 확인
-            result = await conn.execute(
-                """
+            result = await conn.execute(text("""
                 SELECT column_name 
                 FROM information_schema.columns 
                 WHERE table_name = 'campaigns' AND column_name = 'client_user_id'
-                """
-            )
+            """))
             column_exists = result.fetchone() is not None
             
             if not column_exists:
                 print("Adding client_user_id column to campaigns table...")
                 # 컬럼 추가
-                await conn.execute(
-                    """
+                await conn.execute(text("""
                     ALTER TABLE campaigns 
                     ADD COLUMN client_user_id INTEGER REFERENCES users(id)
-                    """
-                )
+                """))
                 print("✅ client_user_id column added successfully")
             else:
                 print("client_user_id column already exists")
@@ -120,43 +117,38 @@ async def add_client_user_id_column():
 async def migrate_client_company_to_user_id():
     """기존 client_company 데이터를 client_user_id로 마이그레이션"""
     try:
+        from sqlalchemy import text
         async with async_engine.begin() as conn:
             print("Starting client_company to client_user_id migration...")
             
             # client_company에서 (ID: user_id) 패턴 추출하여 client_user_id 업데이트
-            result = await conn.execute(
-                """
+            result = await conn.execute(text("""
                 UPDATE campaigns 
                 SET client_user_id = CAST(
                     SUBSTRING(client_company FROM '\\(ID: (\\d+)\\)') AS INTEGER
                 )
                 WHERE client_company LIKE '%(ID: %)' 
                 AND client_user_id IS NULL
-                """
-            )
+            """))
             
             updated_count = result.rowcount
             print(f"✅ Successfully migrated {updated_count} campaigns with client_user_id")
             
             # 마이그레이션 결과 확인 (컬럼 존재 여부 다시 확인)
-            column_check = await conn.execute(
-                """
+            column_check = await conn.execute(text("""
                 SELECT column_name 
                 FROM information_schema.columns 
                 WHERE table_name = 'campaigns' AND column_name = 'client_user_id'
-                """
-            )
+            """))
             column_exists_after = column_check.fetchone() is not None
             
             if column_exists_after:
-                check_result = await conn.execute(
-                    """
+                check_result = await conn.execute(text("""
                     SELECT COUNT(*) as total_campaigns,
                            COUNT(client_user_id) as with_client_user_id,
                            COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
                     FROM campaigns
-                    """
-                )
+                """))
                 stats = check_result.fetchone()
                 print(f"Migration stats: {stats.total_campaigns} total campaigns, "
                       f"{stats.with_client_user_id} with client_user_id, "
