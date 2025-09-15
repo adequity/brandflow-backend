@@ -128,8 +128,31 @@ async def cors_exception_handler(request: Request, exc: Exception):
 # CORS 미들웨어 설정 (프로덕션 보안 강화 + 인증 지원)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # HTTP 0 에러 해결을 위한 임시 전체 허용
-    allow_credentials=False,  # allow_origins=["*"]와 충돌 방지
+    allow_origins=[
+        "https://brandflo.netlify.app",
+        "https://brandflow-frontend.netlify.app", 
+        "https://adequate-brandflow.netlify.app",
+        "https://adequity-brandflow.netlify.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176", 
+        "http://localhost:5177",
+        "http://localhost:5178",
+        "http://localhost:5179",
+        "http://localhost:5180",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+        "http://127.0.0.1:5177",
+        "http://127.0.0.1:5178",
+        "http://127.0.0.1:5179",
+        "http://127.0.0.1:5180"
+    ],  # 특정 도메인만 허용하여 인증 지원
+    allow_credentials=True,  # JWT 토큰 인증을 위해 필수
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=[
         "Content-Type", 
