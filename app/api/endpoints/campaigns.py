@@ -54,13 +54,12 @@ async def get_campaigns(
             User.company == current_user.company
         )
     elif user_role == UserRole.CLIENT.value:
-        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_company 패턴 매칭)
-        query = select(Campaign).options(joinedload(Campaign.creator)).where(
-            Campaign.client_company.like(f'%(ID: {user_id})')
-        )
-        count_query = select(func.count(Campaign.id)).where(
-            Campaign.client_company.like(f'%(ID: {user_id})')
-        )
+        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_user_id 외래키 관계 사용)
+        query = select(Campaign).options(
+            joinedload(Campaign.creator),
+            joinedload(Campaign.client_user)
+        ).where(Campaign.client_user_id == user_id)
+        count_query = select(func.count(Campaign.id)).where(Campaign.client_user_id == user_id)
     elif user_role == UserRole.STAFF.value:
         # 직원은 자신이 생성한 캠페인만 조회 가능 (creator_id 기준)
         query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
@@ -319,9 +318,9 @@ async def get_campaign_detail(
             # 슈퍼 어드민은 모든 캠페인 접근 가능
             pass
         elif user_role == UserRole.CLIENT.value:
-            # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능
-            if not (campaign.client_company and f'(ID: {user_id})' in campaign.client_company):
-                print(f"[CAMPAIGN-DETAIL-JWT] CLIENT permission denied: client_company={campaign.client_company}, user_id={user_id}")
+            # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_user_id 외래키 관계 사용)
+            if campaign.client_user_id != user_id:
+                print(f"[CAMPAIGN-DETAIL-JWT] CLIENT permission denied: client_user_id={campaign.client_user_id}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
         elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 캠페인만 조회 가능
