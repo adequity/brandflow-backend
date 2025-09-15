@@ -61,8 +61,8 @@ async def get_products(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 모든 역할이 상품 목록 조회 가능
-        products_query = select(Product)
+        # 모든 역할이 상품 목록 조회 가능 (활성 상품만)
+        products_query = select(Product).where(Product.is_active == True)
         result = await db.execute(products_query)
         products = result.scalars().all()
         
@@ -93,8 +93,8 @@ async def get_products(
         print(f"[PRODUCTS-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
         
         try:
-            # JWT 기반 상품 목록 조회
-            query = select(Product)
+            # JWT 기반 상품 목록 조회 (활성 상품만)
+            query = select(Product).where(Product.is_active == True)
             result = await db.execute(query)
             products = result.scalars().all()
             
