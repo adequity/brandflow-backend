@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from urllib.parse import unquote
@@ -54,12 +54,18 @@ async def get_campaigns(
             User.company == current_user.company
         )
     elif user_role == UserRole.CLIENT.value:
-        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_company의 ID 패턴 매칭)
+        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_user_id 우선, fallback으로 client_company 패턴)
         query = select(Campaign).options(joinedload(Campaign.creator)).where(
-            Campaign.client_company.like(f'%(ID: {user_id})')
+            or_(
+                Campaign.client_user_id == user_id,
+                Campaign.client_company.like(f'%(ID: {user_id})')
+            )
         )
         count_query = select(func.count(Campaign.id)).where(
-            Campaign.client_company.like(f'%(ID: {user_id})')
+            or_(
+                Campaign.client_user_id == user_id,
+                Campaign.client_company.like(f'%(ID: {user_id})')
+            )
         )
     elif user_role == UserRole.STAFF.value:
         # 직원은 자신이 생성한 캠페인만 조회 가능 (creator_id 기준)

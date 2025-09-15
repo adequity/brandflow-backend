@@ -115,3 +115,43 @@ async def add_client_user_id_column():
     except Exception as e:
         print(f"⚠️ Failed to add client_user_id column: {e}")
         # 에러가 발생해도 애플리케이션 시작은 계속 진행
+
+
+async def migrate_client_company_to_user_id():
+    """기존 client_company 데이터를 client_user_id로 마이그레이션"""
+    try:
+        async with async_engine.begin() as conn:
+            print("Starting client_company to client_user_id migration...")
+            
+            # client_company에서 (ID: user_id) 패턴 추출하여 client_user_id 업데이트
+            result = await conn.execute(
+                """
+                UPDATE campaigns 
+                SET client_user_id = CAST(
+                    SUBSTRING(client_company FROM '\\(ID: (\\d+)\\)') AS INTEGER
+                )
+                WHERE client_company LIKE '%(ID: %)' 
+                AND client_user_id IS NULL
+                """
+            )
+            
+            updated_count = result.rowcount
+            print(f"✅ Successfully migrated {updated_count} campaigns with client_user_id")
+            
+            # 마이그레이션 결과 확인
+            check_result = await conn.execute(
+                """
+                SELECT COUNT(*) as total_campaigns,
+                       COUNT(client_user_id) as with_client_user_id,
+                       COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
+                FROM campaigns
+                """
+            )
+            stats = check_result.fetchone()
+            print(f"Migration stats: {stats.total_campaigns} total campaigns, "
+                  f"{stats.with_client_user_id} with client_user_id, "
+                  f"{stats.with_id_pattern} with ID pattern")
+                
+    except Exception as e:
+        print(f"⚠️ Failed to migrate client_company data: {e}")
+        # 에러가 발생해도 애플리케이션 시작은 계속 진행
