@@ -230,3 +230,129 @@ async def get_schema_status(
             status_code=500,
             detail=f"스키마 상태 조회 중 오류가 발생했습니다: {str(e)}"
         )
+
+
+@router.post("/smart-migration")
+async def smart_migration_endpoint(
+    dry_run: bool = True,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """스마트 데이터 마이그레이션 실행 (슈퍼 어드민 전용)"""
+    
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 스마트 마이그레이션을 실행할 수 있습니다."
+        )
+    
+    try:
+        from app.db.smart_migration import SmartDataMigrator
+        
+        migrator = SmartDataMigrator()
+        stats = await migrator.execute_smart_migration(db, dry_run=dry_run)
+        
+        return {
+            "message": f"스마트 마이그레이션이 {'분석' if dry_run else '완료'}되었습니다.",
+            "dry_run": dry_run,
+            "statistics": {
+                "total_unmapped_campaigns": stats['total_unmapped'],
+                "id_pattern_matches": stats['id_pattern_matches'],
+                "name_matches": stats['name_matches'], 
+                "email_matches": stats['email_matches'],
+                "company_matches": stats['company_matches'],
+                "no_matches": stats['no_matches'],
+                "successfully_updated": stats.get('updated', 0)
+            },
+            "recommendations": {
+                "potential_matches": stats['total_unmapped'] - stats['no_matches'],
+                "success_rate": round((stats['total_unmapped'] - stats['no_matches']) / max(stats['total_unmapped'], 1) * 100, 1) if stats['total_unmapped'] > 0 else 0
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"스마트 마이그레이션 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.get("/migration-analysis")
+async def migration_analysis_endpoint(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """마이그레이션 분석 결과 조회 (슈퍼 어드민 전용)"""
+    
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 마이그레이션 분석을 조회할 수 있습니다."
+        )
+    
+    try:
+        from app.db.smart_migration import SmartDataMigrator
+        
+        migrator = SmartDataMigrator()
+        await migrator.load_user_cache(db)
+        
+        unmapped_campaigns = await migrator.analyze_unmapped_campaigns(db)
+        
+        # 분석 결과 정리
+        analysis_results = []
+        match_type_counts = {
+            'ID_PATTERN': 0,
+            'NAME_MATCH': 0, 
+            'EMAIL_MATCH': 0,
+            'COMPANY_MATCH': 0,
+            'NO_MATCH': 0
+        }
+        
+        for campaign in unmapped_campaigns[:20]:  # 최대 20개만 반환
+            patterns = campaign['extracted_patterns']
+            suggested_user_id = campaign['suggested_user_id']
+            
+            if 'user_id' in patterns and suggested_user_id == patterns['user_id']:
+                match_type = "ID_PATTERN"
+            elif suggested_user_id:
+                user_info = migrator.user_cache.get(suggested_user_id, {})
+                if 'name' in patterns and migrator.normalize_text(patterns['name']) == user_info.get('normalized_name', ''):
+                    match_type = "NAME_MATCH"
+                elif 'email' in patterns and patterns['email'].lower() == user_info.get('email', '').lower():
+                    match_type = "EMAIL_MATCH"
+                else:
+                    match_type = "COMPANY_MATCH"
+            else:
+                match_type = "NO_MATCH"
+            
+            match_type_counts[match_type] += 1
+            
+            analysis_results.append({
+                "campaign_id": campaign['id'],
+                "campaign_name": campaign['name'],
+                "client_company": campaign['client_company'],
+                "extracted_patterns": patterns,
+                "suggested_user_id": suggested_user_id,
+                "suggested_user_name": campaign['suggested_user_name'],
+                "match_type": match_type,
+                "confidence": "HIGH" if match_type == "ID_PATTERN" else "MEDIUM" if suggested_user_id else "LOW"
+            })
+        
+        return {
+            "total_unmapped": len(unmapped_campaigns),
+            "showing_count": min(len(unmapped_campaigns), 20),
+            "match_type_summary": match_type_counts,
+            "analysis_results": analysis_results,
+            "recommendations": {
+                "ready_for_migration": len(unmapped_campaigns) - match_type_counts['NO_MATCH'],
+                "requires_manual_review": match_type_counts['NO_MATCH']
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"마이그레이션 분석 중 오류가 발생했습니다: {str(e)}"
+        )
