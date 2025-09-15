@@ -98,6 +98,9 @@ async def get_campaigns(
             "description": campaign.description,
             "status": campaign.status.value if campaign.status else None,
             "client_company": campaign.client_company,
+            "budget": campaign.budget,  # budget 필드 추가
+            "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+            "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
             "creator_id": campaign.creator_id,
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,

@@ -458,3 +458,77 @@ async def add_campaign_date_columns_endpoint(
             status_code=500,
             detail=f"스키마 수정 중 오류가 발생했습니다: {str(e)}"
         )
+
+
+@router.post("/update-null-campaign-dates")
+async def update_null_campaign_dates_endpoint(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """NULL인 캠페인 날짜 필드들에 기본값 설정 (슈퍼 어드민 전용)"""
+    
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 데이터를 수정할 수 있습니다."
+        )
+    
+    try:
+        from sqlalchemy import text
+        from datetime import datetime, timedelta
+        
+        print("Updating NULL campaign dates with default values...")
+        
+        # NULL인 start_date와 end_date를 가진 캠페인 수 확인
+        result = await db.execute(text("""
+            SELECT COUNT(*) 
+            FROM campaigns 
+            WHERE start_date IS NULL OR end_date IS NULL
+        """))
+        null_count = result.scalar()
+        
+        if null_count > 0:
+            print(f"Found {null_count} campaigns with NULL dates")
+            
+            # NULL인 날짜 필드들을 현재 시간과 30일 후로 설정
+            current_time = datetime.now()
+            end_time = current_time + timedelta(days=30)
+            
+            await db.execute(text("""
+                UPDATE campaigns 
+                SET start_date = COALESCE(start_date, :start_date),
+                    end_date = COALESCE(end_date, :end_date)
+                WHERE start_date IS NULL OR end_date IS NULL
+            """), {
+                'start_date': current_time,
+                'end_date': end_time
+            })
+            
+            await db.commit()
+            
+            print(f"Updated {null_count} campaigns with default dates")
+            print(f"Default start_date: {current_time}")
+            print(f"Default end_date: {end_time}")
+            
+            return {
+                "success": True,
+                "message": f"Successfully updated {null_count} campaigns with NULL dates",
+                "updated_count": null_count,
+                "default_start_date": current_time.isoformat(),
+                "default_end_date": end_time.isoformat()
+            }
+        else:
+            return {
+                "success": True,
+                "message": "All campaigns already have date values",
+                "updated_count": 0
+            }
+            
+    except Exception as e:
+        await db.rollback()
+        print(f"Failed to update NULL campaign dates: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update campaign dates: {str(e)}"
+        )
