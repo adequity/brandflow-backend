@@ -935,6 +935,13 @@ async def delete_campaign(
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 삭제 (권한별 제한)"""
+    from datetime import datetime
+    import uuid
+
+    request_id = str(uuid.uuid4())[:8]
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+
+    print(f"[CAMPAIGN-DELETE] 🟢 START Request {request_id} at {timestamp}")
     print(f"[CAMPAIGN-DELETE] Request for campaign_id={campaign_id}, viewerId={viewerId}, viewerRole={viewerRole}")
     
     # Node.js API 호환 모드인지 확인
@@ -1037,18 +1044,23 @@ async def delete_campaign(
                 print(f"[CAMPAIGN-DELETE] WebSocket notification failed: {ws_error}")
                 # WebSocket 실패는 삭제 작업에 영향 없음
             
+            print(f"[CAMPAIGN-DELETE] 🔴 END Request {request_id} - SUCCESS at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
             return  # 204 No Content
-            
+
         except HTTPException:
+            print(f"[CAMPAIGN-DELETE] 🔴 END Request {request_id} - HTTP ERROR at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
             raise
         except Exception as e:
+            print(f"[CAMPAIGN-DELETE] 🔴 END Request {request_id} - EXCEPTION at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
             print(f"[CAMPAIGN-DELETE] Unexpected error: {type(e).__name__}: {e}")
             await db.rollback()
             raise HTTPException(status_code=500, detail=f"캠페인 삭제 중 오류: {str(e)}")
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         try:
+            print(f"[CAMPAIGN-DELETE-JWT] 🟢 START JWT Request {request_id} at {timestamp}")
             print(f"[CAMPAIGN-DELETE-JWT] Request from user: {current_user.name}, role: {current_user.role.value}")
+            print(f"[CAMPAIGN-DELETE-JWT] User details - ID: {current_user.id}, Company: {current_user.company}")
 
             # 캠페인 찾기 (creator 관계 포함)
             campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
@@ -1060,35 +1072,47 @@ async def delete_campaign(
                 raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
 
             print(f"[CAMPAIGN-DELETE-JWT] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+            print(f"[CAMPAIGN-DELETE-JWT] Campaign creator info: {campaign.creator.name if campaign.creator else 'None'}, company: {campaign.creator.company if campaign.creator else 'None'}")
 
             # 권한 검사
             can_delete = False
 
+            print(f"[CAMPAIGN-DELETE-JWT] Permission check starting...")
+            print(f"[CAMPAIGN-DELETE-JWT] Current user role: {current_user.role} (enum: {current_user.role.value})")
+            print(f"[CAMPAIGN-DELETE-JWT] Available roles: SUPER_ADMIN={UserRole.SUPER_ADMIN.value}, AGENCY_ADMIN={UserRole.AGENCY_ADMIN.value}, STAFF={UserRole.STAFF.value}, CLIENT={UserRole.CLIENT.value}")
+
             if current_user.role == UserRole.SUPER_ADMIN:
                 # 슈퍼 어드민은 모든 캠페인 삭제 가능
                 can_delete = True
-                print(f"[CAMPAIGN-DELETE-JWT] Super admin can delete any campaign")
+                print(f"[CAMPAIGN-DELETE-JWT] ✅ Super admin can delete any campaign")
             elif current_user.role == UserRole.AGENCY_ADMIN:
                 # 대행사 어드민은 같은 회사의 모든 캠페인 삭제 가능
+                print(f"[CAMPAIGN-DELETE-JWT] Agency admin check - User company: '{current_user.company}', Campaign creator company: '{campaign.creator.company if campaign.creator else 'None'}'")
                 if campaign.creator and campaign.creator.company == current_user.company:
                     can_delete = True
-                    print(f"[CAMPAIGN-DELETE-JWT] Agency admin can delete campaign from same company")
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Agency admin can delete campaign from same company")
                 else:
-                    print(f"[CAMPAIGN-DELETE-JWT] Agency admin cannot delete - different company")
+                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Agency admin cannot delete - different company")
             elif current_user.role == UserRole.STAFF:
                 # 직원은 자신이 생성한 캠페인만 삭제 가능
+                print(f"[CAMPAIGN-DELETE-JWT] Staff check - User ID: {current_user.id}, Campaign creator ID: {campaign.creator_id}")
                 if campaign.creator_id == current_user.id:
                     can_delete = True
-                    print(f"[CAMPAIGN-DELETE-JWT] Staff can delete own campaign")
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Staff can delete own campaign")
                 else:
-                    print(f"[CAMPAIGN-DELETE-JWT] Staff cannot delete - not creator")
+                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Staff cannot delete - not creator")
             elif current_user.role == UserRole.CLIENT:
                 # 클라이언트는 자신의 회사와 연결된 캠페인만 삭제 가능 (제한적)
+                print(f"[CAMPAIGN-DELETE-JWT] Client check - User company: '{current_user.company}', Campaign creator company: '{campaign.creator.company if campaign.creator else 'None'}'")
                 if campaign.creator and campaign.creator.company == current_user.company:
                     can_delete = True
-                    print(f"[CAMPAIGN-DELETE-JWT] Client can delete campaign from same company")
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Client can delete campaign from same company")
                 else:
-                    print(f"[CAMPAIGN-DELETE-JWT] Client cannot delete - different company")
+                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Client cannot delete - different company")
+            else:
+                print(f"[CAMPAIGN-DELETE-JWT] ❌ Unknown role: {current_user.role}")
+
+            print(f"[CAMPAIGN-DELETE-JWT] Final permission result: can_delete = {can_delete}")
 
             if not can_delete:
                 print(f"[CAMPAIGN-DELETE-JWT] Permission denied for user_role={current_user.role.value}, creator_id={campaign.creator_id}")
@@ -1124,11 +1148,14 @@ async def delete_campaign(
                 print(f"[CAMPAIGN-DELETE-JWT] WebSocket notification failed: {ws_error}")
                 # WebSocket 실패는 삭제 작업에 영향 없음
 
+            print(f"[CAMPAIGN-DELETE-JWT] 🔴 END JWT Request {request_id} - SUCCESS at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
             return  # 204 No Content
 
         except HTTPException:
+            print(f"[CAMPAIGN-DELETE-JWT] 🔴 END JWT Request {request_id} - HTTP ERROR at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
             raise
         except Exception as e:
+            print(f"[CAMPAIGN-DELETE-JWT] 🔴 END JWT Request {request_id} - EXCEPTION at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
             print(f"[CAMPAIGN-DELETE-JWT] Unexpected error: {type(e).__name__}: {e}")
             await db.rollback()
             raise HTTPException(status_code=500, detail=f"캠페인 삭제 중 오류: {str(e)}")
