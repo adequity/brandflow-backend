@@ -126,25 +126,6 @@ async def get_clients(
     clients = result.scalars().all()
     
     return clients
-    else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        current_user = jwt_user
-        service = UserService(db)
-        
-        try:
-            # JWT 기반 사용자 목록 조회
-            users = await service.get_users_by_role_and_permission(
-                current_user=current_user,
-                skip=skip,
-                limit=limit,
-                role_filter=role,
-                company_filter=company
-            )
-            return users
-            
-        except Exception as e:
-            print(f"[USERS-LIST-JWT] Unexpected error: {type(e).__name__}: {e}")
-            raise HTTPException(status_code=500, detail=f"사용자 목록 조회 중 오류: {str(e)}")
 
 
 @router.get("/me", response_model=UserResponse)
