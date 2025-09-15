@@ -138,14 +138,25 @@ async def migrate_database_endpoint(
         # 2. 기존 데이터 마이그레이션
         await migrate_client_company_to_user_id()
         
-        # 3. 마이그레이션 결과 확인
-        check_result = await db.execute(text("""
-            SELECT COUNT(*) as total_campaigns,
-                   COUNT(client_user_id) as with_client_user_id,
-                   COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
-            FROM campaigns
+        # 3. 마이그레이션 결과 확인 (컬럼 존재 여부 재확인)
+        column_check = await db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'campaigns' AND column_name = 'client_user_id'
         """))
-        stats = check_result.fetchone()
+        column_exists = column_check.fetchone() is not None
+        
+        if column_exists:
+            check_result = await db.execute(text("""
+                SELECT COUNT(*) as total_campaigns,
+                       COUNT(client_user_id) as with_client_user_id,
+                       COUNT(CASE WHEN client_company LIKE '%(ID: %)' THEN 1 END) as with_id_pattern
+                FROM campaigns
+            """))
+            stats = check_result.fetchone()
+        else:
+            # 컬럼이 없으면 기본 통계만
+            stats = (0, 0, 0)
         
         return {
             "message": "데이터베이스 마이그레이션이 성공적으로 완료되었습니다.",
