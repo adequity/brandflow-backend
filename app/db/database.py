@@ -159,3 +159,59 @@ async def migrate_client_company_to_user_id():
     except Exception as e:
         print(f"⚠️ Failed to migrate client_company data: {e}")
         # 에러가 발생해도 애플리케이션 시작은 계속 진행
+
+
+async def add_campaign_date_columns():
+    """campaigns 테이블에 start_date, end_date 컬럼 추가"""
+    try:
+        from sqlalchemy import text
+        from datetime import datetime
+        async with async_engine.begin() as conn:
+            # 현재 컬럼 확인
+            result = await conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'campaigns' AND column_name IN ('start_date', 'end_date')
+            """))
+            existing_columns = {row[0] for row in result.fetchall()}
+            
+            # start_date 컬럼 추가
+            if 'start_date' not in existing_columns:
+                print("Adding start_date column to campaigns table...")
+                await conn.execute(text("""
+                    ALTER TABLE campaigns 
+                    ADD COLUMN start_date TIMESTAMP
+                """))
+                print("✅ start_date column added successfully")
+            else:
+                print("start_date column already exists")
+            
+            # end_date 컬럼 추가
+            if 'end_date' not in existing_columns:
+                print("Adding end_date column to campaigns table...")
+                await conn.execute(text("""
+                    ALTER TABLE campaigns 
+                    ADD COLUMN end_date TIMESTAMP
+                """))
+                print("✅ end_date column added successfully")
+            else:
+                print("end_date column already exists")
+            
+            # 기존 데이터에 기본값 설정 (NULL인 경우만)
+            if 'start_date' not in existing_columns or 'end_date' not in existing_columns:
+                current_time = datetime.now()
+                await conn.execute(text("""
+                    UPDATE campaigns 
+                    SET start_date = COALESCE(start_date, :current_time),
+                        end_date = COALESCE(end_date, :current_time + INTERVAL '30 days')
+                    WHERE start_date IS NULL OR end_date IS NULL
+                """), {"current_time": current_time})
+                
+                # 컬럼을 NOT NULL로 변경
+                await conn.execute(text("ALTER TABLE campaigns ALTER COLUMN start_date SET NOT NULL"))
+                await conn.execute(text("ALTER TABLE campaigns ALTER COLUMN end_date SET NOT NULL"))
+                print("✅ Set start_date and end_date columns to NOT NULL with default values")
+                
+    except Exception as e:
+        print(f"⚠️ Failed to add campaign date columns: {e}")
+        # 에러가 발생해도 애플리케이션 시작은 계속 진행

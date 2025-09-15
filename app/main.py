@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from app.core.config import settings
-from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id
+from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id, add_campaign_date_columns
 from app.db.init_data import init_database_data
 from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple
 
@@ -27,6 +27,9 @@ async def lifespan(app: FastAPI):
         
         # 기존 client_company 데이터를 client_user_id로 마이그레이션
         await migrate_client_company_to_user_id()
+        
+        # campaigns 테이블에 start_date, end_date 컬럼 추가
+        await add_campaign_date_columns()
         
         # 초기 데이터 생성 (선택적)
         try:
