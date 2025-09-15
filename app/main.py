@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from app.core.config import settings
-from app.db.database import create_tables, create_performance_indexes, get_async_db
+from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column
 from app.db.init_data import init_database_data
 from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple
 
@@ -21,6 +21,9 @@ async def lifespan(app: FastAPI):
         print("Attempting database connection...")
         await create_tables()
         print("Database tables created successfully")
+        
+        # client_user_id 컬럼 추가 (스키마 마이그레이션)
+        await add_client_user_id_column()
         
         # 초기 데이터 생성 (선택적)
         try:

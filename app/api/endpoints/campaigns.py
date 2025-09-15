@@ -16,7 +16,7 @@ from app.core.websocket import manager
 router = APIRouter()
 
 
-@router.get("/", response_model=dict)
+@router.get("/")
 async def get_campaigns(
     request: Request,
     # 페이지네이션 파라미터
@@ -40,25 +40,23 @@ async def get_campaigns(
     print(f"[CAMPAIGNS-LIST] Pagination - page={current_page}, size={page_size}, offset={offset}")
     
     # JWT 기반 권한별 필터링 (UserRole enum 값 사용)
-    # 사용자 요구사항: campaign.client_company 기반 필터링 (STAFF 제외)
+    # 기존 client_company 필드 기반 필터링 (데이터베이스 구조에 맞춰)
     if user_role == UserRole.SUPER_ADMIN.value:
         # 슈퍼 어드민은 모든 캠페인 조회 가능
         query = select(Campaign).options(joinedload(Campaign.creator))
         count_query = select(func.count(Campaign.id))
     elif user_role == UserRole.AGENCY_ADMIN.value:
-        # 대행사 어드민은 client_company 기반으로 필터링 (여러 형태 지원)
-        query = select(Campaign).options(joinedload(Campaign.creator)).where(
-            (Campaign.client_company == current_user.company) |  # 회사명 직접 매칭
-            (Campaign.client_company.like(f'%{current_user.company}%'))  # 부분 매칭
+        # 대행사 어드민은 같은 회사의 캠페인들 조회 가능 (creator의 company 기준)
+        query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(
+            User.company == current_user.company
         )
-        count_query = select(func.count(Campaign.id)).where(
-            (Campaign.client_company == current_user.company) |
-            (Campaign.client_company.like(f'%{current_user.company}%'))
+        count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
+            User.company == current_user.company
         )
     elif user_role == UserRole.CLIENT.value:
-        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (본인 ID가 포함된 캠페인)
+        # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_company의 ID 패턴 매칭)
         query = select(Campaign).options(joinedload(Campaign.creator)).where(
-            Campaign.client_company.like(f'%(ID: {user_id})')  # "이름 (ID: user_id)" 형태 매칭
+            Campaign.client_company.like(f'%(ID: {user_id})')
         )
         count_query = select(func.count(Campaign.id)).where(
             Campaign.client_company.like(f'%(ID: {user_id})')
@@ -68,14 +66,12 @@ async def get_campaigns(
         query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.creator_id == user_id)
         count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
     else:
-        # 기본적으로는 client_company 기준 필터링 (여러 형태 지원)
-        query = select(Campaign).options(joinedload(Campaign.creator)).where(
-            (Campaign.client_company == current_user.company) |
-            (Campaign.client_company.like(f'%{current_user.company}%'))
+        # 기본적으로는 같은 회사 기준 필터링 (creator의 company 기준)
+        query = select(Campaign).options(joinedload(Campaign.creator)).join(User, Campaign.creator_id == User.id).where(
+            User.company == current_user.company
         )
-        count_query = select(func.count(Campaign.id)).where(
-            (Campaign.client_company == current_user.company) |
-            (Campaign.client_company.like(f'%{current_user.company}%'))
+        count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
+            User.company == current_user.company
         )
     
     # 전체 개수 조회
@@ -94,7 +90,7 @@ async def get_campaigns(
     
     print(f"[CAMPAIGNS-LIST-JWT] Found {len(campaigns)} campaigns (page {current_page}/{total_pages}, total: {total_count})")
     
-    # Campaign 모델을 CampaignResponse 스키마로 직렬화
+    # Campaign 모델을 CampaignResponse 스키마로 직렬화 (기존 구조 유지)
     serialized_campaigns = []
     for campaign in campaigns:
         campaign_data = {
@@ -103,14 +99,14 @@ async def get_campaigns(
             "description": campaign.description,
             "status": campaign.status.value if campaign.status else None,
             "client_company": campaign.client_company,
-            "manager_name": campaign.manager_name,
             "creator_id": campaign.creator_id,
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
             "User": {
                 "id": campaign.creator.id,
                 "name": campaign.creator.name,
-                "role": campaign.creator.role.value
+                "role": campaign.creator.role.value,
+                "company": campaign.creator.company
             } if campaign.creator else None
         }
         serialized_campaigns.append(campaign_data)

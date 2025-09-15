@@ -19,7 +19,7 @@ class Campaign(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)  # Add description field for frontend compatibility
-    client_company = Column(String(200), nullable=False)
+    client_company = Column(String(200), nullable=True)  # 기존 호환성 유지 (nullable로 변경)
     budget = Column(Float, nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
@@ -27,9 +27,11 @@ class Campaign(Base, TimestampMixin):
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    client_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 클라이언트 사용자 ID
     
     # 관계 설정
-    creator = relationship("User", back_populates="campaigns")
+    creator = relationship("User", back_populates="campaigns", foreign_keys=[creator_id])
+    client_user = relationship("User", foreign_keys=[client_user_id])  # 클라이언트 사용자 관계
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     
     @property

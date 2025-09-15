@@ -83,3 +83,35 @@ async def create_performance_indexes():
     """성능 최적화 인덱스 생성"""
     from app.db.indexes import create_performance_indexes
     await create_performance_indexes(async_engine)
+
+
+async def add_client_user_id_column():
+    """campaigns 테이블에 client_user_id 컬럼 추가"""
+    try:
+        async with async_engine.begin() as conn:
+            # 컬럼 존재 여부 확인
+            result = await conn.execute(
+                """
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'campaigns' AND column_name = 'client_user_id'
+                """
+            )
+            column_exists = result.fetchone() is not None
+            
+            if not column_exists:
+                print("Adding client_user_id column to campaigns table...")
+                # 컬럼 추가
+                await conn.execute(
+                    """
+                    ALTER TABLE campaigns 
+                    ADD COLUMN client_user_id INTEGER REFERENCES users(id)
+                    """
+                )
+                print("✅ client_user_id column added successfully")
+            else:
+                print("client_user_id column already exists")
+                
+    except Exception as e:
+        print(f"⚠️ Failed to add client_user_id column: {e}")
+        # 에러가 발생해도 애플리케이션 시작은 계속 진행
