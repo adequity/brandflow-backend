@@ -191,20 +191,14 @@ async def create_product(
             if existing_product:
                 raise HTTPException(status_code=400, detail="이미 존재하는 SKU입니다")
 
-        # 새 상품 생성
+        # 새 상품 생성 (기존 DB 스키마와 호환)
         new_product = Product(
             name=product_data.name,
             description=product_data.description or "",
             price=product_data.costPrice,  # cost price를 price 필드에 저장
             cost=product_data.costPrice,   # 호환성을 위해 cost도 저장
-            selling_price=product_data.sellingPrice,
-            category=product_data.category,  # 호환성을 위해 보존
-            work_type_id=work_type_id,
+            category=product_data.category,  # 기존 category 필드 사용
             sku=product_data.sku,
-            unit=product_data.unit,
-            min_quantity=product_data.minQuantity,
-            max_quantity=product_data.maxQuantity,
-            tags=product_data.tags,
             is_active=True
         )
 
@@ -212,24 +206,20 @@ async def create_product(
         await db.commit()
         await db.refresh(new_product)
 
-        # work_type 정보를 포함해서 응답
-        await db.refresh(new_product, ["work_type"])
-
         print(f"[PRODUCT-CREATE] SUCCESS: Created product {new_product.id} by user {current_user.id}")
 
         return {
             "id": new_product.id,
             "name": new_product.name,
             "description": new_product.description,
-            "category": new_product.work_type.name if new_product.work_type else new_product.category,
-            "work_type_id": new_product.work_type_id,
+            "category": new_product.category,
             "sku": new_product.sku,
             "costPrice": new_product.price,
-            "sellingPrice": new_product.selling_price,
-            "unit": new_product.unit,
-            "minQuantity": new_product.min_quantity,
-            "maxQuantity": new_product.max_quantity,
-            "tags": new_product.tags,
+            "sellingPrice": product_data.sellingPrice,  # 프론트엔드 호환성을 위해 포함
+            "unit": product_data.unit,  # 프론트엔드 호환성을 위해 포함
+            "minQuantity": product_data.minQuantity,  # 프론트엔드 호환성을 위해 포함
+            "maxQuantity": product_data.maxQuantity,  # 프론트엔드 호환성을 위해 포함
+            "tags": product_data.tags,  # 프론트엔드 호환성을 위해 포함
             "isActive": new_product.is_active,
             "createdAt": new_product.created_at.isoformat() if new_product.created_at else None
         }
