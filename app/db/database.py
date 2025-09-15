@@ -215,3 +215,47 @@ async def add_campaign_date_columns():
     except Exception as e:
         print(f"⚠️ Failed to add campaign date columns: {e}")
         # 에러가 발생해도 애플리케이션 시작은 계속 진행
+
+
+async def update_null_campaign_dates():
+    """NULL인 캠페인 날짜 필드들에 기본값 설정"""
+    try:
+        from sqlalchemy import text
+        from datetime import datetime, timedelta
+        
+        async with async_engine.begin() as conn:
+            print("Updating NULL campaign dates with default values...")
+            
+            # NULL인 start_date와 end_date를 가진 캠페인 수 확인
+            result = await conn.execute(text("""
+                SELECT COUNT(*) 
+                FROM campaigns 
+                WHERE start_date IS NULL OR end_date IS NULL
+            """))
+            null_count = result.scalar()
+            
+            if null_count > 0:
+                print(f"Found {null_count} campaigns with NULL dates")
+                
+                # NULL인 날짜 필드들을 현재 시간과 30일 후로 설정
+                current_time = datetime.now()
+                end_time = current_time + timedelta(days=30)
+                
+                await conn.execute(text("""
+                    UPDATE campaigns 
+                    SET start_date = COALESCE(start_date, :start_date),
+                        end_date = COALESCE(end_date, :end_date)
+                    WHERE start_date IS NULL OR end_date IS NULL
+                """), {
+                    'start_date': current_time,
+                    'end_date': end_time
+                })
+                
+                print(f"Updated {null_count} campaigns with default dates")
+                print(f"Default start_date: {current_time}")
+                print(f"Default end_date: {end_time}")
+            else:
+                print("All campaigns already have date values")
+                
+    except Exception as e:
+        print(f"⚠️ Failed to update NULL campaign dates: {e}")
