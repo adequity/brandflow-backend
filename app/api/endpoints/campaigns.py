@@ -290,29 +290,67 @@ async def get_staff_members(
 @router.get("/client-list", response_model=List[dict])
 async def get_client_members(
     request: Request,
+    campaign_id: Optional[int] = Query(None, description="Campaign ID to get related clients"),
     # JWT 인증된 사용자
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """같은 회사 클라이언트 목록 조회 (JWT 인증 기반)"""
+    """
+    캠페인의 클라이언트와 같은 회사의 클라이언트 목록을 반환
+    campaign_id가 있으면 해당 캠페인의 client_user_id와 같은 회사의 클라이언트들
+    campaign_id가 없으면 현재 사용자와 같은 회사의 클라이언트들
+    """
     user_id = current_user.id
     user_role = current_user.role.value
     
     print(f"[CLIENT-MEMBERS-JWT] Request from user_id={user_id}, user_role={user_role}")
+    print(f"[CLIENT-MEMBERS-JWT] Campaign ID: {campaign_id}")
     
     try:
         print(f"[CLIENT-MEMBERS-JWT] Found user: {current_user.name}, company={current_user.company}")
         
-        # 같은 회사의 클라이언트들 조회 (클라이언트 역할만)
+        target_company = None
+        
+        if campaign_id:
+            # 캠페인 정보 조회
+            campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+            campaign_result = await db.execute(campaign_query)
+            campaign = campaign_result.scalar_one_or_none()
+            
+            if not campaign:
+                raise HTTPException(status_code=404, detail="Campaign not found")
+            
+            print(f"[CLIENT-MEMBERS-JWT] Campaign found: {campaign.name}, client_user_id: {campaign.client_user_id}")
+            
+            if campaign.client_user_id:
+                # 캠페인의 클라이언트 사용자 조회
+                client_user_query = select(User).where(User.id == campaign.client_user_id)
+                client_user_result = await db.execute(client_user_query)
+                client_user = client_user_result.scalar_one_or_none()
+                
+                if client_user:
+                    target_company = client_user.company
+                    print(f"[CLIENT-MEMBERS-JWT] Using campaign client's company: {target_company}")
+                else:
+                    print(f"[CLIENT-MEMBERS-JWT] Campaign client user not found, using current user's company")
+                    target_company = current_user.company
+            else:
+                print(f"[CLIENT-MEMBERS-JWT] Campaign has no client_user_id, using current user's company")
+                target_company = current_user.company
+        else:
+            target_company = current_user.company
+            print(f"[CLIENT-MEMBERS-JWT] No campaign_id provided, using current user's company: {target_company}")
+        
+        # 대상 회사의 클라이언트들 조회 (클라이언트 역할만)
         client_query = select(User).where(
-            User.company == current_user.company,
+            User.company == target_company,
             User.role == UserRole.CLIENT,
             User.is_active == True
         )
         result = await db.execute(client_query)
         client_members = result.scalars().all()
         
-        print(f"[CLIENT-MEMBERS-JWT] Found {len(client_members)} client members")
+        print(f"[CLIENT-MEMBERS-JWT] Found {len(client_members)} client members in company: {target_company}")
         
         # 클라이언트 정보를 딕셔너리로 변환
         client_list = [
