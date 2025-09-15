@@ -69,7 +69,7 @@ async def login(
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        subject=user.email, expires_delta=access_token_expires
+        subject=str(user.id), expires_delta=access_token_expires
     )
     
     security_logger.log_login_attempt(
@@ -125,7 +125,7 @@ async def login_json(
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        subject=user.email, expires_delta=access_token_expires
+        subject=str(user.id), expires_delta=access_token_expires
     )
     
     security_logger.log_login_attempt(

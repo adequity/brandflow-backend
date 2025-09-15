@@ -41,14 +41,14 @@ async def get_current_user(
         if not user_identifier:
             raise credentials_exception
         
-        # 사용자 조회 (ID 또는 이메일에 따라 다른 메서드 사용)
+        # 사용자 조회 (JWT subject는 이제 항상 user ID)
         service = UserService(db)
         try:
-            # 숫자인 경우 ID로 조회
+            # JWT subject는 이제 항상 user ID (문자열)
             user_id = int(user_identifier)
             user = await service.get_user_by_id(user_id)
         except ValueError:
-            # 문자열인 경우 이메일로 조회
+            # 혹시 이전 토큰이 이메일을 담고 있는 경우 호환성 유지
             user = await service.get_user_by_email(user_identifier)
         if user is None:
             security_logger.log_suspicious_activity(
@@ -141,11 +141,11 @@ async def get_optional_current_user(
         
         service = UserService(db)
         try:
-            # 숫자인 경우 ID로 조회
+            # JWT subject는 이제 항상 user ID (문자열)
             user_id = int(user_identifier)
             user = await service.get_user_by_id(user_id)
         except ValueError:
-            # 문자열인 경우 이메일로 조회
+            # 혹시 이전 토큰이 이메일을 담고 있는 경우 호환성 유지
             user = await service.get_user_by_email(user_identifier)
         
         if user and user.is_active:
