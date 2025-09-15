@@ -72,9 +72,39 @@ async def get_users(
         
         return users
     else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        # TODO: JWT 토큰 기반 인증 구현
-        return []
+        # JWT 기반 권한별 필터링
+        user_role = jwt_user.role
+        
+        # JWT 기반 권한별 필터링 (UserRole enum 값 사용)
+        if user_role == UserRole.SUPER_ADMIN:
+            # 슈퍼 어드민은 모든 사용자 조회 가능
+            query = select(User)
+        elif user_role == UserRole.AGENCY_ADMIN:
+            # 대행사 어드민은 같은 회사 사용자만 조회 가능
+            query = select(User).where(User.company == jwt_user.company)
+        elif user_role == UserRole.CLIENT:
+            # 클라이언트는 자신만 조회 가능
+            query = select(User).where(User.id == jwt_user.id)
+        elif user_role == UserRole.STAFF:
+            # 직원은 같은 회사 사용자만 조회 가능
+            query = select(User).where(User.company == jwt_user.company)
+        else:
+            # 기본값: 같은 회사 사용자만 조회 가능
+            query = select(User).where(User.company == jwt_user.company)
+        
+        # 페이지네이션 적용
+        query = query.offset(skip).limit(limit)
+        
+        # 추가 필터링
+        if role:
+            query = query.where(User.role == role)
+        if company:
+            query = query.where(User.company == company)
+        
+        result = await db.execute(query)
+        users = result.scalars().all()
+        
+        return users
 
 
 @router.get("/clients", response_model=List[UserResponse])
