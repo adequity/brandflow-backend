@@ -670,8 +670,9 @@ async def update_campaign(
                             setattr(campaign, field, parsed_date)
                             print(f"[CAMPAIGN-UPDATE] Updated {field}: {value} -> {parsed_date}")
                         except Exception as e:
-                            print(f"[CAMPAIGN-UPDATE] Date parsing error for {field}: {e}")
-                            setattr(campaign, field, None)
+                            print(f"[CAMPAIGN-UPDATE] Date parsing error for {field}: {e}, keeping existing value")
+                            # 파싱 오류 시 기존 값을 유지 (NULL 값 설정하지 않음)
+                            pass
                 elif field == 'client_company' and value:
                     setattr(campaign, field, value)
                     client_user_id = None
