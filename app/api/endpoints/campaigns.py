@@ -1045,6 +1045,89 @@ async def delete_campaign(
             raise HTTPException(status_code=500, detail=f"캠페인 삭제 중 오류: {str(e)}")
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 캠페인 삭제 구현
-        raise HTTPException(status_code=501, detail="Not implemented yet")
+        try:
+            current_user = await get_current_active_user()
+            print(f"[CAMPAIGN-DELETE-JWT] Request from user: {current_user.name}, role: {current_user.role.value}")
+
+            # 캠페인 찾기 (creator 관계 포함)
+            campaign_query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+            result = await db.execute(campaign_query)
+            campaign = result.unique().scalar_one_or_none()
+
+            if not campaign:
+                print(f"[CAMPAIGN-DELETE-JWT] Campaign not found: {campaign_id}")
+                raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+            print(f"[CAMPAIGN-DELETE-JWT] Found campaign: {campaign.name}, creator_id={campaign.creator_id}")
+
+            # 권한 검사
+            can_delete = False
+
+            if current_user.role == UserRole.SUPER_ADMIN:
+                # 슈퍼 어드민은 모든 캠페인 삭제 가능
+                can_delete = True
+                print(f"[CAMPAIGN-DELETE-JWT] Super admin can delete any campaign")
+            elif current_user.role == UserRole.AGENCY_ADMIN:
+                # 대행사 어드민은 같은 회사의 모든 캠페인 삭제 가능
+                if campaign.creator and campaign.creator.company == current_user.company:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE-JWT] Agency admin can delete campaign from same company")
+                else:
+                    print(f"[CAMPAIGN-DELETE-JWT] Agency admin cannot delete - different company")
+            elif current_user.role == UserRole.STAFF:
+                # 직원은 자신이 생성한 캠페인만 삭제 가능
+                if campaign.creator_id == current_user.id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE-JWT] Staff can delete own campaign")
+                else:
+                    print(f"[CAMPAIGN-DELETE-JWT] Staff cannot delete - not creator")
+            elif current_user.role == UserRole.CLIENT:
+                # 클라이언트는 자신의 회사와 연결된 캠페인만 삭제 가능 (제한적)
+                if campaign.creator and campaign.creator.company == current_user.company:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE-JWT] Client can delete campaign from same company")
+                else:
+                    print(f"[CAMPAIGN-DELETE-JWT] Client cannot delete - different company")
+
+            if not can_delete:
+                print(f"[CAMPAIGN-DELETE-JWT] Permission denied for user_role={current_user.role.value}, creator_id={campaign.creator_id}")
+                raise HTTPException(status_code=403, detail="이 캠페인을 삭제할 권한이 없습니다.")
+
+            # 관련 데이터 확인 (구매요청 등)
+            from app.models.purchase_request import PurchaseRequest
+            purchase_query = select(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
+            purchase_result = await db.execute(purchase_query)
+            purchase_requests = purchase_result.scalars().all()
+
+            if purchase_requests:
+                print(f"[CAMPAIGN-DELETE-JWT] Found {len(purchase_requests)} related purchase requests")
+                # 구매요청이 있는 경우 경고하지만 삭제는 허용 (CASCADE)
+
+            # 캠페인 삭제 (관련 데이터는 CASCADE로 자동 삭제)
+            await db.delete(campaign)
+            await db.commit()
+
+            print(f"[CAMPAIGN-DELETE-JWT] SUCCESS: Campaign {campaign_id} deleted by user {current_user.id}")
+
+            # WebSocket 알림 전송 (선택적)
+            try:
+                await manager.notify_campaign_update(
+                    action="deleted",
+                    campaign_id=campaign_id,
+                    campaign_name=campaign.name,
+                    user_id=current_user.id,
+                    user_name=current_user.name
+                )
+                print(f"[CAMPAIGN-DELETE-JWT] WebSocket notification sent")
+            except Exception as ws_error:
+                print(f"[CAMPAIGN-DELETE-JWT] WebSocket notification failed: {ws_error}")
+                # WebSocket 실패는 삭제 작업에 영향 없음
+
+            return  # 204 No Content
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"[CAMPAIGN-DELETE-JWT] Unexpected error: {type(e).__name__}: {e}")
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"캠페인 삭제 중 오류: {str(e)}")
