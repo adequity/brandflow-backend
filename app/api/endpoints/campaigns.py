@@ -578,7 +578,27 @@ async def get_campaign_detail(
                 print(f"[CAMPAIGN-DETAIL-JWT] Campaign {campaign_id} not found")
                 raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
             
-            print(f"[CAMPAIGN-DETAIL-JWT] Found campaign: {campaign.title}")
+            print(f"[CAMPAIGN-DETAIL-JWT] Found campaign: {campaign.name}")
+            
+            # JWT 기반 권한 확인
+            user_role = current_user.role.value
+            
+            if user_role == '클라이언트':
+                # 클라이언트는 본인 캠페인 또는 자신을 대상으로 한 캠페인만 조회 가능
+                if (campaign.creator_id != current_user.id and 
+                    campaign.client_company != current_user.company and 
+                    not campaign.client_company.like(f'%(ID: {current_user.id})')):
+                    raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
+            elif user_role in ['대행사 어드민', '대행사어드민'] or ('대행사' in user_role and '어드민' in user_role):
+                # 대행사 어드민은 같은 회사 캠페인만 조회 가능
+                if campaign.creator and campaign.creator.company != current_user.company:
+                    raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
+            elif user_role == '직원':
+                # 직원은 자신이 생성한 캠페인만 조회 가능
+                if campaign.creator_id != current_user.id:
+                    raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
+            # 슈퍼 어드민은 모든 캠페인 접근 가능
+            
             print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {current_user.id}")
             return campaign
             
@@ -598,6 +618,8 @@ async def update_campaign(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
+    # JWT 인증된 사용자
+    jwt_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
     """캠페인 수정"""
