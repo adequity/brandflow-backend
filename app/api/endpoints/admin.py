@@ -367,3 +367,94 @@ async def migration_analysis_endpoint(
             status_code=500,
             detail=f"마이그레이션 분석 중 오류가 발생했습니다: {str(e)}"
         )
+
+
+@router.post("/add-campaign-date-columns")
+async def add_campaign_date_columns_endpoint(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """campaigns 테이블에 start_date, end_date 컬럼 강제 추가 (슈퍼 어드민 전용)"""
+    
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 스키마를 수정할 수 있습니다."
+        )
+    
+    try:
+        from sqlalchemy import text
+        from datetime import datetime
+        
+        # 현재 컬럼 확인
+        result = await db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'campaigns' AND column_name IN ('start_date', 'end_date')
+        """))
+        existing_columns = {row[0] for row in result.fetchall()}
+        
+        operations = []
+        
+        # start_date 컬럼 추가
+        if 'start_date' not in existing_columns:
+            operations.append("Adding start_date column")
+            await db.execute(text("""
+                ALTER TABLE campaigns 
+                ADD COLUMN start_date TIMESTAMP
+            """))
+        else:
+            operations.append("start_date column already exists")
+        
+        # end_date 컬럼 추가
+        if 'end_date' not in existing_columns:
+            operations.append("Adding end_date column")
+            await db.execute(text("""
+                ALTER TABLE campaigns 
+                ADD COLUMN end_date TIMESTAMP
+            """))
+        else:
+            operations.append("end_date column already exists")
+        
+        # 기존 데이터에 기본값 설정 (NULL인 경우만)
+        if 'start_date' not in existing_columns or 'end_date' not in existing_columns:
+            operations.append("Setting default values for existing campaigns")
+            current_time = datetime.now()
+            await db.execute(text("""
+                UPDATE campaigns 
+                SET start_date = COALESCE(start_date, :current_time),
+                    end_date = COALESCE(end_date, :current_time + INTERVAL '30 days')
+                WHERE start_date IS NULL OR end_date IS NULL
+            """), {"current_time": current_time})
+            
+            # 컬럼을 NOT NULL로 변경
+            operations.append("Setting NOT NULL constraints")
+            await db.execute(text("ALTER TABLE campaigns ALTER COLUMN start_date SET NOT NULL"))
+            await db.execute(text("ALTER TABLE campaigns ALTER COLUMN end_date SET NOT NULL"))
+        
+        # 최종 테이블 구조 확인
+        final_columns = await db.execute(text("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns 
+            WHERE table_name = 'campaigns' 
+            ORDER BY ordinal_position
+        """))
+        
+        column_info = []
+        for col in final_columns:
+            nullable = "NULL" if col['is_nullable'] == 'YES' else "NOT NULL"
+            column_info.append(f"{col['column_name']}: {col['data_type']} ({nullable})")
+        
+        return {
+            "message": "campaigns 테이블 날짜 컬럼 추가 완료",
+            "operations": operations,
+            "final_columns": column_info,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"스키마 수정 중 오류가 발생했습니다: {str(e)}"
+        )
