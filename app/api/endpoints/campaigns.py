@@ -172,10 +172,26 @@ async def create_campaign(
                     return current_time
             return current_time
         
+        # client_company에서 client_user_id 추출
+        client_user_id = None
+        client_company = campaign_data.client_company or "기본 클라이언트"
+        
+        # (ID: user_id) 패턴에서 user_id 추출
+        if client_company and '(ID: ' in client_company and ')' in client_company:
+            try:
+                import re
+                match = re.search(r'\(ID: (\d+)\)', client_company)
+                if match:
+                    client_user_id = int(match.group(1))
+                    print(f"[CAMPAIGN-CREATE-JWT] Extracted client_user_id: {client_user_id}")
+            except (ValueError, AttributeError) as e:
+                print(f"[CAMPAIGN-CREATE-JWT] Failed to extract client_user_id: {e}")
+
         new_campaign = Campaign(
             name=campaign_data.name.strip() if campaign_data.name else "새 캠페인",
             description=campaign_data.description or '',
-            client_company=campaign_data.client_company or "기본 클라이언트",
+            client_company=client_company,
+            client_user_id=client_user_id,  # 새로운 필드 설정
             budget=float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
             start_date=safe_datetime_parse(campaign_data.start_date),
             end_date=safe_datetime_parse(campaign_data.end_date),
@@ -451,6 +467,34 @@ async def update_campaign(
                         print(f"[CAMPAIGN-UPDATE] Date parsing error for {field}: {e}")
                         # 날짜 파싱 실패 시 원본 값 사용
                         setattr(campaign, field, value)
+                elif field == 'client_company' and value:
+                    # client_company 업데이트 시 client_user_id도 함께 업데이트
+                    setattr(campaign, field, value)
+                    
+                    # client_company에서 client_user_id 추출
+                    client_user_id = None
+                    if value and '(ID: ' in value and ')' in value:
+                        try:
+                            import re
+                            match = re.search(r'\(ID: (\d+)\)', value)
+                            if match:
+                                client_user_id = int(match.group(1))
+                                setattr(campaign, 'client_user_id', client_user_id)
+                                print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
+                                print(f"[CAMPAIGN-UPDATE] Extracted and updated client_user_id: {client_user_id}")
+                            else:
+                                # ID 패턴이 없으면 client_user_id를 None으로 설정
+                                setattr(campaign, 'client_user_id', None)
+                                print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
+                                print(f"[CAMPAIGN-UPDATE] No ID pattern found, set client_user_id to None")
+                        except (ValueError, AttributeError) as e:
+                            print(f"[CAMPAIGN-UPDATE] Failed to extract client_user_id: {e}")
+                            setattr(campaign, 'client_user_id', None)
+                    else:
+                        # client_company가 None이거나 빈 문자열인 경우
+                        setattr(campaign, 'client_user_id', None)
+                        print(f"[CAMPAIGN-UPDATE] Updated client_company: {value}")
+                        print(f"[CAMPAIGN-UPDATE] Set client_user_id to None (no value or pattern)")
                 elif hasattr(campaign, field):
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
