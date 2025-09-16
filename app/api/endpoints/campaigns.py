@@ -1860,6 +1860,93 @@ async def get_order_request(
         raise HTTPException(status_code=500, detail=f"발주요청 조회 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.get("/approved-order-expenses")
+async def get_approved_order_expenses(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """승인된 발주요청의 이번 달 총 지출 계산 (products.cost × posts.quantity)"""
+    try:
+        from sqlalchemy import text
+        from datetime import datetime
+
+        # 현재 날짜 기준 이번 달
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
+
+        # 승인된 발주요청의 총 금액 계산 (products.cost × posts.quantity)
+        approved_expenses_query = text("""
+            SELECT
+                COUNT(*) as total_approved_count,
+                COALESCE(SUM(COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)), 0) as total_approved_amount,
+                COUNT(CASE WHEN EXTRACT(MONTH FROM order_requests.created_at) = :month
+                           AND EXTRACT(YEAR FROM order_requests.created_at) = :year
+                           THEN 1 END) as this_month_approved_count,
+                COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM order_requests.created_at) = :month
+                                  AND EXTRACT(YEAR FROM order_requests.created_at) = :year
+                                  THEN COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)
+                                  ELSE 0 END), 0) as this_month_approved_amount
+            FROM order_requests
+            INNER JOIN posts ON order_requests.post_id = posts.id
+            INNER JOIN products ON posts.product_id = products.id
+            WHERE order_requests.status = '승인'
+            AND order_requests.is_active = true
+            AND posts.is_active = true
+            AND products.is_active = true
+        """)
+
+        result = await db.execute(approved_expenses_query, {"month": current_month, "year": current_year})
+        row = result.fetchone()
+
+        # 전체 승인된 발주요청 통계
+        all_approved_query = text("""
+            SELECT
+                COUNT(*) as total_count,
+                COALESCE(SUM(COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)), 0) as total_amount
+            FROM order_requests
+            INNER JOIN posts ON order_requests.post_id = posts.id
+            INNER JOIN products ON posts.product_id = products.id
+            WHERE order_requests.is_active = true
+            AND posts.is_active = true
+            AND products.is_active = true
+        """)
+
+        all_result = await db.execute(all_approved_query)
+        all_row = all_result.fetchone()
+
+        # 승인 대기 중인 발주요청 통계
+        pending_query = text("""
+            SELECT COUNT(*) as pending_count
+            FROM order_requests
+            WHERE order_requests.status = '대기'
+            AND order_requests.is_active = true
+        """)
+
+        pending_result = await db.execute(pending_query)
+        pending_row = pending_result.fetchone()
+
+        return {
+            "total_requests": all_row[0] if all_row else 0,
+            "pending_requests": pending_row[0] if pending_row else 0,
+            "approved_requests": row[0] if row else 0,
+            "total_amount": float(all_row[1]) if all_row else 0,
+            "this_month_amount": float(row[3]) if row else 0,
+            "debug_info": {
+                "month": current_month,
+                "year": current_year,
+                "total_approved_count": row[0] if row else 0,
+                "total_approved_amount": float(row[1]) if row else 0,
+                "this_month_approved_count": row[2] if row else 0,
+                "this_month_approved_amount": float(row[3]) if row else 0
+            }
+        }
+
+    except Exception as e:
+        print(f"[APPROVED-ORDER-EXPENSES] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"승인된 발주요청 지출 계산 중 오류: {str(e)}")
+
+
 @router.get("/debug-amounts")
 async def debug_amounts(
     current_user: User = Depends(get_current_active_user),
