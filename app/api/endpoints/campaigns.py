@@ -9,12 +9,12 @@ from datetime import datetime, timezone
 from app.db.database import get_async_db
 from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
 from app.schemas.post import PostCreate, PostResponse
-# from app.schemas.order_request import OrderRequestCreate, OrderRequestResponse
+from app.schemas.order_request import OrderRequestCreate, OrderRequestResponse
 from app.api.deps import get_current_active_user
 from app.models.user import User, UserRole
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.post import Post
-# from app.models.order_request import OrderRequest
+from app.models.order_request import OrderRequest
 from app.core.websocket import manager
 
 router = APIRouter()
@@ -1444,92 +1444,116 @@ async def delete_campaign(
             raise HTTPException(status_code=500, detail=f"캠페인 삭제 중 오류: {str(e)}")
 
 
-# # 발주요청 관련 엔드포인트 (임시 비활성화)
-# @router.post("/{campaign_id}/posts/{post_id}/order-request", response_model=OrderRequestResponse)
-# async def create_order_request(
-#     campaign_id: int,
-#     post_id: int,
-#     order_data: OrderRequestCreate,
-#     current_user: User = Depends(get_current_active_user),
-#     db: AsyncSession = Depends(get_async_db)
-# ):
-#     """JWT 기반 발주요청 생성"""
+# 발주요청 관련 엔드포인트
+@router.post("/{campaign_id}/posts/{post_id}/order-request")
+async def create_order_request(
+    campaign_id: int,
+    post_id: int,
+    order_data: OrderRequestCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """JWT 기반 발주요청 생성"""
 
-#     print(f"[ORDER-REQUEST] Creating order request for post_id={post_id}, user_id={current_user.id}")
+    print(f"[ORDER-REQUEST] Creating order request for post_id={post_id}, user_id={current_user.id}")
 
-#     try:
-#         # 포스트 존재 여부 및 권한 확인
-#         post_query = select(Post).where(
-#             Post.id == post_id,
-#             Post.campaign_id == campaign_id,
-#             Post.is_active == True
-#         )
-#         result = await db.execute(post_query)
-#         post = result.scalar_one_or_none()
+    try:
+        # 포스트 존재 여부 및 권한 확인
+        post_query = select(Post).where(
+            Post.id == post_id,
+            Post.campaign_id == campaign_id,
+            Post.is_active == True
+        )
+        result = await db.execute(post_query)
+        post = result.scalar_one_or_none()
 
-#         if not post:
-#             raise HTTPException(status_code=404, detail="포스트를 찾을 수 없습니다")
+        if not post:
+            raise HTTPException(status_code=404, detail="포스트를 찾을 수 없습니다")
 
-#         # 발주요청 생성
-#         new_order_request = OrderRequest(
-#             title=order_data.title,
-#             description=order_data.description,
-#             cost_price=order_data.cost_price,
-#             resource_type=order_data.resource_type,
-#             post_id=post_id,
-#             user_id=current_user.id,
-#             campaign_id=campaign_id,
-#             status="대기"
-#         )
+        # 발주요청 생성
+        new_order_request = OrderRequest(
+            title=order_data.title,
+            description=order_data.description,
+            cost_price=order_data.cost_price,
+            resource_type=order_data.resource_type,
+            post_id=post_id,
+            user_id=current_user.id,
+            campaign_id=campaign_id,
+            status="대기"
+        )
 
-#         db.add(new_order_request)
-#         await db.flush()  # order_request ID 생성을 위해 flush
+        db.add(new_order_request)
+        await db.commit()
+        await db.refresh(new_order_request)
 
-#         # 포스트의 발주 상태 업데이트
-#         post.order_request_status = "발주 대기"
-#         post.order_request_id = new_order_request.id
+        # 포스트 상태 업데이트 (order_request_id 연결하지 않음)
+        post.order_request_status = "발주 대기"
+        await db.commit()
 
-#         await db.commit()
-#         await db.refresh(new_order_request)
+        print(f"[ORDER-REQUEST] Order request created successfully: {new_order_request.id}")
 
-#         print(f"[ORDER-REQUEST] Order request created successfully: {new_order_request.id}")
+        # 응답 데이터 구성
+        return {
+            "id": new_order_request.id,
+            "title": new_order_request.title,
+            "description": new_order_request.description,
+            "status": new_order_request.status,
+            "cost_price": new_order_request.cost_price,
+            "resource_type": new_order_request.resource_type,
+            "post_id": new_order_request.post_id,
+            "user_id": new_order_request.user_id,
+            "campaign_id": new_order_request.campaign_id,
+            "created_at": new_order_request.created_at.isoformat(),
+            "updated_at": new_order_request.updated_at.isoformat()
+        }
 
-#         return new_order_request
-
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         print(f"[ORDER-REQUEST] Error creating order request: {e}")
-#         await db.rollback()
-#         raise HTTPException(status_code=500, detail="발주요청 생성 중 오류가 발생했습니다")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ORDER-REQUEST] Error creating order request: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"발주요청 생성 중 오류가 발생했습니다: {str(e)}")
 
 
-# @router.get("/{campaign_id}/posts/{post_id}/order-request", response_model=OrderRequestResponse)
-# async def get_order_request(
-#     campaign_id: int,
-#     post_id: int,
-#     current_user: User = Depends(get_current_active_user),
-#     db: AsyncSession = Depends(get_async_db)
-# ):
-#     """JWT 기반 발주요청 조회"""
+@router.get("/{campaign_id}/posts/{post_id}/order-request")
+async def get_order_request(
+    campaign_id: int,
+    post_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """JWT 기반 발주요청 조회"""
 
-#     try:
-#         # 발주요청 조회
-#         order_query = select(OrderRequest).where(
-#             OrderRequest.post_id == post_id,
-#             OrderRequest.campaign_id == campaign_id,
-#             OrderRequest.is_active == True
-#         )
-#         result = await db.execute(order_query)
-#         order_request = result.scalar_one_or_none()
+    try:
+        # 발주요청 조회
+        order_query = select(OrderRequest).where(
+            OrderRequest.post_id == post_id,
+            OrderRequest.campaign_id == campaign_id,
+            OrderRequest.is_active == True
+        ).order_by(OrderRequest.created_at.desc())
 
-#         if not order_request:
-#             raise HTTPException(status_code=404, detail="발주요청을 찾을 수 없습니다")
+        result = await db.execute(order_query)
+        order_request = result.scalar_one_or_none()
 
-#         return order_request
+        if not order_request:
+            raise HTTPException(status_code=404, detail="발주요청을 찾을 수 없습니다")
 
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         print(f"[ORDER-REQUEST] Error getting order request: {e}")
-#         raise HTTPException(status_code=500, detail="발주요청 조회 중 오류가 발생했습니다")
+        return {
+            "id": order_request.id,
+            "title": order_request.title,
+            "description": order_request.description,
+            "status": order_request.status,
+            "cost_price": order_request.cost_price,
+            "resource_type": order_request.resource_type,
+            "post_id": order_request.post_id,
+            "user_id": order_request.user_id,
+            "campaign_id": order_request.campaign_id,
+            "created_at": order_request.created_at.isoformat(),
+            "updated_at": order_request.updated_at.isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ORDER-REQUEST] Error getting order request: {e}")
+        raise HTTPException(status_code=500, detail=f"발주요청 조회 중 오류가 발생했습니다: {str(e)}")
