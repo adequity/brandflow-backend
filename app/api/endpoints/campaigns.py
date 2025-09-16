@@ -1910,7 +1910,7 @@ async def update_order_cost_prices(
 
 
 
-@router.get("/order-status-list")
+@router.get("/order-status-list", response_model=dict)
 async def get_order_status_list(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
@@ -1972,7 +1972,7 @@ async def get_order_status_list(
         }
 
 
-@router.get("/order-requesters")
+@router.get("/order-requesters", response_model=dict)
 async def get_order_requesters(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
