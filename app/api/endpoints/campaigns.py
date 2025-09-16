@@ -1944,6 +1944,32 @@ async def get_approved_order_expenses(
         result = await db.execute(approved_expenses_query, {"month": current_month, "year": current_year})
         row = result.fetchone()
 
+        # 디버그: 승인된 발주요청들의 개별 cost_price 값 조회
+        debug_query = text("""
+            SELECT
+                id,
+                title,
+                cost_price,
+                created_at,
+                status
+            FROM order_requests
+            WHERE status = '승인'
+            AND is_active = true
+            ORDER BY created_at DESC
+        """)
+
+        debug_result = await db.execute(debug_query)
+        debug_rows = debug_result.fetchall()
+
+        print(f"[DEBUG] 승인된 발주요청 개별 데이터:")
+        total_debug_sum = 0
+        for debug_row in debug_rows:
+            cost_price = debug_row[2] or 0
+            total_debug_sum += cost_price
+            print(f"  ID: {debug_row[0]}, Title: {debug_row[1]}, cost_price: {cost_price}, Created: {debug_row[3]}")
+        print(f"[DEBUG] 개별 합계: {total_debug_sum}")
+        print(f"[DEBUG] 쿼리 결과: {row[1] if row else 0}")
+
         # 승인된 발주요청의 cost_price 합계
         approved_total_cost_query = text("""
             SELECT
