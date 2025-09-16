@@ -1944,17 +1944,32 @@ async def get_approved_order_expenses(
         result = await db.execute(approved_expenses_query, {"month": current_month, "year": current_year})
         row = result.fetchone()
 
-        # 전체 발주요청 통계
-        all_approved_query = text("""
+        # 승인된 발주요청의 total_cost 합계 (campaign_id 기준)
+        approved_total_cost_query = text("""
             SELECT
-                COUNT(*) as total_count,
-                COALESCE(SUM(order_requests.cost_price), 0) as total_amount
+                COUNT(*) as approved_count,
+                COALESCE(SUM(COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)), 0) as approved_total_cost
+            FROM order_requests
+            INNER JOIN posts ON order_requests.post_id = posts.id
+            INNER JOIN products ON posts.product_id = products.id
+            WHERE order_requests.status = '승인'
+            AND order_requests.is_active = true
+            AND posts.is_active = true
+            AND products.is_active = true
+        """)
+
+        approved_total_result = await db.execute(approved_total_cost_query)
+        approved_total_row = approved_total_result.fetchone()
+
+        # 전체 발주요청 통계 (모든 상태)
+        all_requests_query = text("""
+            SELECT COUNT(*) as total_count
             FROM order_requests
             WHERE order_requests.is_active = true
         """)
 
-        all_result = await db.execute(all_approved_query)
-        all_row = all_result.fetchone()
+        all_requests_result = await db.execute(all_requests_query)
+        all_requests_row = all_requests_result.fetchone()
 
         # 승인 대기 중인 발주요청 통계
         pending_query = text("""
@@ -1967,11 +1982,23 @@ async def get_approved_order_expenses(
         pending_result = await db.execute(pending_query)
         pending_row = pending_result.fetchone()
 
+        # 거절된 발주요청 통계
+        rejected_query = text("""
+            SELECT COUNT(*) as rejected_count
+            FROM order_requests
+            WHERE order_requests.status = '거부'
+            AND order_requests.is_active = true
+        """)
+
+        rejected_result = await db.execute(rejected_query)
+        rejected_row = rejected_result.fetchone()
+
         return {
-            "total_requests": all_row[0] if all_row else 0,
+            "total_requests": all_requests_row[0] if all_requests_row else 0,
             "pending_requests": pending_row[0] if pending_row else 0,
-            "approved_requests": row[0] if row else 0,
-            "total_amount": float(all_row[1]) if all_row else 0,
+            "approved_requests": approved_total_row[0] if approved_total_row else 0,
+            "rejected_requests": rejected_row[0] if rejected_row else 0,
+            "total_amount": float(approved_total_row[1]) if approved_total_row else 0,  # 승인된 것들의 total_cost 합계
             "this_month_amount": float(row[3]) if row else 0,
             "debug_info": {
                 "month": current_month,
