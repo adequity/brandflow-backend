@@ -1917,18 +1917,20 @@ async def get_order_status_list(
 ):
     """발주요청 상태 목록 조회 (DB 기반 동적)"""
     try:
-        # 실제 order_requests에서 사용되는 status 값들 조회
         from sqlalchemy import select, distinct
         from app.models.order_request import OrderRequest
 
-        # 간단한 ORM 쿼리 사용
+        print(f"[ORDER-STATUS-LIST] Starting query for user: {current_user.id}")
+
+        # 더 안전한 쿼리 - 조건 제거하고 단순화
         query = select(distinct(OrderRequest.status)).where(
-            OrderRequest.status.isnot(None),
-            OrderRequest.is_active == True
+            OrderRequest.status.isnot(None)
         ).order_by(OrderRequest.status)
 
         result = await db.execute(query)
         status_values = result.scalars().all()
+
+        print(f"[ORDER-STATUS-LIST] Found status values: {status_values}")
 
         # 상태별 색상 매핑
         status_colors = {
@@ -1946,13 +1948,18 @@ async def get_order_status_list(
                 "color": status_colors.get(status, "gray")
             })
 
+        print(f"[ORDER-STATUS-LIST] Returning status_list: {status_list}")
+
         return {
             "status_list": status_list,
             "success": True
         }
 
     except Exception as e:
-        print(f"[ORDER-STATUS-LIST] Error: {e}")
+        print(f"[ORDER-STATUS-LIST] Exception: {type(e).__name__}: {e}")
+        import traceback
+        print(f"[ORDER-STATUS-LIST] Traceback: {traceback.format_exc()}")
+
         # 에러 발생 시 안전한 기본값 반환
         return {
             "status_list": [
@@ -1976,7 +1983,9 @@ async def get_order_requesters(
         from app.models.order_request import OrderRequest
         from app.models.user import User
 
-        # 간단한 ORM 조인 쿼리
+        print(f"[ORDER-REQUESTERS] Starting query for user: {current_user.id}")
+
+        # 더 안전한 쿼리 - is_active 조건 제거
         query = select(
             distinct(User.id).label('user_id'),
             User.name.label('user_name')
@@ -1985,12 +1994,13 @@ async def get_order_requesters(
         ).join(
             User, OrderRequest.user_id == User.id
         ).where(
-            OrderRequest.is_active == True,
             User.name.isnot(None)
         ).order_by(User.name)
 
         result = await db.execute(query)
         rows = result.all()
+
+        print(f"[ORDER-REQUESTERS] Found {len(rows)} unique requesters")
 
         # 요청자 목록 구성
         requester_list = []
@@ -2001,13 +2011,18 @@ async def get_order_requesters(
                 "label": row.user_name
             })
 
+        print(f"[ORDER-REQUESTERS] Returning requester_list: {requester_list}")
+
         return {
             "requester_list": requester_list,
             "success": True
         }
 
     except Exception as e:
-        print(f"[ORDER-REQUESTERS] Error: {e}")
+        print(f"[ORDER-REQUESTERS] Exception: {type(e).__name__}: {e}")
+        import traceback
+        print(f"[ORDER-REQUESTERS] Traceback: {traceback.format_exc()}")
+
         # 에러 발생 시 빈 목록 반환
         return {
             "requester_list": [],
