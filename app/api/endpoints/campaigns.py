@@ -1910,6 +1910,112 @@ async def update_order_cost_prices(
 
 
 
+@router.get("/order-status-list")
+async def get_order_status_list(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """발주요청 상태 목록 조회 (DB 기반 동적)"""
+    try:
+        # 실제 order_requests에서 사용되는 status 값들 조회
+        from sqlalchemy import select, distinct
+        from app.models.order_request import OrderRequest
+
+        # 간단한 ORM 쿼리 사용
+        query = select(distinct(OrderRequest.status)).where(
+            OrderRequest.status.isnot(None),
+            OrderRequest.is_active == True
+        ).order_by(OrderRequest.status)
+
+        result = await db.execute(query)
+        status_values = result.scalars().all()
+
+        # 상태별 색상 매핑
+        status_colors = {
+            "대기": "yellow",
+            "승인": "green",
+            "거부": "red"
+        }
+
+        # 상태 목록 구성
+        status_list = []
+        for status in status_values:
+            status_list.append({
+                "value": status,
+                "label": status,
+                "color": status_colors.get(status, "gray")
+            })
+
+        return {
+            "status_list": status_list,
+            "success": True
+        }
+
+    except Exception as e:
+        print(f"[ORDER-STATUS-LIST] Error: {e}")
+        # 에러 발생 시 안전한 기본값 반환
+        return {
+            "status_list": [
+                {"value": "대기", "label": "대기", "color": "yellow"},
+                {"value": "승인", "label": "승인", "color": "green"},
+                {"value": "거부", "label": "거부", "color": "red"}
+            ],
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.get("/order-requesters")
+async def get_order_requesters(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """발주요청자 목록 조회 (user.name 기반)"""
+    try:
+        from sqlalchemy import select, distinct
+        from app.models.order_request import OrderRequest
+        from app.models.user import User
+
+        # 간단한 ORM 조인 쿼리
+        query = select(
+            distinct(User.id).label('user_id'),
+            User.name.label('user_name')
+        ).select_from(
+            OrderRequest
+        ).join(
+            User, OrderRequest.user_id == User.id
+        ).where(
+            OrderRequest.is_active == True,
+            User.name.isnot(None)
+        ).order_by(User.name)
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        # 요청자 목록 구성
+        requester_list = []
+        for row in rows:
+            requester_list.append({
+                "user_id": row.user_id,
+                "user_name": row.user_name,
+                "label": row.user_name
+            })
+
+        return {
+            "requester_list": requester_list,
+            "success": True
+        }
+
+    except Exception as e:
+        print(f"[ORDER-REQUESTERS] Error: {e}")
+        # 에러 발생 시 빈 목록 반환
+        return {
+            "requester_list": [],
+            "success": False,
+            "error": str(e)
+        }
+
+
 @router.get("/debug-amounts")
 async def debug_amounts(
     current_user: User = Depends(get_current_active_user),
