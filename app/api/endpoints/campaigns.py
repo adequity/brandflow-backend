@@ -1560,6 +1560,22 @@ async def get_order_request(
 
 
 # 전체 발주요청 목록 조회 (발주 관리용)
+@router.get("/order-requests-health")
+async def check_order_requests_table(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """OrderRequest 테이블 존재 여부 확인"""
+    try:
+        # 테이블 존재 확인을 위한 간단한 쿼리
+        from sqlalchemy import text
+        result = await db.execute(text("SELECT COUNT(*) FROM order_requests LIMIT 1"))
+        count = result.scalar()
+        return {"status": "ok", "table_exists": True, "count": count}
+    except Exception as e:
+        print(f"[ORDER-REQUEST-HEALTH] Table check failed: {e}")
+        return {"status": "error", "table_exists": False, "error": str(e)}
+
 @router.get("/order-requests")
 async def get_all_order_requests(
     current_user: User = Depends(get_current_active_user),
@@ -1626,4 +1642,8 @@ async def get_all_order_requests(
 
     except Exception as e:
         print(f"[ORDER-REQUESTS-LIST] Error getting order requests: {e}")
+        print(f"[ORDER-REQUESTS-LIST] Error type: {type(e).__name__}")
+        print(f"[ORDER-REQUESTS-LIST] Error args: {e.args}")
+        import traceback
+        print(f"[ORDER-REQUESTS-LIST] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"발주요청 목록 조회 중 오류가 발생했습니다: {str(e)}")
