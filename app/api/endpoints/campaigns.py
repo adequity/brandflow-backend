@@ -102,6 +102,7 @@ async def get_campaigns(
             "name": campaign.name,
             "description": campaign.description,
             "status": campaign.status.value if campaign.status else None,
+            "executionStatus": getattr(campaign, 'executionStatus', '대기'),  # 안전하게 executionStatus 처리
             "client_company": campaign.client_company,
             "budget": campaign.budget,  # budget 필드 추가
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
