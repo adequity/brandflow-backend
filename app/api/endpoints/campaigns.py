@@ -465,7 +465,8 @@ async def get_all_order_requests(
         # 응답 데이터 구성
         order_requests_data = []
         for order_request, post, campaign, product, requester_name in order_requests_with_details:
-            print(f"[ORDER-REQUEST-DATA] ID: {order_request.id}, cost_price: {order_request.cost_price}, type: {type(order_request.cost_price)}")
+            print(f"[ORDER-REQUEST-DATA] ID: {order_request.id}, post_id: {post.id}, product_id: {post.product_id}")
+            print(f"[ORDER-REQUEST-DATA] Product: {product.name if product else 'None'}, cost: {product.cost if product else 'None'}, quantity: {post.quantity}")
             order_requests_data.append({
                 "id": order_request.id,
                 "title": order_request.title,
