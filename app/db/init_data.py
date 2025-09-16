@@ -7,6 +7,8 @@ import os
 from app.models.user import User, UserRole, UserStatus
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.purchase_request import PurchaseRequest, RequestStatus
+from app.models.order_request import OrderRequest
+from app.models.post import Post
 from app.core.security import get_password_hash
 
 
@@ -277,6 +279,103 @@ async def create_test_purchase_requests(db: AsyncSession, users: list, campaigns
     return created_requests
 
 
+async def create_test_order_requests(db: AsyncSession, users, campaigns):
+    """테스트 발주요청 생성"""
+
+    # 기존 발주요청 확인
+    query = select(OrderRequest).limit(1)
+    result = await db.execute(query)
+    existing_order_requests = result.scalar_one_or_none()
+
+    if existing_order_requests:
+        print("발주요청이 이미 존재합니다.")
+        query_all = select(OrderRequest)
+        result_all = await db.execute(query_all)
+        return result_all.scalars().all()
+
+    if not campaigns:
+        print("발주요청을 연결할 캠페인이 없습니다.")
+        return []
+
+    # 발주요청을 생성할 사용자들 (모든 활성 사용자)
+    active_users = [u for u in users if u.is_active]
+    if not active_users:
+        print("발주요청을 생성할 활성 사용자가 없습니다.")
+        return []
+
+    # 각 캠페인에 대해 테스트 Post 생성 (발주요청 생성을 위해 필요)
+    created_posts = []
+    for i, campaign in enumerate(campaigns[:3]):  # 처음 3개 캠페인만
+        test_post = Post(
+            title=f"테스트 업무 {i+1} - {campaign.name}",
+            work_type="블로그",
+            topic_status="대기",
+            outline=f"{campaign.name}을 위한 콘텐츠 제작 업무",
+            outline_status="승인됨",
+            campaign_id=campaign.id,
+            is_active=True
+        )
+        db.add(test_post)
+        created_posts.append(test_post)
+
+    await db.flush()
+    for post in created_posts:
+        await db.refresh(post)
+
+    # 테스트 발주요청 데이터
+    test_order_requests_data = [
+        {
+            "title": "블로그 콘텐츠 제작 발주",
+            "description": "브랜드 소개 블로그 포스팅 5개 제작",
+            "cost_price": 300000,
+            "resource_type": "캠페인 업무 발주",
+            "status": "대기"
+        },
+        {
+            "title": "소셜미디어 콘텐츠 발주",
+            "description": "인스타그램 피드 이미지 10개 제작",
+            "cost_price": 500000,
+            "resource_type": "캠페인 업무 발주",
+            "status": "승인"
+        },
+        {
+            "title": "제품 촬영 발주",
+            "description": "신제품 프로모션용 제품 촬영",
+            "cost_price": 800000,
+            "resource_type": "캠페인 업무 발주",
+            "status": "대기"
+        }
+    ]
+
+    created_order_requests = []
+    for i, order_data in enumerate(test_order_requests_data):
+        if i < len(created_posts):  # Post가 있는 경우에만 생성
+            post = created_posts[i]
+            user = random.choice(active_users)
+
+            order_request = OrderRequest(
+                title=order_data["title"],
+                description=order_data["description"],
+                cost_price=order_data["cost_price"],
+                resource_type=order_data["resource_type"],
+                status=order_data["status"],
+                post_id=post.id,
+                user_id=user.id,
+                campaign_id=post.campaign_id,
+                is_active=True
+            )
+
+            db.add(order_request)
+            created_order_requests.append(order_request)
+
+    await db.flush()
+    for order_request in created_order_requests:
+        await db.refresh(order_request)
+
+    print(f"테스트 발주요청 {len(created_order_requests)}개가 생성되었습니다.")
+    return created_order_requests
+
+
 async def init_database_data(db: AsyncSession):
     """데이터베이스 초기 데이터 생성 - 환경별 전략"""
     # 환경 확인
@@ -314,12 +413,16 @@ async def init_database_data(db: AsyncSession):
             
             # 4. 테스트 구매요청들 생성
             test_requests = await create_test_purchase_requests(db, all_users, test_campaigns)
-            
+
+            # 5. 테스트 발주요청들 생성
+            test_order_requests = await create_test_order_requests(db, all_users, test_campaigns)
+
             await db.commit()
             print(f"\n=== 개발환경 초기 데이터 생성 완료 ===")
             print(f"사용자 수: {len(all_users)}명")
             print(f"캠페인 수: {len(test_campaigns)}개")
             print(f"구매요청 수: {len(test_requests)}개")
+            print(f"발주요청 수: {len(test_order_requests)}개")
             print(f"")
             print(f"슈퍼 어드민 계정:")
             print(f"  이메일: {superuser.email}")
