@@ -1771,11 +1771,23 @@ async def create_order_request(
         if not post:
             raise HTTPException(status_code=404, detail="포스트를 찾을 수 없습니다")
 
+        # 제품 정보 조회 (cost_price 자동 계산용)
+        from app.models.product import Product
+        product_query = select(Product).where(Product.id == post.product_id)
+        product_result = await db.execute(product_query)
+        product = product_result.scalar_one_or_none()
+
+        # cost_price 자동 계산: products.cost × posts.quantity
+        calculated_cost_price = 0
+        if product and product.cost and post.quantity:
+            calculated_cost_price = int(product.cost * post.quantity)
+            print(f"[ORDER-REQUEST] Auto-calculated cost_price: {product.cost} × {post.quantity} = {calculated_cost_price}")
+
         # 발주요청 생성
         new_order_request = OrderRequest(
             title=order_data.title,
             description=order_data.description,
-            cost_price=order_data.cost_price,
+            cost_price=calculated_cost_price,  # 자동 계산된 값 사용
             resource_type=order_data.resource_type,
             post_id=post_id,
             user_id=current_user.id,
@@ -1860,6 +1872,43 @@ async def get_order_request(
         raise HTTPException(status_code=500, detail=f"발주요청 조회 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.post("/update-order-cost-prices")
+async def update_order_cost_prices(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """기존 order_requests의 cost_price를 products.cost × posts.quantity로 업데이트"""
+    try:
+        from sqlalchemy import text
+
+        # 모든 활성 order_requests의 cost_price 업데이트
+        update_query = text("""
+            UPDATE order_requests
+            SET cost_price = COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)
+            FROM posts, products
+            WHERE order_requests.post_id = posts.id
+            AND posts.product_id = products.id
+            AND order_requests.is_active = true
+            AND posts.is_active = true
+            AND products.is_active = true
+        """)
+
+        result = await db.execute(update_query)
+        await db.commit()
+
+        print(f"[UPDATE-COST-PRICES] Updated {result.rowcount} order_requests")
+
+        return {
+            "message": "order_requests cost_price 업데이트 완료",
+            "updated_count": result.rowcount
+        }
+
+    except Exception as e:
+        print(f"[UPDATE-COST-PRICES] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"cost_price 업데이트 중 오류: {str(e)}")
+
+
 @router.get("/approved-order-expenses")
 async def get_approved_order_expenses(
     current_user: User = Depends(get_current_active_user),
@@ -1875,41 +1924,33 @@ async def get_approved_order_expenses(
         current_month = current_date.month
         current_year = current_date.year
 
-        # 승인된 발주요청의 총 금액 계산 (products.cost × posts.quantity)
+        # 승인된 발주요청의 총 금액 계산 (order_requests.cost_price 사용)
         approved_expenses_query = text("""
             SELECT
                 COUNT(*) as total_approved_count,
-                COALESCE(SUM(COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)), 0) as total_approved_amount,
+                COALESCE(SUM(order_requests.cost_price), 0) as total_approved_amount,
                 COUNT(CASE WHEN EXTRACT(MONTH FROM order_requests.created_at) = :month
                            AND EXTRACT(YEAR FROM order_requests.created_at) = :year
                            THEN 1 END) as this_month_approved_count,
                 COALESCE(SUM(CASE WHEN EXTRACT(MONTH FROM order_requests.created_at) = :month
                                   AND EXTRACT(YEAR FROM order_requests.created_at) = :year
-                                  THEN COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)
+                                  THEN order_requests.cost_price
                                   ELSE 0 END), 0) as this_month_approved_amount
             FROM order_requests
-            INNER JOIN posts ON order_requests.post_id = posts.id
-            INNER JOIN products ON posts.product_id = products.id
             WHERE order_requests.status = '승인'
             AND order_requests.is_active = true
-            AND posts.is_active = true
-            AND products.is_active = true
         """)
 
         result = await db.execute(approved_expenses_query, {"month": current_month, "year": current_year})
         row = result.fetchone()
 
-        # 전체 승인된 발주요청 통계
+        # 전체 발주요청 통계
         all_approved_query = text("""
             SELECT
                 COUNT(*) as total_count,
-                COALESCE(SUM(COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)), 0) as total_amount
+                COALESCE(SUM(order_requests.cost_price), 0) as total_amount
             FROM order_requests
-            INNER JOIN posts ON order_requests.post_id = posts.id
-            INNER JOIN products ON posts.product_id = products.id
             WHERE order_requests.is_active = true
-            AND posts.is_active = true
-            AND products.is_active = true
         """)
 
         all_result = await db.execute(all_approved_query)
