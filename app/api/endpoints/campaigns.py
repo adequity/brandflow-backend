@@ -502,9 +502,17 @@ async def update_order_request_status(
         if not order_request:
             raise HTTPException(status_code=404, detail="발주요청을 찾을 수 없습니다.")
 
-        # 권한 확인 (대행사 어드민만 상태 변경 가능)
-        if current_user.role.value != "대행사 어드민":
-            raise HTTPException(status_code=403, detail="발주요청 상태 변경 권한이 없습니다.")
+        # 권한 확인 (대행사 어드민과 슈퍼 어드민만 상태 변경 가능)
+        allowed_roles = ["대행사 어드민", "슈퍼 어드민"]
+        user_role = current_user.role.value
+
+        print(f"[ORDER-REQUEST-UPDATE] User role: '{user_role}', Allowed roles: {allowed_roles}")
+
+        if user_role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"발주요청 상태 변경 권한이 없습니다. 현재 역할: {user_role}, 필요 역할: {allowed_roles}"
+            )
 
         # 상태 업데이트
         new_status = status_data.get("status")
