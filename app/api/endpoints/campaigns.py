@@ -1944,18 +1944,14 @@ async def get_approved_order_expenses(
         result = await db.execute(approved_expenses_query, {"month": current_month, "year": current_year})
         row = result.fetchone()
 
-        # 승인된 발주요청의 total_cost 합계 (campaign_id 기준)
+        # 승인된 발주요청의 cost_price 합계
         approved_total_cost_query = text("""
             SELECT
                 COUNT(*) as approved_count,
-                COALESCE(SUM(COALESCE(products.cost, 0) * COALESCE(posts.quantity, 1)), 0) as approved_total_cost
+                COALESCE(SUM(order_requests.cost_price), 0) as approved_total_cost
             FROM order_requests
-            INNER JOIN posts ON order_requests.post_id = posts.id
-            INNER JOIN products ON posts.product_id = products.id
             WHERE order_requests.status = '승인'
             AND order_requests.is_active = true
-            AND posts.is_active = true
-            AND products.is_active = true
         """)
 
         approved_total_result = await db.execute(approved_total_cost_query)
@@ -1998,7 +1994,7 @@ async def get_approved_order_expenses(
             "pending_requests": pending_row[0] if pending_row else 0,
             "approved_requests": approved_total_row[0] if approved_total_row else 0,
             "rejected_requests": rejected_row[0] if rejected_row else 0,
-            "total_amount": float(approved_total_row[1]) if approved_total_row else 0,  # 승인된 것들의 total_cost 합계
+            "total_amount": float(approved_total_row[1]) if approved_total_row else 0,  # 승인된 발주요청들의 cost_price 합계
             "this_month_amount": float(row[3]) if row else 0,
             "debug_info": {
                 "month": current_month,
