@@ -1789,12 +1789,44 @@ async def get_approved_posts_expense(
 ):
     """발주 승인된 posts의 원가*수량 총 지출 계산"""
     try:
+        print(f"[APPROVED-POSTS-EXPENSE] API 호출 시작")
+
         # 회사별 권한 확인
         user_role = current_user.role
         user_company = current_user.company
 
-        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role}, Company: {user_company}")
+        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role.value}, Company: {user_company}")
 
+        # 먼저 간단한 승인된 OrderRequest 조회
+        simple_query = select(OrderRequest).where(
+            OrderRequest.status == "승인",
+            OrderRequest.is_active == True
+        )
+
+        if user_role != UserRole.SUPER_ADMIN:
+            print(f"[APPROVED-POSTS-EXPENSE] Adding company filter for {user_company}")
+            from sqlalchemy.orm import aliased
+            UserAlias = aliased(User)
+            simple_query = simple_query.join(
+                UserAlias, OrderRequest.user_id == UserAlias.id
+            ).where(UserAlias.company == user_company)
+
+        print(f"[APPROVED-POSTS-EXPENSE] Executing simple query...")
+        result = await db.execute(simple_query)
+        approved_orders = result.scalars().all()
+
+        print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_orders)} approved orders")
+
+        # 임시로 간단한 응답 반환
+        return {
+            "total_expense": 0,
+            "count": len(approved_orders),
+            "details": [],
+            "message": f"Found {len(approved_orders)} approved orders - calculation in progress"
+        }
+
+        # TODO: 복잡한 JOIN 쿼리는 임시 주석 처리
+        """
         # 기본 쿼리: 승인된 OrderRequest와 관련된 Post, Product 조인
         base_query = select(OrderRequest, Post, Product).select_from(
             OrderRequest
@@ -1891,6 +1923,7 @@ async def get_approved_posts_expense(
             "count": len(approved_posts_with_products),
             "details": expense_details
         }
+        """
 
     except Exception as e:
         import traceback
