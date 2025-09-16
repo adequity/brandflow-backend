@@ -24,7 +24,7 @@ class Campaign(Base, TimestampMixin):
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
     status = Column(SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT)
-    # executionStatus = Column(String(50), default="대기", nullable=True)  # 집행 상태 필드 - 임시 비활성화
+    executionStatus = Column(String(50), default="대기", nullable=True)  # 집행 상태 필드
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)

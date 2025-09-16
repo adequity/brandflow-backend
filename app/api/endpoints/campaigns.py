@@ -1006,6 +1006,10 @@ async def update_campaign(
                 elif hasattr(campaign, field):
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
+                    # executionStatus 업데이트 특별 로깅
+                    if field == 'executionStatus':
+                        print(f"[CAMPAIGN-UPDATE] ✅ ExecutionStatus successfully updated to: {value}")
+                        print(f"[CAMPAIGN-UPDATE] Campaign.executionStatus value: {getattr(campaign, 'executionStatus', 'NOT_FOUND')}")
         
             # 업데이트 시간과 업데이트한 사용자 정보 추가
             campaign.updated_at = datetime.utcnow()
@@ -1146,6 +1150,10 @@ async def update_campaign(
                 elif hasattr(campaign, field):
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
+                    # executionStatus 업데이트 특별 로깅
+                    if field == 'executionStatus':
+                        print(f"[CAMPAIGN-UPDATE] ✅ ExecutionStatus successfully updated to: {value}")
+                        print(f"[CAMPAIGN-UPDATE] Campaign.executionStatus value: {getattr(campaign, 'executionStatus', 'NOT_FOUND')}")
             
             # 업데이트 시간 설정
             campaign.updated_at = datetime.utcnow()
