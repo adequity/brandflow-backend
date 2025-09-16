@@ -680,6 +680,60 @@ async def get_approved_posts_expense(
         raise HTTPException(status_code=500, detail=f"발주 승인 지출 계산 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.get("/order-status-list")
+async def get_order_status_list(
+    current_user: User = Depends(get_current_active_user),
+):
+    """발주요청 상태 목록 조회 (단순 버전)"""
+    try:
+        print(f"[ORDER-STATUS-LIST] Simple version for user: {current_user.id}")
+
+        # DB 쿼리 없이 단순 반환
+        status_list = [
+            {"value": "대기", "label": "대기", "color": "yellow"},
+            {"value": "승인", "label": "승인", "color": "green"},
+            {"value": "거부", "label": "거부", "color": "red"}
+        ]
+
+        print(f"[ORDER-STATUS-LIST] Returning: {status_list}")
+
+        return {
+            "status_list": status_list,
+            "success": True
+        }
+
+    except Exception as e:
+        print(f"[ORDER-STATUS-LIST] Exception: {e}")
+        return {
+            "status_list": [],
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.get("/order-requesters")
+async def get_order_requesters(
+    current_user: User = Depends(get_current_active_user),
+):
+    """발주요청자 목록 조회 (단순 버전)"""
+    try:
+        print(f"[ORDER-REQUESTERS] Simple version for user: {current_user.id}")
+
+        # DB 쿼리 없이 빈 목록 반환 (프론트엔드 fallback 활용)
+        return {
+            "requester_list": [],
+            "success": True
+        }
+
+    except Exception as e:
+        print(f"[ORDER-REQUESTERS] Exception: {e}")
+        return {
+            "requester_list": [],
+            "success": False,
+            "error": str(e)
+        }
+
+
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign_detail(
     request: Request,
@@ -1908,60 +1962,6 @@ async def update_order_cost_prices(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"cost_price 업데이트 중 오류: {str(e)}")
 
-
-
-@router.get("/order-status-list")
-async def get_order_status_list(
-    current_user: User = Depends(get_current_active_user),
-):
-    """발주요청 상태 목록 조회 (단순 버전)"""
-    try:
-        print(f"[ORDER-STATUS-LIST] Simple version for user: {current_user.id}")
-
-        # DB 쿼리 없이 단순 반환
-        status_list = [
-            {"value": "대기", "label": "대기", "color": "yellow"},
-            {"value": "승인", "label": "승인", "color": "green"},
-            {"value": "거부", "label": "거부", "color": "red"}
-        ]
-
-        print(f"[ORDER-STATUS-LIST] Returning: {status_list}")
-
-        return {
-            "status_list": status_list,
-            "success": True
-        }
-
-    except Exception as e:
-        print(f"[ORDER-STATUS-LIST] Exception: {e}")
-        return {
-            "status_list": [],
-            "success": False,
-            "error": str(e)
-        }
-
-
-@router.get("/order-requesters")
-async def get_order_requesters(
-    current_user: User = Depends(get_current_active_user),
-):
-    """발주요청자 목록 조회 (단순 버전)"""
-    try:
-        print(f"[ORDER-REQUESTERS] Simple version for user: {current_user.id}")
-
-        # DB 쿼리 없이 빈 목록 반환 (프론트엔드 fallback 활용)
-        return {
-            "requester_list": [],
-            "success": True
-        }
-
-    except Exception as e:
-        print(f"[ORDER-REQUESTERS] Exception: {e}")
-        return {
-            "requester_list": [],
-            "success": False,
-            "error": str(e)
-        }
 
 
 @router.get("/debug-order-requests")
