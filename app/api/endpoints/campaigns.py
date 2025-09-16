@@ -918,14 +918,18 @@ async def get_campaign_posts(
         if not viewer:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 캠페인의 모든 포스트 조회
-        posts_query = select(Post).where(Post.campaign_id == campaign_id, Post.is_active == True)
+        # 캠페인의 모든 포스트 조회 (Product 조인)
+        from app.models.product import Product
+        posts_query = select(Post, Product).outerjoin(Product, Post.product_id == Product.id).where(
+            Post.campaign_id == campaign_id,
+            Post.is_active == True
+        )
         posts_result = await db.execute(posts_query)
-        posts = posts_result.scalars().all()
+        posts_with_products = posts_result.all()
 
-        # PostResponse 형태로 직렬화
+        # PostResponse 형태로 직렬화 (product name 포함)
         posts_data = []
-        for post in posts:
+        for post, product in posts_with_products:
             posts_data.append({
                 "id": post.id,
                 "title": post.title,
@@ -940,6 +944,7 @@ async def get_campaign_posts(
                 "startDate": post.start_date,
                 "dueDate": post.due_date,
                 "productId": post.product_id,
+                "productName": product.name if product else None,  # 제품명 추가
                 "quantity": post.quantity,
                 "campaignId": post.campaign_id,
                 "createdAt": post.created_at.isoformat() if post.created_at else None
@@ -958,14 +963,18 @@ async def get_campaign_posts(
         if not campaign:
             raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
 
-        # 캠페인의 모든 포스트 조회
-        posts_query = select(Post).where(Post.campaign_id == campaign_id, Post.is_active == True)
+        # 캠페인의 모든 포스트 조회 (Product 조인)
+        from app.models.product import Product
+        posts_query = select(Post, Product).outerjoin(Product, Post.product_id == Product.id).where(
+            Post.campaign_id == campaign_id,
+            Post.is_active == True
+        )
         posts_result = await db.execute(posts_query)
-        posts = posts_result.scalars().all()
+        posts_with_products = posts_result.all()
 
-        # PostResponse 형태로 직렬화
+        # PostResponse 형태로 직렬화 (product name 포함)
         posts_data = []
-        for post in posts:
+        for post, product in posts_with_products:
             posts_data.append({
                 "id": post.id,
                 "title": post.title,
@@ -980,6 +989,7 @@ async def get_campaign_posts(
                 "startDate": post.start_date,
                 "dueDate": post.due_date,
                 "productId": post.product_id,
+                "productName": product.name if product else None,  # 제품명 추가
                 "quantity": post.quantity,
                 "campaignId": post.campaign_id,
                 "createdAt": post.created_at.isoformat() if post.created_at else None
@@ -1035,9 +1045,38 @@ async def create_campaign_post(
         await db.commit()
         await db.refresh(new_post)
 
+        # Product 정보도 함께 조회해서 반환
+        product_name = None
+        if new_post.product_id:
+            from app.models.product import Product
+            product_query = select(Product).where(Product.id == new_post.product_id)
+            product_result = await db.execute(product_query)
+            product = product_result.scalar_one_or_none()
+            product_name = product.name if product else None
+
         print(f"[CREATE-POST] SUCCESS: Created post {new_post.id} for campaign {campaign_id}")
 
-        return new_post
+        # 수동으로 직렬화해서 productName 포함
+        return {
+            "id": new_post.id,
+            "title": new_post.title,
+            "work_type": new_post.work_type,
+            "topic_status": new_post.topic_status,
+            "outline": new_post.outline,
+            "outline_status": new_post.outline_status,
+            "images": new_post.images or [],
+            "published_url": new_post.published_url,
+            "order_request_status": new_post.order_request_status,
+            "order_request_id": new_post.order_request_id,
+            "start_date": new_post.start_date,
+            "due_date": new_post.due_date,
+            "product_id": new_post.product_id,
+            "productName": product_name,  # 제품명 추가
+            "quantity": new_post.quantity,
+            "campaign_id": new_post.campaign_id,
+            "created_at": new_post.created_at.isoformat() if new_post.created_at else None,
+            "updated_at": new_post.updated_at.isoformat() if new_post.updated_at else None
+        }
 
     except HTTPException:
         raise
@@ -1045,6 +1084,105 @@ async def create_campaign_post(
         print(f"[CREATE-POST] Unexpected error: {type(e).__name__}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"업무 생성 중 오류: {str(e)}")
+
+
+@router.put("/{campaign_id}/posts/{post_id}", response_model=dict)
+async def update_campaign_post(
+    campaign_id: int,
+    post_id: int,
+    post_data: dict,  # 유연한 업데이트를 위해 dict 사용
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인의 업무(포스트) 수정 (JWT 기반)"""
+    print(f"[UPDATE-POST] JWT User: {current_user.name}, Campaign: {campaign_id}, Post: {post_id}, Data: {post_data}")
+
+    try:
+        # 캠페인 및 포스트 존재 여부 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+
+        post_query = select(Post).where(Post.id == post_id, Post.campaign_id == campaign_id, Post.is_active == True)
+        post_result = await db.execute(post_query)
+        post = post_result.scalar_one_or_none()
+
+        if not post:
+            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다")
+
+        # 권한 확인: 캠페인 생성자이거나 관리자 권한 필요
+        user_role = current_user.role.value
+        if (campaign.creator_id != current_user.id and
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
+
+        # 업데이트할 필드들 처리
+        if 'title' in post_data:
+            post.title = post_data['title']
+        if 'workType' in post_data:
+            post.work_type = post_data['workType']
+        if 'topicStatus' in post_data:
+            post.topic_status = post_data['topicStatus']
+        if 'outline' in post_data:
+            post.outline = post_data['outline']
+        if 'outlineStatus' in post_data:
+            post.outline_status = post_data['outlineStatus']
+        if 'images' in post_data:
+            post.images = post_data['images']
+        if 'productId' in post_data:
+            post.product_id = post_data['productId']
+        if 'quantity' in post_data:
+            post.quantity = post_data['quantity']
+        if 'startDate' in post_data:
+            post.start_date = post_data['startDate']
+        if 'dueDate' in post_data:
+            post.due_date = post_data['dueDate']
+
+        await db.commit()
+        await db.refresh(post)
+
+        # Product 정보도 함께 조회해서 반환
+        product_name = None
+        if post.product_id:
+            from app.models.product import Product
+            product_query = select(Product).where(Product.id == post.product_id)
+            product_result = await db.execute(product_query)
+            product = product_result.scalar_one_or_none()
+            product_name = product.name if product else None
+
+        print(f"[UPDATE-POST] SUCCESS: Updated post {post.id} for campaign {campaign_id}")
+
+        # 수정된 포스트 반환
+        return {
+            "id": post.id,
+            "title": post.title,
+            "work_type": post.work_type,
+            "topic_status": post.topic_status,
+            "outline": post.outline,
+            "outline_status": post.outline_status,
+            "images": post.images or [],
+            "published_url": post.published_url,
+            "order_request_status": post.order_request_status,
+            "order_request_id": post.order_request_id,
+            "start_date": post.start_date,
+            "due_date": post.due_date,
+            "product_id": post.product_id,
+            "productName": product_name,
+            "quantity": post.quantity,
+            "campaign_id": post.campaign_id,
+            "created_at": post.created_at.isoformat() if post.created_at else None,
+            "updated_at": post.updated_at.isoformat() if post.updated_at else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[UPDATE-POST] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"업무 수정 중 오류: {str(e)}")
 
 
 @router.delete("/{campaign_id}", status_code=204)

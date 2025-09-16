@@ -17,7 +17,6 @@ class PostCreate(BaseModel):
     due_date: Optional[str] = None
     product_id: Optional[int] = None
     quantity: Optional[int] = 1
-    campaign_id: int
 
 
 class PostUpdate(BaseModel):
