@@ -1783,6 +1783,7 @@ async def get_order_request(
 
 @router.get("/test-auth")
 async def test_auth(
+    request: Request,
     current_user: User = Depends(get_current_active_user)
 ):
     """인증 테스트 엔드포인트"""
@@ -1796,6 +1797,7 @@ async def test_auth(
 
 @router.get("/approved-posts-expense")
 async def get_approved_posts_expense(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
