@@ -1795,22 +1795,39 @@ async def get_approved_posts_expense(
 
         print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role}, Company: {user_company}")
 
-        # 기본 쿼리: 발주 승인된 posts와 product 조인
-        base_query = select(Post, Product).join(
-            Product, Post.product_id == Product.id
-        ).where(
-            Post.order_request_status == "발주 승인",
-            Post.is_active == True,
-            Product.is_active == True
-        )
+        # 단순한 쿼리로 변경 - 발주 승인된 posts만 조회
+        try:
+            # 1단계: 발주 승인된 posts 조회
+            posts_query = select(Post).where(
+                Post.order_request_status == "발주 승인",
+                Post.is_active == True
+            )
 
-        # 권한별 필터링 - 모든 사용자 허용 (단순화)
-        query = base_query
-        print(f"[APPROVED-POSTS-EXPENSE] User: {user_role}, Company: {user_company} - showing all approved posts")
+            posts_result = await db.execute(posts_query)
+            approved_posts = posts_result.scalars().all()
 
-        # 쿼리 실행
-        result = await db.execute(query)
-        approved_posts_with_products = result.fetchall()
+            print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts)} approved posts")
+
+            approved_posts_with_products = []
+
+            # 2단계: 각 post의 product 정보 개별 조회
+            for post in approved_posts:
+                if post.product_id:
+                    product_query = select(Product).where(Product.id == post.product_id)
+                    product_result = await db.execute(product_query)
+                    product = product_result.scalar_one_or_none()
+
+                    if product:
+                        approved_posts_with_products.append((post, product))
+                        print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: {product.name}, cost: {product.cost}, quantity: {post.quantity}")
+                    else:
+                        print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: Product {post.product_id} not found")
+                else:
+                    print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: No product_id")
+
+        except Exception as query_error:
+            print(f"[APPROVED-POSTS-EXPENSE] Query error: {query_error}")
+            return {"total_expense": 0, "count": 0, "details": [], "error": str(query_error)}
 
         print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts_with_products)} approved posts with products")
 
