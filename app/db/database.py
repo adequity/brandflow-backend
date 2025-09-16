@@ -11,6 +11,10 @@ from app.models.campaign import Campaign
 from app.models.purchase_request import PurchaseRequest
 from app.models.product import Product
 from app.models.work_type import WorkType
+from app.models.sales import Sales
+from app.models.company_logo import CompanyLogo
+from app.models.post import Post
+from app.models.order_request import OrderRequest
 
 
 # Railway PostgreSQL 데이터베이스 URL 가져오기
