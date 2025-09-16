@@ -1808,24 +1808,56 @@ async def get_approved_posts_expense(
             Post.is_active == True
         )
 
+        print(f"[APPROVED-POSTS-EXPENSE] Base query created successfully")
+
         # 권한별 필터링
-        if user_role == "슈퍼 어드민":
+        if user_role == UserRole.SUPER_ADMIN:
             # 슈퍼 어드민은 모든 회사의 발주 승인 내역 조회 가능
             query = base_query
             print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
         else:
             # 일반 어드민은 본인 회사의 발주 승인 내역만 조회 가능
-            # OrderRequest 생성자를 통해 회사 필터링
+            # OrderRequest 생성자를 통해 회사 필터링 (User 테이블 별칭 사용)
+            from sqlalchemy.orm import aliased
+            UserAlias = aliased(User)
             query = base_query.join(
-                User, OrderRequest.user_id == User.id
+                UserAlias, OrderRequest.user_id == UserAlias.id
             ).where(
-                User.company == user_company
+                UserAlias.company == user_company
             )
             print(f"[APPROVED-POSTS-EXPENSE] Company admin access - filtered by company: {user_company}")
 
-        # 쿼리 실행
-        result = await db.execute(query)
-        approved_posts_with_products = result.fetchall()
+        # 쿼리 실행 및 디버깅
+        print(f"[APPROVED-POSTS-EXPENSE] Executing query...")
+        try:
+            result = await db.execute(query)
+            approved_posts_with_products = result.fetchall()
+            print(f"[APPROVED-POSTS-EXPENSE] Query executed successfully")
+        except Exception as query_error:
+            print(f"[APPROVED-POSTS-EXPENSE] Complex query failed: {query_error}")
+            # 간단한 fallback 쿼리 시도
+            print(f"[APPROVED-POSTS-EXPENSE] Trying simple fallback query...")
+            simple_query = select(OrderRequest).where(
+                OrderRequest.status == "승인",
+                OrderRequest.is_active == True
+            )
+            if user_role != UserRole.SUPER_ADMIN:
+                from sqlalchemy.orm import aliased
+                UserAlias = aliased(User)
+                simple_query = simple_query.join(
+                    UserAlias, OrderRequest.user_id == UserAlias.id
+                ).where(UserAlias.company == user_company)
+
+            result = await db.execute(simple_query)
+            order_requests = result.scalars().all()
+
+            # 간단한 반환
+            return {
+                "total_expense": 0,
+                "count": len(order_requests),
+                "details": [],
+                "message": "Fallback query used - expense calculation temporarily unavailable"
+            }
 
         print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts_with_products)} approved posts with products")
 
@@ -1861,5 +1893,8 @@ async def get_approved_posts_expense(
         }
 
     except Exception as e:
+        import traceback
         print(f"[APPROVED-POSTS-EXPENSE] Error: {e}")
+        print(f"[APPROVED-POSTS-EXPENSE] Error type: {type(e).__name__}")
+        print(f"[APPROVED-POSTS-EXPENSE] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"발주 승인 지출 계산 중 오류가 발생했습니다: {str(e)}")
