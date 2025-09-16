@@ -1800,13 +1800,22 @@ async def get_approved_posts_expense(
             Product.is_active == True
         )
 
-        # 우선 슈퍼 어드민만 허용 (단순화)
-        if user_role != "슈퍼 어드민":
-            # 임시로 슈퍼 어드민만 허용
-            raise HTTPException(status_code=403, detail="슈퍼 어드민만 접근 가능합니다")
-
-        query = base_query
-        print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
+        # 권한별 필터링 (OrderRequest를 통한 회사 필터링)
+        if user_role == "슈퍼 어드민":
+            # 슈퍼 어드민은 모든 회사의 발주 승인 내역 조회 가능
+            query = base_query
+            print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
+        else:
+            # 일반 어드민은 본인 회사의 발주 승인 내역만 조회 가능
+            # OrderRequest를 통해 회사 필터링 (더 안전한 방법)
+            query = base_query.join(
+                OrderRequest, Post.id == OrderRequest.post_id
+            ).join(
+                User, OrderRequest.user_id == User.id
+            ).where(
+                User.company == user_company
+            )
+            print(f"[APPROVED-POSTS-EXPENSE] Company admin access - filtered by company: {user_company}")
 
         # 쿼리 실행
         result = await db.execute(query)
