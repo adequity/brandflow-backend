@@ -81,8 +81,8 @@ async def get_products(
             # selling_price나 cost_price가 있으면 추가
             if hasattr(product, 'selling_price') and product.selling_price:
                 product_data["sellingPrice"] = product.selling_price
-            if hasattr(product, 'cost_price') and product.cost_price:
-                product_data["costPrice"] = product.cost_price
+            if hasattr(product, 'cost') and product.cost:
+                product_data["costPrice"] = product.cost
                 
             products_data.append(product_data)
         
