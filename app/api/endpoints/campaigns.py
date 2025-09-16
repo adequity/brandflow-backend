@@ -1557,3 +1557,73 @@ async def get_order_request(
     except Exception as e:
         print(f"[ORDER-REQUEST] Error getting order request: {e}")
         raise HTTPException(status_code=500, detail=f"발주요청 조회 중 오류가 발생했습니다: {str(e)}")
+
+
+# 전체 발주요청 목록 조회 (발주 관리용)
+@router.get("/order-requests")
+async def get_all_order_requests(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """JWT 기반 전체 발주요청 목록 조회"""
+
+    print(f"[ORDER-REQUESTS-LIST] Getting all order requests for user_id={current_user.id}, role={current_user.role.value}")
+
+    try:
+        # 모든 활성 발주요청 조회 (Post, Campaign, Product와 조인)
+        from app.models.product import Product
+        query = select(
+            OrderRequest,
+            Post,
+            Campaign,
+            Product,
+            User.name.label('requester_name')
+        ).select_from(
+            OrderRequest
+        ).join(
+            Post, OrderRequest.post_id == Post.id
+        ).join(
+            Campaign, OrderRequest.campaign_id == Campaign.id
+        ).outerjoin(
+            Product, Post.product_id == Product.id
+        ).join(
+            User, OrderRequest.user_id == User.id
+        ).where(
+            OrderRequest.is_active == True
+        ).order_by(
+            OrderRequest.created_at.desc()
+        )
+
+        result = await db.execute(query)
+        order_requests_with_details = result.all()
+
+        print(f"[ORDER-REQUESTS-LIST] Found {len(order_requests_with_details)} order requests")
+
+        # 응답 데이터 구성
+        order_requests_data = []
+        for order_request, post, campaign, product, requester_name in order_requests_with_details:
+            order_requests_data.append({
+                "id": order_request.id,
+                "title": order_request.title,
+                "description": order_request.description,
+                "status": order_request.status,
+                "cost_price": order_request.cost_price,
+                "resource_type": order_request.resource_type,
+                "post_id": order_request.post_id,
+                "user_id": order_request.user_id,
+                "campaign_id": order_request.campaign_id,
+                "created_at": order_request.created_at.isoformat(),
+                "updated_at": order_request.updated_at.isoformat(),
+                # 추가 정보
+                "post_title": post.title,
+                "campaign_name": campaign.name,
+                "product_name": product.name if product else None,
+                "requester_name": requester_name,
+                "work_type": post.work_type
+            })
+
+        return order_requests_data
+
+    except Exception as e:
+        print(f"[ORDER-REQUESTS-LIST] Error getting order requests: {e}")
+        raise HTTPException(status_code=500, detail=f"발주요청 목록 조회 중 오류가 발생했습니다: {str(e)}")
