@@ -952,50 +952,68 @@ async def get_campaign_posts(
 
         return posts_data
     else:
-        # JWT 기반 API 모드
-        current_user = get_current_active_user()
-
-        # 캠페인 존재 여부 및 권한 확인
-        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
-        result = await db.execute(campaign_query)
-        campaign = result.scalar_one_or_none()
-
-        if not campaign:
-            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
-
-        # 캠페인의 모든 포스트 조회 (Product 조인)
-        from app.models.product import Product
-        posts_query = select(Post, Product).outerjoin(Product, Post.product_id == Product.id).where(
-            Post.campaign_id == campaign_id,
-            Post.is_active == True
+        # JWT 기반 API 호출은 별도 엔드포인트 사용 요구
+        raise HTTPException(
+            status_code=400,
+            detail="JWT 기반 인증을 위해서는 /api/campaigns/{campaign_id}/posts/jwt 엔드포인트를 사용하세요"
         )
-        posts_result = await db.execute(posts_query)
-        posts_with_products = posts_result.all()
 
-        # PostResponse 형태로 직렬화 (product name 포함)
-        posts_data = []
-        for post, product in posts_with_products:
-            posts_data.append({
-                "id": post.id,
-                "title": post.title,
-                "workType": post.work_type,
-                "topicStatus": post.topic_status,
-                "outline": post.outline,
-                "outlineStatus": post.outline_status,
-                "images": post.images or [],
-                "publishedUrl": post.published_url,
-                "orderRequestStatus": post.order_request_status,
-                "orderRequestId": post.order_request_id,
-                "startDate": post.start_date,
-                "dueDate": post.due_date,
-                "productId": post.product_id,
-                "productName": product.name if product else None,  # 제품명 추가
-                "quantity": post.quantity,
-                "campaignId": post.campaign_id,
-                "createdAt": post.created_at.isoformat() if post.created_at else None
-            })
 
-        return posts_data
+# JWT 기반 캠페인 포스트 조회 전용 엔드포인트
+@router.get("/{campaign_id}/posts/jwt", response_model=list)
+async def get_campaign_posts_jwt(
+    campaign_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """JWT 인증 기반 캠페인 게시물 목록 조회"""
+
+    print(f"[CAMPAIGN-POSTS-JWT] Request for campaign_id={campaign_id}, user_id={current_user.id}, user_role={current_user.role.value}")
+
+    # 캠페인 존재 여부 확인
+    campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+    result = await db.execute(campaign_query)
+    campaign = result.scalar_one_or_none()
+
+    if not campaign:
+        print(f"[CAMPAIGN-POSTS-JWT] Campaign {campaign_id} not found")
+        raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+
+    # 캠페인의 모든 포스트 조회 (Product 조인)
+    from app.models.product import Product
+    posts_query = select(Post, Product).outerjoin(Product, Post.product_id == Product.id).where(
+        Post.campaign_id == campaign_id,
+        Post.is_active == True
+    )
+    posts_result = await db.execute(posts_query)
+    posts_with_products = posts_result.all()
+
+    print(f"[CAMPAIGN-POSTS-JWT] Found {len(posts_with_products)} posts for campaign {campaign_id}")
+
+    # PostResponse 형태로 직렬화 (product name 포함)
+    posts_data = []
+    for post, product in posts_with_products:
+        posts_data.append({
+            "id": post.id,
+            "title": post.title,
+            "workType": post.work_type,
+            "topicStatus": post.topic_status,
+            "outline": post.outline,
+            "outlineStatus": post.outline_status,
+            "images": post.images or [],
+            "publishedUrl": post.published_url,
+            "orderRequestStatus": post.order_request_status,
+            "orderRequestId": post.order_request_id,
+            "startDate": post.start_date,
+            "dueDate": post.due_date,
+            "productId": post.product_id,
+            "productName": product.name if product else None,  # 제품명 추가
+            "quantity": post.quantity,
+            "campaignId": post.campaign_id,
+            "createdAt": post.created_at.isoformat() if post.created_at else None
+        })
+
+    return posts_data
 
 
 @router.post("/{campaign_id}/posts/", response_model=PostResponse)
