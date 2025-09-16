@@ -2031,6 +2031,42 @@ async def get_order_requesters(
         }
 
 
+@router.get("/debug-order-requests")
+async def debug_order_requests(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """디버그: OrderRequest 테이블 데이터 확인"""
+    try:
+        from sqlalchemy import select
+        from app.models.order_request import OrderRequest
+
+        # 전체 OrderRequest 개수 확인
+        count_query = select(OrderRequest.id).limit(10)
+        result = await db.execute(count_query)
+        orders = result.scalars().all()
+
+        # 상태별 개수 확인
+        status_query = select(OrderRequest.status, OrderRequest.id)
+        status_result = await db.execute(status_query)
+        status_data = status_result.all()
+
+        return {
+            "total_order_requests": len(orders),
+            "sample_order_ids": orders,
+            "status_data": [{"status": row.status, "id": row.id} for row in status_data],
+            "success": True
+        }
+
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "success": False
+        }
+
+
 @router.get("/debug-amounts")
 async def debug_amounts(
     current_user: User = Depends(get_current_active_user),
