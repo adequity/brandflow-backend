@@ -599,6 +599,87 @@ async def update_order_request_status(
         raise HTTPException(status_code=500, detail=f"발주요청 상태 업데이트 중 오류가 발생했습니다: {str(e)}")
 
 
+# 정적 경로들 - 동적 경로 {campaign_id} 보다 먼저 정의해야 함
+@router.get("/test-auth")
+async def test_auth(
+    request: Request,
+    current_user: User = Depends(get_current_active_user)
+):
+    """인증 테스트 엔드포인트"""
+    print(f"[TEST-AUTH] 사용자 정보: {current_user.id}, {current_user.role}, {current_user.company}")
+    return {
+        "user_id": current_user.id,
+        "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+        "company": current_user.company,
+        "message": "인증 성공"
+    }
+
+
+@router.get("/approved-posts-expense")
+async def get_approved_posts_expense(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """발주 승인된 posts의 원가*수량 총 지출 계산"""
+    print(f"[APPROVED-POSTS-EXPENSE] ===== API 호출 시작 =====")
+
+    try:
+        # 사용자 정보 검증
+        if not current_user:
+            print(f"[APPROVED-POSTS-EXPENSE] ERROR: current_user is None")
+            raise HTTPException(status_code=401, detail="인증되지 않은 사용자입니다")
+
+        print(f"[APPROVED-POSTS-EXPENSE] 사용자 검증 완료: {current_user.id}")
+
+        # 회사별 권한 확인
+        user_role = current_user.role
+        user_company = current_user.company
+
+        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}")
+        print(f"[APPROVED-POSTS-EXPENSE] Role: {user_role} (type: {type(user_role)})")
+        print(f"[APPROVED-POSTS-EXPENSE] Role.value: {user_role.value if hasattr(user_role, 'value') else 'No value attr'}")
+        print(f"[APPROVED-POSTS-EXPENSE] Company: {user_company}")
+
+        # 먼저 간단한 승인된 OrderRequest 조회
+        simple_query = select(OrderRequest).where(
+            OrderRequest.status == "승인",
+            OrderRequest.is_active == True
+        )
+
+        if user_role != UserRole.SUPER_ADMIN:
+            print(f"[APPROVED-POSTS-EXPENSE] Adding company filter for {user_company}")
+            from sqlalchemy.orm import aliased
+            UserAlias = aliased(User)
+            simple_query = simple_query.join(
+                UserAlias, OrderRequest.user_id == UserAlias.id
+            ).where(UserAlias.company == user_company)
+
+        print(f"[APPROVED-POSTS-EXPENSE] Executing simple query...")
+        result = await db.execute(simple_query)
+        approved_orders = result.scalars().all()
+
+        print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_orders)} approved orders")
+
+        # 임시로 간단한 응답 반환
+        return {
+            "total_expense": 0,
+            "count": len(approved_orders),
+            "details": [],
+            "message": f"Found {len(approved_orders)} approved orders - calculation in progress"
+        }
+
+    except HTTPException as he:
+        print(f"[APPROVED-POSTS-EXPENSE] HTTPException: {he.status_code} - {he.detail}")
+        raise he
+    except Exception as e:
+        import traceback
+        print(f"[APPROVED-POSTS-EXPENSE] Unexpected Error: {e}")
+        print(f"[APPROVED-POSTS-EXPENSE] Error type: {type(e).__name__}")
+        print(f"[APPROVED-POSTS-EXPENSE] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"발주 승인 지출 계산 중 오류가 발생했습니다: {str(e)}")
+
+
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign_detail(
     request: Request,
@@ -1779,182 +1860,3 @@ async def get_order_request(
         raise HTTPException(status_code=500, detail=f"발주요청 조회 중 오류가 발생했습니다: {str(e)}")
 
 
-# OrderRequest 엔드포인트들이 위로 이동되었습니다.
-
-@router.get("/test-auth")
-async def test_auth(
-    request: Request,
-    current_user: User = Depends(get_current_active_user)
-):
-    """인증 테스트 엔드포인트"""
-    print(f"[TEST-AUTH] 사용자 정보: {current_user.id}, {current_user.role}, {current_user.company}")
-    return {
-        "user_id": current_user.id,
-        "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
-        "company": current_user.company,
-        "message": "인증 성공"
-    }
-
-@router.get("/approved-posts-expense")
-async def get_approved_posts_expense(
-    request: Request,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_async_db)
-):
-    """발주 승인된 posts의 원가*수량 총 지출 계산"""
-    print(f"[APPROVED-POSTS-EXPENSE] ===== API 호출 시작 =====")
-
-    try:
-        # 사용자 정보 검증
-        if not current_user:
-            print(f"[APPROVED-POSTS-EXPENSE] ERROR: current_user is None")
-            raise HTTPException(status_code=401, detail="인증되지 않은 사용자입니다")
-
-        print(f"[APPROVED-POSTS-EXPENSE] 사용자 검증 완료: {current_user.id}")
-
-        # 회사별 권한 확인
-        user_role = current_user.role
-        user_company = current_user.company
-
-        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}")
-        print(f"[APPROVED-POSTS-EXPENSE] Role: {user_role} (type: {type(user_role)})")
-        print(f"[APPROVED-POSTS-EXPENSE] Role.value: {user_role.value if hasattr(user_role, 'value') else 'No value attr'}")
-        print(f"[APPROVED-POSTS-EXPENSE] Company: {user_company}")
-
-        # 먼저 간단한 승인된 OrderRequest 조회
-        simple_query = select(OrderRequest).where(
-            OrderRequest.status == "승인",
-            OrderRequest.is_active == True
-        )
-
-        if user_role != UserRole.SUPER_ADMIN:
-            print(f"[APPROVED-POSTS-EXPENSE] Adding company filter for {user_company}")
-            from sqlalchemy.orm import aliased
-            UserAlias = aliased(User)
-            simple_query = simple_query.join(
-                UserAlias, OrderRequest.user_id == UserAlias.id
-            ).where(UserAlias.company == user_company)
-
-        print(f"[APPROVED-POSTS-EXPENSE] Executing simple query...")
-        result = await db.execute(simple_query)
-        approved_orders = result.scalars().all()
-
-        print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_orders)} approved orders")
-
-        # 임시로 간단한 응답 반환
-        return {
-            "total_expense": 0,
-            "count": len(approved_orders),
-            "details": [],
-            "message": f"Found {len(approved_orders)} approved orders - calculation in progress"
-        }
-
-        # TODO: 복잡한 JOIN 쿼리는 임시 주석 처리
-        """
-        # 기본 쿼리: 승인된 OrderRequest와 관련된 Post, Product 조인
-        base_query = select(OrderRequest, Post, Product).select_from(
-            OrderRequest
-        ).join(
-            Post, OrderRequest.post_id == Post.id
-        ).outerjoin(
-            Product, Post.product_id == Product.id
-        ).where(
-            OrderRequest.status == "승인",
-            OrderRequest.is_active == True,
-            Post.is_active == True
-        )
-
-        print(f"[APPROVED-POSTS-EXPENSE] Base query created successfully")
-
-        # 권한별 필터링
-        if user_role == UserRole.SUPER_ADMIN:
-            # 슈퍼 어드민은 모든 회사의 발주 승인 내역 조회 가능
-            query = base_query
-            print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
-        else:
-            # 일반 어드민은 본인 회사의 발주 승인 내역만 조회 가능
-            # OrderRequest 생성자를 통해 회사 필터링 (User 테이블 별칭 사용)
-            from sqlalchemy.orm import aliased
-            UserAlias = aliased(User)
-            query = base_query.join(
-                UserAlias, OrderRequest.user_id == UserAlias.id
-            ).where(
-                UserAlias.company == user_company
-            )
-            print(f"[APPROVED-POSTS-EXPENSE] Company admin access - filtered by company: {user_company}")
-
-        # 쿼리 실행 및 디버깅
-        print(f"[APPROVED-POSTS-EXPENSE] Executing query...")
-        try:
-            result = await db.execute(query)
-            approved_posts_with_products = result.fetchall()
-            print(f"[APPROVED-POSTS-EXPENSE] Query executed successfully")
-        except Exception as query_error:
-            print(f"[APPROVED-POSTS-EXPENSE] Complex query failed: {query_error}")
-            # 간단한 fallback 쿼리 시도
-            print(f"[APPROVED-POSTS-EXPENSE] Trying simple fallback query...")
-            simple_query = select(OrderRequest).where(
-                OrderRequest.status == "승인",
-                OrderRequest.is_active == True
-            )
-            if user_role != UserRole.SUPER_ADMIN:
-                from sqlalchemy.orm import aliased
-                UserAlias = aliased(User)
-                simple_query = simple_query.join(
-                    UserAlias, OrderRequest.user_id == UserAlias.id
-                ).where(UserAlias.company == user_company)
-
-            result = await db.execute(simple_query)
-            order_requests = result.scalars().all()
-
-            # 간단한 반환
-            return {
-                "total_expense": 0,
-                "count": len(order_requests),
-                "details": [],
-                "message": "Fallback query used - expense calculation temporarily unavailable"
-            }
-
-        print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts_with_products)} approved posts with products")
-
-        # 총 지출 계산: product.cost * post.quantity (OrderRequest.status = "승인" 기준)
-        total_expense = 0
-        expense_details = []
-
-        for order_request, post, product in approved_posts_with_products:
-            post_expense = (product.cost or 0) * (post.quantity or 1) if product else 0
-            total_expense += post_expense
-
-            expense_details.append({
-                "order_request_id": order_request.id,
-                "order_request_title": order_request.title,
-                "post_id": post.id,
-                "post_title": post.title,
-                "product_id": product.id if product else None,
-                "product_name": product.name if product else None,
-                "product_cost": product.cost if product else 0,
-                "quantity": post.quantity,
-                "expense": post_expense,
-                "campaign_id": post.campaign_id
-            })
-
-            print(f"[APPROVED-POSTS-EXPENSE] OrderRequest {order_request.id}: {product.name if product else 'No Product'} x{post.quantity} = {post_expense}원")
-
-        print(f"[APPROVED-POSTS-EXPENSE] Total expense: {total_expense}원")
-
-        return {
-            "total_expense": total_expense,
-            "count": len(approved_posts_with_products),
-            "details": expense_details
-        }
-        """
-
-    except HTTPException as he:
-        print(f"[APPROVED-POSTS-EXPENSE] HTTPException: {he.status_code} - {he.detail}")
-        raise he
-    except Exception as e:
-        import traceback
-        print(f"[APPROVED-POSTS-EXPENSE] Unexpected Error: {e}")
-        print(f"[APPROVED-POSTS-EXPENSE] Error type: {type(e).__name__}")
-        print(f"[APPROVED-POSTS-EXPENSE] Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"발주 승인 지출 계산 중 오류가 발생했습니다: {str(e)}")
