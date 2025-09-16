@@ -6,3 +6,4 @@ from .product import Product
 from .sales import Sales
 from .company_logo import CompanyLogo
 from .post import Post
+from .order_request import OrderRequest

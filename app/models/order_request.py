@@ -2,10 +2,10 @@ from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DateT
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from app.db.base_class import Base
+from app.models.base import Base, TimestampMixin
 
 
-class OrderRequest(Base):
+class OrderRequest(Base, TimestampMixin):
     __tablename__ = "order_requests"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -20,9 +20,7 @@ class OrderRequest(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
 
-    # 타임스탬프
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # 상태 필드
     is_active = Column(Boolean, default=True)
 
     # 관계 설정
