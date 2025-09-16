@@ -481,6 +481,74 @@ async def get_all_order_requests(
         print(f"[ORDER-REQUESTS-LIST] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"발주요청 목록 조회 중 오류가 발생했습니다: {str(e)}")
 
+@router.put("/order-requests/{order_request_id}/status")
+async def update_order_request_status(
+    order_request_id: int,
+    status_data: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """발주요청 상태 업데이트 (승인/거절)"""
+
+    print(f"[ORDER-REQUEST-UPDATE] Updating order_request_id={order_request_id}, user_id={current_user.id}, user_role={current_user.role.value}")
+    print(f"[ORDER-REQUEST-UPDATE] Status data: {status_data}")
+
+    try:
+        # 발주요청 조회
+        query = select(OrderRequest).where(OrderRequest.id == order_request_id)
+        result = await db.execute(query)
+        order_request = result.scalar_one_or_none()
+
+        if not order_request:
+            raise HTTPException(status_code=404, detail="발주요청을 찾을 수 없습니다.")
+
+        # 권한 확인 (대행사 어드민만 상태 변경 가능)
+        if current_user.role.value != "대행사 어드민":
+            raise HTTPException(status_code=403, detail="발주요청 상태 변경 권한이 없습니다.")
+
+        # 상태 업데이트
+        new_status = status_data.get("status")
+        comment = status_data.get("comment", "")
+
+        if new_status not in ["대기", "승인", "거부", "완료"]:
+            raise HTTPException(status_code=400, detail="유효하지 않은 상태입니다.")
+
+        order_request.status = new_status
+
+        # 승인/거부 시 Post 상태도 업데이트
+        if order_request.post_id:
+            post_query = select(Post).where(Post.id == order_request.post_id)
+            post_result = await db.execute(post_query)
+            post = post_result.scalar_one_or_none()
+
+            if post:
+                if new_status == "승인":
+                    post.order_request_status = "발주 승인"
+                elif new_status == "거부":
+                    post.order_request_status = "발주 거절"
+
+        await db.commit()
+        await db.refresh(order_request)
+
+        print(f"[ORDER-REQUEST-UPDATE] Successfully updated order request {order_request_id} to status: {new_status}")
+
+        return {
+            "message": f"발주요청이 {new_status}되었습니다.",
+            "order_request": {
+                "id": order_request.id,
+                "title": order_request.title,
+                "status": order_request.status,
+                "cost_price": order_request.cost_price
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ORDER-REQUEST-UPDATE] Error updating order request: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"발주요청 상태 업데이트 중 오류가 발생했습니다: {str(e)}")
+
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign_detail(
