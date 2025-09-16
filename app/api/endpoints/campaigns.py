@@ -1910,45 +1910,22 @@ async def update_order_cost_prices(
 
 
 
-@router.get("/order-status-list", response_model=dict)
+@router.get("/order-status-list")
 async def get_order_status_list(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_async_db)
 ):
-    """발주요청 상태 목록 조회 (DB 기반 동적)"""
+    """발주요청 상태 목록 조회 (단순 버전)"""
     try:
-        from sqlalchemy import select, distinct
-        from app.models.order_request import OrderRequest
+        print(f"[ORDER-STATUS-LIST] Simple version for user: {current_user.id}")
 
-        print(f"[ORDER-STATUS-LIST] Starting query for user: {current_user.id}")
+        # DB 쿼리 없이 단순 반환
+        status_list = [
+            {"value": "대기", "label": "대기", "color": "yellow"},
+            {"value": "승인", "label": "승인", "color": "green"},
+            {"value": "거부", "label": "거부", "color": "red"}
+        ]
 
-        # 더 안전한 쿼리 - 조건 제거하고 단순화
-        query = select(distinct(OrderRequest.status)).where(
-            OrderRequest.status.isnot(None)
-        ).order_by(OrderRequest.status)
-
-        result = await db.execute(query)
-        status_values = result.scalars().all()
-
-        print(f"[ORDER-STATUS-LIST] Found status values: {status_values}")
-
-        # 상태별 색상 매핑
-        status_colors = {
-            "대기": "yellow",
-            "승인": "green",
-            "거부": "red"
-        }
-
-        # 상태 목록 구성
-        status_list = []
-        for status in status_values:
-            status_list.append({
-                "value": status,
-                "label": status,
-                "color": status_colors.get(status, "gray")
-            })
-
-        print(f"[ORDER-STATUS-LIST] Returning status_list: {status_list}")
+        print(f"[ORDER-STATUS-LIST] Returning: {status_list}")
 
         return {
             "status_list": status_list,
@@ -1956,74 +1933,30 @@ async def get_order_status_list(
         }
 
     except Exception as e:
-        print(f"[ORDER-STATUS-LIST] Exception: {type(e).__name__}: {e}")
-        import traceback
-        print(f"[ORDER-STATUS-LIST] Traceback: {traceback.format_exc()}")
-
-        # 에러 발생 시 안전한 기본값 반환
+        print(f"[ORDER-STATUS-LIST] Exception: {e}")
         return {
-            "status_list": [
-                {"value": "대기", "label": "대기", "color": "yellow"},
-                {"value": "승인", "label": "승인", "color": "green"},
-                {"value": "거부", "label": "거부", "color": "red"}
-            ],
+            "status_list": [],
             "success": False,
             "error": str(e)
         }
 
 
-@router.get("/order-requesters", response_model=dict)
+@router.get("/order-requesters")
 async def get_order_requesters(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_async_db)
 ):
-    """발주요청자 목록 조회 (user.name 기반)"""
+    """발주요청자 목록 조회 (단순 버전)"""
     try:
-        from sqlalchemy import select, distinct
-        from app.models.order_request import OrderRequest
-        from app.models.user import User
+        print(f"[ORDER-REQUESTERS] Simple version for user: {current_user.id}")
 
-        print(f"[ORDER-REQUESTERS] Starting query for user: {current_user.id}")
-
-        # 더 안전한 쿼리 - is_active 조건 제거
-        query = select(
-            distinct(User.id).label('user_id'),
-            User.name.label('user_name')
-        ).select_from(
-            OrderRequest
-        ).join(
-            User, OrderRequest.user_id == User.id
-        ).where(
-            User.name.isnot(None)
-        ).order_by(User.name)
-
-        result = await db.execute(query)
-        rows = result.all()
-
-        print(f"[ORDER-REQUESTERS] Found {len(rows)} unique requesters")
-
-        # 요청자 목록 구성
-        requester_list = []
-        for row in rows:
-            requester_list.append({
-                "user_id": row.user_id,
-                "user_name": row.user_name,
-                "label": row.user_name
-            })
-
-        print(f"[ORDER-REQUESTERS] Returning requester_list: {requester_list}")
-
+        # DB 쿼리 없이 빈 목록 반환 (프론트엔드 fallback 활용)
         return {
-            "requester_list": requester_list,
+            "requester_list": [],
             "success": True
         }
 
     except Exception as e:
-        print(f"[ORDER-REQUESTERS] Exception: {type(e).__name__}: {e}")
-        import traceback
-        print(f"[ORDER-REQUESTERS] Traceback: {traceback.format_exc()}")
-
-        # 에러 발생 시 빈 목록 반환
+        print(f"[ORDER-REQUESTERS] Exception: {e}")
         return {
             "requester_list": [],
             "success": False,
