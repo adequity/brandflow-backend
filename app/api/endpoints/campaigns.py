@@ -1560,6 +1560,18 @@ async def get_order_request(
 
 
 # 전체 발주요청 목록 조회 (발주 관리용)
+@router.get("/order-requests-test")
+async def test_order_requests_endpoint(
+    current_user: User = Depends(get_current_active_user)
+):
+    """OrderRequest 엔드포인트 테스트 - DB 접근 없이"""
+    return {
+        "status": "ok",
+        "user_id": current_user.id,
+        "user_role": current_user.role.value,
+        "message": "엔드포인트 접근 성공"
+    }
+
 @router.get("/order-requests-health")
 async def check_order_requests_table(
     current_user: User = Depends(get_current_active_user),
