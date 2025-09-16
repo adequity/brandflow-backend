@@ -15,6 +15,7 @@ from app.models.user import User, UserRole
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.post import Post
 from app.models.order_request import OrderRequest
+from app.models.product import Product
 from app.core.websocket import manager
 
 router = APIRouter()
@@ -1775,3 +1776,82 @@ async def get_order_request(
 
 
 # OrderRequest 엔드포인트들이 위로 이동되었습니다.
+
+
+@router.get("/approved-posts-expense")
+async def get_approved_posts_expense(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """발주 승인된 posts의 원가*수량 총 지출 계산"""
+    try:
+        # 회사별 권한 확인
+        user_role = current_user.role
+        user_company = current_user.company
+
+        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role}, Company: {user_company}")
+
+        # 기본 쿼리: 발주 승인된 posts와 product 조인
+        base_query = select(Post, Product).join(
+            Product, Post.product_id == Product.id
+        ).where(
+            Post.order_request_status == "발주 승인",
+            Post.is_active == True,
+            Product.is_active == True
+        )
+
+        # 권한별 필터링
+        if user_role == "슈퍼 어드민":
+            # 슈퍼 어드민은 모든 회사의 발주 승인 내역 조회 가능
+            query = base_query
+            print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
+        else:
+            # 일반 어드민은 본인 회사의 발주 승인 내역만 조회 가능
+            # Campaign을 통해 회사 필터링
+            query = base_query.join(
+                Campaign, Post.campaign_id == Campaign.id
+            ).join(
+                User, Campaign.creator_id == User.id
+            ).where(
+                User.company == user_company
+            )
+            print(f"[APPROVED-POSTS-EXPENSE] Company admin access - filtered by company: {user_company}")
+
+        # 쿼리 실행
+        result = await db.execute(query)
+        approved_posts_with_products = result.fetchall()
+
+        print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts_with_products)} approved posts with products")
+
+        # 총 지출 계산: product.cost * post.quantity
+        total_expense = 0
+        expense_details = []
+
+        for post, product in approved_posts_with_products:
+            post_expense = (product.cost or 0) * (post.quantity or 1)
+            total_expense += post_expense
+
+            expense_details.append({
+                "post_id": post.id,
+                "post_title": post.title,
+                "product_id": product.id,
+                "product_name": product.name,
+                "product_cost": product.cost,
+                "quantity": post.quantity,
+                "expense": post_expense,
+                "campaign_id": post.campaign_id
+            })
+
+            print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: {product.name} x{post.quantity} = {post_expense}원")
+
+        print(f"[APPROVED-POSTS-EXPENSE] Total expense: {total_expense}원")
+
+        return {
+            "total_expense": total_expense,
+            "count": len(approved_posts_with_products),
+            "details": expense_details
+        }
+
+    except Exception as e:
+        print(f"[APPROVED-POSTS-EXPENSE] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"발주 승인 지출 계산 중 오류가 발생했습니다: {str(e)}")
