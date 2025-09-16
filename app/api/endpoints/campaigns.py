@@ -1781,6 +1781,18 @@ async def get_order_request(
 
 # OrderRequest 엔드포인트들이 위로 이동되었습니다.
 
+@router.get("/test-auth")
+async def test_auth(
+    current_user: User = Depends(get_current_active_user)
+):
+    """인증 테스트 엔드포인트"""
+    print(f"[TEST-AUTH] 사용자 정보: {current_user.id}, {current_user.role}, {current_user.company}")
+    return {
+        "user_id": current_user.id,
+        "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+        "company": current_user.company,
+        "message": "인증 성공"
+    }
 
 @router.get("/approved-posts-expense")
 async def get_approved_posts_expense(
@@ -1788,14 +1800,24 @@ async def get_approved_posts_expense(
     db: AsyncSession = Depends(get_async_db)
 ):
     """발주 승인된 posts의 원가*수량 총 지출 계산"""
+    print(f"[APPROVED-POSTS-EXPENSE] ===== API 호출 시작 =====")
+
     try:
-        print(f"[APPROVED-POSTS-EXPENSE] API 호출 시작")
+        # 사용자 정보 검증
+        if not current_user:
+            print(f"[APPROVED-POSTS-EXPENSE] ERROR: current_user is None")
+            raise HTTPException(status_code=401, detail="인증되지 않은 사용자입니다")
+
+        print(f"[APPROVED-POSTS-EXPENSE] 사용자 검증 완료: {current_user.id}")
 
         # 회사별 권한 확인
         user_role = current_user.role
         user_company = current_user.company
 
-        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role.value}, Company: {user_company}")
+        print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}")
+        print(f"[APPROVED-POSTS-EXPENSE] Role: {user_role} (type: {type(user_role)})")
+        print(f"[APPROVED-POSTS-EXPENSE] Role.value: {user_role.value if hasattr(user_role, 'value') else 'No value attr'}")
+        print(f"[APPROVED-POSTS-EXPENSE] Company: {user_company}")
 
         # 먼저 간단한 승인된 OrderRequest 조회
         simple_query = select(OrderRequest).where(
@@ -1925,9 +1947,12 @@ async def get_approved_posts_expense(
         }
         """
 
+    except HTTPException as he:
+        print(f"[APPROVED-POSTS-EXPENSE] HTTPException: {he.status_code} - {he.detail}")
+        raise he
     except Exception as e:
         import traceback
-        print(f"[APPROVED-POSTS-EXPENSE] Error: {e}")
+        print(f"[APPROVED-POSTS-EXPENSE] Unexpected Error: {e}")
         print(f"[APPROVED-POSTS-EXPENSE] Error type: {type(e).__name__}")
         print(f"[APPROVED-POSTS-EXPENSE] Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"발주 승인 지출 계산 중 오류가 발생했습니다: {str(e)}")
