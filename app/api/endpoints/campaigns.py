@@ -415,12 +415,16 @@ async def get_all_order_requests(
 ):
     """JWT 기반 전체 발주요청 목록 조회"""
 
-    print(f"[ORDER-REQUESTS-LIST] Getting all order requests for user_id={current_user.id}, role={current_user.role.value}")
+    user_role = current_user.role.value
+    user_company = current_user.company
+
+    print(f"[ORDER-REQUESTS-LIST] Getting order requests for user_id={current_user.id}, role={user_role}, company={user_company}")
 
     try:
-        # 모든 활성 발주요청 조회 (Post, Campaign, Product와 조인)
+        # 발주요청 조회 (회사별 필터링 적용)
         from app.models.product import Product
-        query = select(
+
+        base_query = select(
             OrderRequest,
             Post,
             Campaign,
@@ -438,9 +442,19 @@ async def get_all_order_requests(
             User, OrderRequest.user_id == User.id
         ).where(
             OrderRequest.is_active == True
-        ).order_by(
-            OrderRequest.created_at.desc()
         )
+
+        # 권한별 필터링
+        if user_role == "슈퍼 어드민":
+            # 슈퍼 어드민은 모든 발주요청 조회 가능
+            print("[ORDER-REQUESTS-LIST] Super admin: showing all order requests")
+            query = base_query
+        else:
+            # 일반 어드민은 본인 회사의 발주요청만 조회 가능
+            print(f"[ORDER-REQUESTS-LIST] Company admin: filtering by company '{user_company}'")
+            query = base_query.where(User.company == user_company)
+
+        query = query.order_by(OrderRequest.created_at.desc())
 
         result = await db.execute(query)
         order_requests_with_details = result.all()
@@ -502,17 +516,39 @@ async def update_order_request_status(
         if not order_request:
             raise HTTPException(status_code=404, detail="발주요청을 찾을 수 없습니다.")
 
-        # 권한 확인 (대행사 어드민과 슈퍼 어드민만 상태 변경 가능)
-        allowed_roles = ["대행사 어드민", "슈퍼 어드민"]
+        # 권한 확인 (회사별 어드민 권한 체크)
         user_role = current_user.role.value
+        user_company = current_user.company
 
-        print(f"[ORDER-REQUEST-UPDATE] User role: '{user_role}', Allowed roles: {allowed_roles}")
+        print(f"[ORDER-REQUEST-UPDATE] User info - Role: '{user_role}', Company: '{user_company}'")
 
-        if user_role not in allowed_roles:
-            raise HTTPException(
-                status_code=403,
-                detail=f"발주요청 상태 변경 권한이 없습니다. 현재 역할: {user_role}, 필요 역할: {allowed_roles}"
-            )
+        # 슈퍼 어드민은 모든 발주요청 관리 가능
+        if user_role == "슈퍼 어드민":
+            print(f"[ORDER-REQUEST-UPDATE] Super admin access granted")
+        else:
+            # 일반 어드민은 본인 회사의 발주요청만 관리 가능
+            if user_role != "대행사 어드민":
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"발주요청 상태 변경 권한이 없습니다. 현재 역할: {user_role}"
+                )
+
+            # 발주요청을 생성한 사용자의 회사와 현재 사용자의 회사가 같은지 확인
+            requester_query = select(User).where(User.id == order_request.user_id)
+            requester_result = await db.execute(requester_query)
+            requester = requester_result.scalar_one_or_none()
+
+            if not requester:
+                raise HTTPException(status_code=404, detail="발주요청 생성자를 찾을 수 없습니다.")
+
+            requester_company = requester.company
+            print(f"[ORDER-REQUEST-UPDATE] Company check - User: '{user_company}', Requester: '{requester_company}'")
+
+            if user_company != requester_company:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"다른 회사의 발주요청은 관리할 수 없습니다. (요청자 회사: {requester_company}, 현재 사용자 회사: {user_company})"
+                )
 
         # 상태 업데이트
         new_status = status_data.get("status")
