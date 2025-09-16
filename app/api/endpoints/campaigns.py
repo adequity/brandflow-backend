@@ -1860,3 +1860,106 @@ async def get_order_request(
         raise HTTPException(status_code=500, detail=f"발주요청 조회 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.get("/debug-amounts")
+async def debug_amounts(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """임시 디버그 엔드포인트: 현재 vs 변경 후 금액 비교"""
+    try:
+        from sqlalchemy import text
+        from datetime import datetime
+
+        # 현재 날짜 기준 이번 달
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_year = current_date.year
+
+        # 1. 현재 purchase_requests (이번 달 전체)
+        purchase_query = text("""
+            SELECT
+                COUNT(*) as total_count,
+                COALESCE(SUM(amount), 0) as total_amount
+            FROM purchase_requests
+            WHERE EXTRACT(MONTH FROM created_at) = :month
+            AND EXTRACT(YEAR FROM created_at) = :year
+        """)
+
+        purchase_result = await db.execute(purchase_query, {"month": current_month, "year": current_year})
+        purchase_row = purchase_result.fetchone()
+
+        # 2. order_requests (이번 달 전체)
+        order_all_query = text("""
+            SELECT
+                COUNT(*) as total_count,
+                COALESCE(SUM(cost_price), 0) as total_amount
+            FROM order_requests
+            WHERE EXTRACT(MONTH FROM created_at) = :month
+            AND EXTRACT(YEAR FROM created_at) = :year
+            AND is_active = true
+        """)
+
+        order_all_result = await db.execute(order_all_query, {"month": current_month, "year": current_year})
+        order_all_row = order_all_result.fetchone()
+
+        # 3. order_requests (이번 달 승인된 것만)
+        order_approved_query = text("""
+            SELECT
+                COUNT(*) as approved_count,
+                COALESCE(SUM(cost_price), 0) as approved_amount
+            FROM order_requests
+            WHERE EXTRACT(MONTH FROM created_at) = :month
+            AND EXTRACT(YEAR FROM created_at) = :year
+            AND status = '승인'
+            AND is_active = true
+        """)
+
+        order_approved_result = await db.execute(order_approved_query, {"month": current_month, "year": current_year})
+        order_approved_row = order_approved_result.fetchone()
+
+        # 4. order_requests 상태별 분포
+        status_query = text("""
+            SELECT
+                status,
+                COUNT(*) as count,
+                COALESCE(SUM(cost_price), 0) as amount
+            FROM order_requests
+            WHERE EXTRACT(MONTH FROM created_at) = :month
+            AND EXTRACT(YEAR FROM created_at) = :year
+            AND is_active = true
+            GROUP BY status
+            ORDER BY status
+        """)
+
+        status_result = await db.execute(status_query, {"month": current_month, "year": current_year})
+        status_rows = status_result.fetchall()
+
+        return {
+            "debug_date": f"{current_year}-{current_month:02d}",
+            "current_purchase_requests": {
+                "count": purchase_row[0] if purchase_row else 0,
+                "amount": float(purchase_row[1]) if purchase_row else 0
+            },
+            "order_requests_all": {
+                "count": order_all_row[0] if order_all_row else 0,
+                "amount": float(order_all_row[1]) if order_all_row else 0
+            },
+            "order_requests_approved_only": {
+                "count": order_approved_row[0] if order_approved_row else 0,
+                "amount": float(order_approved_row[1]) if order_approved_row else 0
+            },
+            "order_requests_by_status": [
+                {
+                    "status": row[0],
+                    "count": row[1],
+                    "amount": float(row[2])
+                }
+                for row in status_rows
+            ]
+        }
+
+    except Exception as e:
+        print(f"[DEBUG-AMOUNTS] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"디버그 쿼리 실행 중 오류: {str(e)}")
+
+
