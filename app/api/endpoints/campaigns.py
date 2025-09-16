@@ -1795,13 +1795,16 @@ async def get_approved_posts_expense(
 
         print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role}, Company: {user_company}")
 
-        # 기본 쿼리: 발주 승인된 posts와 product 조인
-        base_query = select(Post, Product).select_from(
-            Post
+        # 기본 쿼리: 승인된 OrderRequest와 관련된 Post, Product 조인
+        base_query = select(OrderRequest, Post, Product).select_from(
+            OrderRequest
+        ).join(
+            Post, OrderRequest.post_id == Post.id
         ).outerjoin(
             Product, Post.product_id == Product.id
         ).where(
-            Post.order_request_status == "발주 승인",
+            OrderRequest.status == "승인",
+            OrderRequest.is_active == True,
             Post.is_active == True
         )
 
@@ -1812,11 +1815,9 @@ async def get_approved_posts_expense(
             print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
         else:
             # 일반 어드민은 본인 회사의 발주 승인 내역만 조회 가능
-            # Campaign을 통해 회사 필터링
+            # OrderRequest 생성자를 통해 회사 필터링
             query = base_query.join(
-                Campaign, Post.campaign_id == Campaign.id
-            ).join(
-                User, Campaign.creator_id == User.id
+                User, OrderRequest.user_id == User.id
             ).where(
                 User.company == user_company
             )
@@ -1828,26 +1829,28 @@ async def get_approved_posts_expense(
 
         print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts_with_products)} approved posts with products")
 
-        # 총 지출 계산: product.cost * post.quantity
+        # 총 지출 계산: product.cost * post.quantity (OrderRequest.status = "승인" 기준)
         total_expense = 0
         expense_details = []
 
-        for post, product in approved_posts_with_products:
-            post_expense = (product.cost or 0) * (post.quantity or 1)
+        for order_request, post, product in approved_posts_with_products:
+            post_expense = (product.cost or 0) * (post.quantity or 1) if product else 0
             total_expense += post_expense
 
             expense_details.append({
+                "order_request_id": order_request.id,
+                "order_request_title": order_request.title,
                 "post_id": post.id,
                 "post_title": post.title,
-                "product_id": product.id,
-                "product_name": product.name,
-                "product_cost": product.cost,
+                "product_id": product.id if product else None,
+                "product_name": product.name if product else None,
+                "product_cost": product.cost if product else 0,
                 "quantity": post.quantity,
                 "expense": post_expense,
                 "campaign_id": post.campaign_id
             })
 
-            print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: {product.name} x{post.quantity} = {post_expense}원")
+            print(f"[APPROVED-POSTS-EXPENSE] OrderRequest {order_request.id}: {product.name if product else 'No Product'} x{post.quantity} = {post_expense}원")
 
         print(f"[APPROVED-POSTS-EXPENSE] Total expense: {total_expense}원")
 
