@@ -8,9 +8,11 @@ from datetime import datetime, timezone
 
 from app.db.database import get_async_db
 from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
+from app.schemas.post import PostCreate, PostResponse
 from app.api.deps import get_current_active_user
 from app.models.user import User, UserRole
 from app.models.campaign import Campaign, CampaignStatus
+from app.models.post import Post
 from app.core.websocket import manager
 
 router = APIRouter()
@@ -916,13 +918,133 @@ async def get_campaign_posts(
         if not viewer:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 현재는 빈 배열 반환 (추후 posts 모델 구현시 확장)
-        return []
+        # 캠페인의 모든 포스트 조회
+        posts_query = select(Post).where(Post.campaign_id == campaign_id, Post.is_active == True)
+        posts_result = await db.execute(posts_query)
+        posts = posts_result.scalars().all()
+
+        # PostResponse 형태로 직렬화
+        posts_data = []
+        for post in posts:
+            posts_data.append({
+                "id": post.id,
+                "title": post.title,
+                "workType": post.work_type,
+                "topicStatus": post.topic_status,
+                "outline": post.outline,
+                "outlineStatus": post.outline_status,
+                "images": post.images or [],
+                "publishedUrl": post.published_url,
+                "orderRequestStatus": post.order_request_status,
+                "orderRequestId": post.order_request_id,
+                "startDate": post.start_date,
+                "dueDate": post.due_date,
+                "productId": post.product_id,
+                "quantity": post.quantity,
+                "campaignId": post.campaign_id,
+                "createdAt": post.created_at.isoformat() if post.created_at else None
+            })
+
+        return posts_data
     else:
-        # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
-        # TODO: 기존 방식으로 게시물 목록 조회 구현
-        raise HTTPException(status_code=501, detail="Not implemented yet")
+        # JWT 기반 API 모드
+        current_user = get_current_active_user()
+
+        # 캠페인 존재 여부 및 권한 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_query)
+        campaign = result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+
+        # 캠페인의 모든 포스트 조회
+        posts_query = select(Post).where(Post.campaign_id == campaign_id, Post.is_active == True)
+        posts_result = await db.execute(posts_query)
+        posts = posts_result.scalars().all()
+
+        # PostResponse 형태로 직렬화
+        posts_data = []
+        for post in posts:
+            posts_data.append({
+                "id": post.id,
+                "title": post.title,
+                "workType": post.work_type,
+                "topicStatus": post.topic_status,
+                "outline": post.outline,
+                "outlineStatus": post.outline_status,
+                "images": post.images or [],
+                "publishedUrl": post.published_url,
+                "orderRequestStatus": post.order_request_status,
+                "orderRequestId": post.order_request_id,
+                "startDate": post.start_date,
+                "dueDate": post.due_date,
+                "productId": post.product_id,
+                "quantity": post.quantity,
+                "campaignId": post.campaign_id,
+                "createdAt": post.created_at.isoformat() if post.created_at else None
+            })
+
+        return posts_data
+
+
+@router.post("/{campaign_id}/posts/", response_model=PostResponse)
+async def create_campaign_post(
+    campaign_id: int,
+    post_data: PostCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인에 새 업무(포스트) 생성 (JWT 기반)"""
+    print(f"[CREATE-POST] JWT User: {current_user.name}, Campaign: {campaign_id}, Data: {post_data.dict()}")
+
+    try:
+        # 캠페인 존재 여부 및 권한 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(campaign_query)
+        campaign = result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+
+        # 권한 확인: 캠페인 생성자이거나 관리자 권한 필요
+        user_role = current_user.role.value
+        if (campaign.creator_id != current_user.id and
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            raise HTTPException(status_code=403, detail="이 캠페인에 업무를 생성할 권한이 없습니다")
+
+        # 새 포스트 생성
+        new_post = Post(
+            title=post_data.title,
+            work_type=post_data.work_type,
+            topic_status=post_data.topic_status,
+            outline=post_data.outline,
+            outline_status=post_data.outline_status,
+            images=post_data.images or [],
+            published_url=post_data.published_url,
+            order_request_status=post_data.order_request_status,
+            order_request_id=post_data.order_request_id,
+            start_date=post_data.start_date,
+            due_date=post_data.due_date,
+            product_id=post_data.product_id,
+            quantity=post_data.quantity or 1,
+            campaign_id=campaign_id
+        )
+
+        db.add(new_post)
+        await db.commit()
+        await db.refresh(new_post)
+
+        print(f"[CREATE-POST] SUCCESS: Created post {new_post.id} for campaign {campaign_id}")
+
+        return new_post
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CREATE-POST] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"업무 생성 중 오류: {str(e)}")
 
 
 @router.delete("/{campaign_id}", status_code=204)

@@ -5,3 +5,4 @@ from .purchase_request import PurchaseRequest
 from .product import Product
 from .sales import Sales
 from .company_logo import CompanyLogo
+from .post import Post

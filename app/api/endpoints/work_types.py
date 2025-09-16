@@ -56,27 +56,7 @@ async def get_work_types(
         result = await db.execute(query)
         work_types = result.scalars().all()
         
-        # 기본 작업 유형이 없으면 생성
-        if not work_types:
-            default_types = [
-                {"name": "블로그 포스트", "description": "블로그 콘텐츠 작성"},
-                {"name": "인스타그램 포스트", "description": "인스타그램 콘텐츠 제작"},
-                {"name": "유튜브 영상", "description": "유튜브 동영상 제작"},
-                {"name": "페이스북 광고", "description": "페이스북 광고 콘텐츠"},
-                {"name": "카카오 채널", "description": "카카오톡 채널 운영"},
-                {"name": "네이버 블로그", "description": "네이버 블로그 포스팅"},
-                {"name": "기타", "description": "기타 마케팅 업무"}
-            ]
-            
-            for type_data in default_types:
-                work_type = WorkType(**type_data)
-                db.add(work_type)
-            
-            await db.commit()
-            
-            # 새로 생성된 작업 유형 조회
-            result = await db.execute(query)
-            work_types = result.scalars().all()
+        # work_types 테이블에서 직접 조회 (하드코딩 제거)
         
         return [
             {
@@ -100,27 +80,7 @@ async def get_work_types(
             result = await db.execute(query)
             work_types = result.scalars().all()
             
-            # 기본 작업 유형이 없으면 생성
-            if not work_types:
-                default_types = [
-                    {"name": "블로그 포스트", "description": "블로그 콘텐츠 작성"},
-                    {"name": "인스타그램 포스트", "description": "인스타그램 콘텐츠 제작"},
-                    {"name": "유튜브 영상", "description": "유튜브 동영상 제작"},
-                    {"name": "페이스북 광고", "description": "페이스북 광고 콘텐츠"},
-                    {"name": "카카오 채널", "description": "카카오톡 채널 운영"},
-                    {"name": "네이버 블로그", "description": "네이버 블로그 포스팅"},
-                    {"name": "기타", "description": "기타 마케팅 업무"}
-                ]
-                
-                for type_data in default_types:
-                    work_type = WorkType(**type_data)
-                    db.add(work_type)
-                
-                await db.commit()
-                
-                # 새로 생성된 작업 유형 조회
-                result = await db.execute(query)
-                work_types = result.scalars().all()
+            # work_types 테이블에서 직접 조회 (하드코딩 제거)
             
             print(f"[WORK-TYPES-LIST-JWT] SUCCESS: Found {len(work_types)} work types for user {current_user.id}")
             

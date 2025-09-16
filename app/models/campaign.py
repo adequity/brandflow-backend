@@ -33,6 +33,7 @@ class Campaign(Base, TimestampMixin):
     creator = relationship("User", back_populates="campaigns", foreign_keys=[creator_id])
     client_user = relationship("User", foreign_keys=[client_user_id])  # 클라이언트 사용자 관계
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
+    posts = relationship("Post", back_populates="campaign")
     
     @property
     def creator_name(self) -> Optional[str]:
