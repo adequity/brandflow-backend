@@ -1795,39 +1795,36 @@ async def get_approved_posts_expense(
 
         print(f"[APPROVED-POSTS-EXPENSE] User: {current_user.id}, Role: {user_role}, Company: {user_company}")
 
-        # 단순한 쿼리로 변경 - 발주 승인된 posts만 조회
-        try:
-            # 1단계: 발주 승인된 posts 조회
-            posts_query = select(Post).where(
-                Post.order_request_status == "발주 승인",
-                Post.is_active == True
+        # 기본 쿼리: 발주 승인된 posts와 product 조인
+        base_query = select(Post, Product).select_from(
+            Post
+        ).outerjoin(
+            Product, Post.product_id == Product.id
+        ).where(
+            Post.order_request_status == "발주 승인",
+            Post.is_active == True
+        )
+
+        # 권한별 필터링
+        if user_role == "슈퍼 어드민":
+            # 슈퍼 어드민은 모든 회사의 발주 승인 내역 조회 가능
+            query = base_query
+            print(f"[APPROVED-POSTS-EXPENSE] Super admin access - no company filter")
+        else:
+            # 일반 어드민은 본인 회사의 발주 승인 내역만 조회 가능
+            # Campaign을 통해 회사 필터링
+            query = base_query.join(
+                Campaign, Post.campaign_id == Campaign.id
+            ).join(
+                User, Campaign.creator_id == User.id
+            ).where(
+                User.company == user_company
             )
+            print(f"[APPROVED-POSTS-EXPENSE] Company admin access - filtered by company: {user_company}")
 
-            posts_result = await db.execute(posts_query)
-            approved_posts = posts_result.scalars().all()
-
-            print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts)} approved posts")
-
-            approved_posts_with_products = []
-
-            # 2단계: 각 post의 product 정보 개별 조회
-            for post in approved_posts:
-                if post.product_id:
-                    product_query = select(Product).where(Product.id == post.product_id)
-                    product_result = await db.execute(product_query)
-                    product = product_result.scalar_one_or_none()
-
-                    if product:
-                        approved_posts_with_products.append((post, product))
-                        print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: {product.name}, cost: {product.cost}, quantity: {post.quantity}")
-                    else:
-                        print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: Product {post.product_id} not found")
-                else:
-                    print(f"[APPROVED-POSTS-EXPENSE] Post {post.id}: No product_id")
-
-        except Exception as query_error:
-            print(f"[APPROVED-POSTS-EXPENSE] Query error: {query_error}")
-            return {"total_expense": 0, "count": 0, "details": [], "error": str(query_error)}
+        # 쿼리 실행
+        result = await db.execute(query)
+        approved_posts_with_products = result.fetchall()
 
         print(f"[APPROVED-POSTS-EXPENSE] Found {len(approved_posts_with_products)} approved posts with products")
 
