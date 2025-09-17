@@ -94,36 +94,35 @@ async def get_migration_status(
     try:
         from sqlalchemy import text
 
-        async with db.begin():
-            current_version = None
-            alembic_available = ALEMBIC_AVAILABLE
+        current_version = None
+        alembic_available = ALEMBIC_AVAILABLE
 
-            # Alembic이 있을 때만 현재 마이그레이션 버전 확인
-            if ALEMBIC_AVAILABLE:
-                try:
-                    result = await db.execute(text("SELECT version_num FROM alembic_version"))
-                    current_version = result.scalar()
-                except Exception as e:
-                    logging.warning(f"마이그레이션 버전 확인 실패: {str(e)}")
-                    current_version = "unknown"
+        # Alembic이 있을 때만 현재 마이그레이션 버전 확인
+        if ALEMBIC_AVAILABLE:
+            try:
+                result = await db.execute(text("SELECT version_num FROM alembic_version"))
+                current_version = result.scalar()
+            except Exception as e:
+                logging.warning(f"마이그레이션 버전 확인 실패: {str(e)}")
+                current_version = "unknown"
 
-            # 테이블 존재 여부 확인
-            tables_check = await db.execute(text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = 'posts'
-                AND column_name IN ('start_datetime', 'due_datetime')
-            """))
+        # 테이블 존재 여부 확인
+        tables_check = await db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'posts'
+            AND column_name IN ('start_datetime', 'due_datetime')
+        """))
 
-            new_columns = [row[0] for row in tables_check.fetchall()]
+        new_columns = [row[0] for row in tables_check.fetchall()]
 
-            return {
-                "alembic_available": alembic_available,
-                "current_version": current_version,
-                "new_datetime_columns_exist": len(new_columns) > 0,
-                "existing_columns": new_columns,
-                "migration_needed": len(new_columns) == 0
-            }
+        return {
+            "alembic_available": alembic_available,
+            "current_version": current_version,
+            "new_datetime_columns_exist": len(new_columns) > 0,
+            "existing_columns": new_columns,
+            "migration_needed": len(new_columns) == 0
+        }
 
     except Exception as e:
         logging.error(f"마이그레이션 상태 확인 중 오류: {str(e)}")
