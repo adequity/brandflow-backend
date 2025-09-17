@@ -1608,6 +1608,9 @@ async def update_campaign_post(
             post.start_date = post_data['startDate']
         if 'dueDate' in post_data:
             post.due_date = post_data['dueDate']
+        if 'published_url' in post_data:
+            post.published_url = post_data['published_url']
+            print(f"[UPDATE-POST] Updated published_url: {post_data['published_url']}")
 
         await db.commit()
         await db.refresh(post)
