@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, desc
 from typing import List, Optional, Dict, Any
@@ -214,8 +214,8 @@ async def create_system_setting(
 
 @router.put("/{setting_key}", response_model=SystemSettingResponse)
 async def update_system_setting(
-    setting_data: SystemSettingUpdate,
     setting_key: str = Path(..., description="설정 키"),
+    setting_data: SystemSettingUpdate = Body(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
