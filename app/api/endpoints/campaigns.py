@@ -1022,6 +1022,14 @@ async def update_campaign(
                             print("[CAMPAIGN-UPDATE] client_user_id field not available, skipping")
                     except Exception as e:
                         print(f"[CAMPAIGN-UPDATE] Warning: Could not update client_user_id: {e}")
+                elif field in ['invoice_issued', 'payment_completed']:
+                    # 재무 상태 필드 처리
+                    try:
+                        bool_value = bool(value) if value is not None else False
+                        setattr(campaign, field, bool_value)
+                        print(f"[CAMPAIGN-UPDATE] Updated financial field {field}: {value} -> {bool_value}")
+                    except Exception as e:
+                        print(f"[CAMPAIGN-UPDATE] Warning: Could not update {field}: {e}")
                 elif hasattr(campaign, field):
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
@@ -1185,6 +1193,14 @@ async def update_campaign(
                             print("[CAMPAIGN-UPDATE] client_user_id field not available, skipping")
                     except Exception as e:
                         print(f"[CAMPAIGN-UPDATE] Warning: Could not update client_user_id: {e}")
+                elif field in ['invoice_issued', 'payment_completed']:
+                    # 재무 상태 필드 처리
+                    try:
+                        bool_value = bool(value) if value is not None else False
+                        setattr(campaign, field, bool_value)
+                        print(f"[CAMPAIGN-UPDATE] Updated financial field {field}: {value} -> {bool_value}")
+                    except Exception as e:
+                        print(f"[CAMPAIGN-UPDATE] Warning: Could not update {field}: {e}")
                 elif hasattr(campaign, field):
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Updated {field}: {value}")
