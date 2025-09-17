@@ -1669,9 +1669,21 @@ async def update_campaign_post(
         if 'images' in post_data:
             post.images = post_data['images']
         if 'productId' in post_data:
-            post.product_id = post_data['productId']
+            # productId를 정수로 변환
+            try:
+                post.product_id = int(post_data['productId']) if post_data['productId'] else None
+                print(f"[UPDATE-POST] Updated product_id: {post.product_id}")
+            except (ValueError, TypeError) as e:
+                print(f"[UPDATE-POST] Invalid productId: {post_data['productId']}, error: {e}")
+                raise HTTPException(status_code=400, detail=f"잘못된 상품 ID 형식: {post_data['productId']}")
         if 'quantity' in post_data:
-            post.quantity = post_data['quantity']
+            # quantity를 정수로 변환
+            try:
+                post.quantity = int(post_data['quantity']) if post_data['quantity'] else 1
+                print(f"[UPDATE-POST] Updated quantity: {post.quantity}")
+            except (ValueError, TypeError) as e:
+                print(f"[UPDATE-POST] Invalid quantity: {post_data['quantity']}, error: {e}")
+                raise HTTPException(status_code=400, detail=f"잘못된 수량 형식: {post_data['quantity']}")
         if 'startDate' in post_data:
             post.start_date = post_data['startDate']
         if 'dueDate' in post_data:
