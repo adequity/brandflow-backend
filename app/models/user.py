@@ -36,6 +36,7 @@ class User(Base, TimestampMixin):
     campaigns = relationship("Campaign", back_populates="creator", foreign_keys="Campaign.creator_id")
     purchase_requests = relationship("PurchaseRequest", back_populates="requester")
     sales_records = relationship("Sales", back_populates="employee")
+    telegram_setting = relationship("UserTelegramSetting", back_populates="user", uselist=False)
     
     def __repr__(self):
         return f"<User(id={self.id}, name={self.name}, role={self.role})>"

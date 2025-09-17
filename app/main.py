@@ -69,10 +69,27 @@ async def lifespan(app: FastAPI):
     #         print(f"❌ 자동 마이그레이션 실패: {str(migrate_error)}")
     #         # 마이그레이션 실패해도 서버는 계속 시작
 
+    # 텔레그램 스케줄러 시작 (백그라운드)
+    try:
+        from app.services.telegram_scheduler import telegram_scheduler
+        import asyncio
+
+        # 스케줄러를 백그라운드 태스크로 시작
+        asyncio.create_task(telegram_scheduler.start())
+        print("✅ 텔레그램 알림 스케줄러 시작됨")
+    except Exception as scheduler_error:
+        print(f"⚠️ 텔레그램 스케줄러 시작 실패: {str(scheduler_error)}")
+
     print("BrandFlow FastAPI v2.3.0 ready!")
 
     yield
     # Shutdown
+    try:
+        from app.services.telegram_scheduler import telegram_scheduler
+        telegram_scheduler.stop()
+        print("텔레그램 스케줄러 중지됨")
+    except:
+        pass
     print("BrandFlow server shutdown completed")
 
 
@@ -232,6 +249,14 @@ try:
     print("✅ 시스템 설정 라우터 등록 완료")
 except Exception as e:
     print(f"⚠️ 시스템 설정 라우터 등록 실패: {str(e)}")
+
+# 텔레그램 설정 라우터 등록
+try:
+    from app.api.endpoints import telegram_settings
+    app.include_router(telegram_settings.router, prefix="/api/telegram", tags=["텔레그램알림"])
+    print("✅ 텔레그램 설정 라우터 등록 완료")
+except Exception as e:
+    print(f"⚠️ 텔레그램 설정 라우터 등록 실패: {str(e)}")
 
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])
