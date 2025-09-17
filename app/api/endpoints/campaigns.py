@@ -106,8 +106,8 @@ async def get_campaigns(
             "budget": campaign.budget,  # budget 필드 추가
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
-            "invoice_issued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
-            "payment_completed": getattr(campaign, 'payment_completed', False) if hasattr(campaign, 'payment_completed') else False,  # 입금 완료
+            "invoiceIssued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
+            "paymentCompleted": getattr(campaign, 'payment_completed', False) if hasattr(campaign, 'payment_completed') else False,  # 입금 완료
             "creator_id": campaign.creator_id,
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
@@ -793,8 +793,8 @@ async def get_campaign_detail(
             "budget": campaign.budget,
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
-            "invoice_issued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
-            "payment_completed": getattr(campaign, 'payment_completed', False) if hasattr(campaign, 'payment_completed') else False,  # 입금 완료
+            "invoiceIssued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
+            "paymentCompleted": getattr(campaign, 'payment_completed', False) if hasattr(campaign, 'payment_completed') else False,  # 입금 완료
             "creator_id": campaign.creator_id,
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
@@ -1056,8 +1056,8 @@ async def update_campaign(
                 "budget": campaign.budget,
                 "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
                 "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
-                "invoice_issued": getattr(campaign, 'invoice_issued', False),  # 계산서 발행 완료
-                "payment_completed": getattr(campaign, 'payment_completed', False),  # 입금 완료
+                "invoiceIssued": getattr(campaign, 'invoice_issued', False),  # 계산서 발행 완료
+                "paymentCompleted": getattr(campaign, 'payment_completed', False),  # 입금 완료
                 "creator_id": campaign.creator_id,
                 "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
                 "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
@@ -1227,8 +1227,8 @@ async def update_campaign(
                 "budget": campaign.budget,
                 "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
                 "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
-                "invoice_issued": getattr(campaign, 'invoice_issued', False),  # 계산서 발행 완료
-                "payment_completed": getattr(campaign, 'payment_completed', False),  # 입금 완료
+                "invoiceIssued": getattr(campaign, 'invoice_issued', False),  # 계산서 발행 완료
+                "paymentCompleted": getattr(campaign, 'payment_completed', False),  # 입금 완료
                 "creator_id": campaign.creator_id,
                 "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
                 "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
