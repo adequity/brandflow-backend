@@ -1636,6 +1636,7 @@ async def update_campaign_post(
             "outline_status": post.outline_status,
             "images": post.images or [],
             "published_url": post.published_url,
+            "publishedUrl": post.published_url,  # 프론트엔드 호환성
             "order_request_status": post.order_request_status,
             "order_request_id": post.order_request_id,
             "start_date": post.start_date,
