@@ -2295,18 +2295,41 @@ async def reset_campaign_order_requests(
         can_reset = False
         if user_role == UserRole.SUPER_ADMIN.value:
             can_reset = True
+            print(f"[RESET-ORDER-REQUESTS] SUPER_ADMIN access granted")
         elif user_role == UserRole.AGENCY_ADMIN.value:
-            if campaign.creator and campaign.creator.company == current_user.company:
+            # creator를 직접 조회해서 확인
+            creator_query = select(User).where(User.id == campaign.creator_id)
+            creator_result = await db.execute(creator_query)
+            creator = creator_result.scalar_one_or_none()
+
+            if creator and creator.company == current_user.company:
                 can_reset = True
+                print(f"[RESET-ORDER-REQUESTS] AGENCY_ADMIN access granted: same company")
+            else:
+                print(f"[RESET-ORDER-REQUESTS] AGENCY_ADMIN access denied: different company or no creator")
         elif user_role == UserRole.STAFF.value:
             if campaign.creator_id == user_id:
                 can_reset = True
+                print(f"[RESET-ORDER-REQUESTS] STAFF access granted: campaign creator")
+            else:
+                print(f"[RESET-ORDER-REQUESTS] STAFF access denied: not campaign creator")
 
         if not can_reset:
+            print(f"[RESET-ORDER-REQUESTS] Access denied for user {user_id} with role {user_role}")
             raise HTTPException(status_code=403, detail="이 캠페인의 발주 요청을 초기화할 권한이 없습니다.")
 
         # 해당 캠페인의 모든 posts의 발주 요청 상태 초기화
         from app.models.post import Post
+
+        # 먼저 현재 상태 확인
+        check_query = select(Post).where(Post.campaign_id == campaign_id)
+        check_result = await db.execute(check_query)
+        posts_before = check_result.scalars().all()
+
+        print(f"[RESET-ORDER-REQUESTS] Found {len(posts_before)} posts for campaign {campaign_id}")
+        for post in posts_before:
+            print(f"[RESET-ORDER-REQUESTS] Post {post.id}: order_request_status={post.order_request_status}, order_request_id={post.order_request_id}")
+
         update_query = (
             update(Post)
             .where(Post.campaign_id == campaign_id)
@@ -2320,7 +2343,16 @@ async def reset_campaign_order_requests(
         await db.commit()
 
         updated_count = result.rowcount
-        print(f"[RESET-ORDER-REQUESTS] Successfully reset {updated_count} posts for campaign {campaign_id}")
+        print(f"[RESET-ORDER-REQUESTS] Update query executed, affected rows: {updated_count}")
+
+        # 업데이트 후 상태 확인
+        check_after_query = select(Post).where(Post.campaign_id == campaign_id)
+        check_after_result = await db.execute(check_after_query)
+        posts_after = check_after_result.scalars().all()
+
+        print(f"[RESET-ORDER-REQUESTS] After update:")
+        for post in posts_after:
+            print(f"[RESET-ORDER-REQUESTS] Post {post.id}: order_request_status={post.order_request_status}, order_request_id={post.order_request_id}")
 
         return {
             "success": True,
