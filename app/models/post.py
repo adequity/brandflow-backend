@@ -18,8 +18,13 @@ class Post(Base, TimestampMixin):
     published_url = Column(Text, nullable=True)
     order_request_status = Column(String(50), nullable=True)
     order_request_id = Column(Integer, nullable=True)
-    start_date = Column(String(20), nullable=True)  # 날짜를 문자열로 저장 (YYYY-MM-DD 형식)
-    due_date = Column(String(20), nullable=True)    # 날짜를 문자열로 저장 (YYYY-MM-DD 형식)
+    start_date = Column(String(20), nullable=True)  # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
+    due_date = Column(String(20), nullable=True)    # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
+
+    # 새로운 DateTime 필드들 (더 정확한 일정 관리용)
+    start_datetime = Column(DateTime, nullable=True)    # 시작 일시
+    due_datetime = Column(DateTime, nullable=True)      # 마감 일시
+    scheduled_datetime = Column(DateTime, nullable=True) # 예정 일시
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     quantity = Column(Integer, nullable=True, default=1)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)

@@ -14,6 +14,9 @@ class CampaignBase(BaseModel):
     end_date: Optional[datetime] = None    # 선택적
     invoice_issued: Optional[bool] = None  # 계산서 발행 완료
     payment_completed: Optional[bool] = None  # 입금 완료
+    invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
+    payment_due_date: Optional[datetime] = None  # 결제 마감일
+    project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
 
 
 class CampaignCreate(CampaignBase):
@@ -30,6 +33,9 @@ class CampaignUpdate(BaseModel):
     status: Optional[CampaignStatus] = None
     invoice_issued: Optional[bool] = None  # 계산서 발행 완료
     payment_completed: Optional[bool] = None  # 입금 완료
+    invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
+    payment_due_date: Optional[datetime] = None  # 결제 마감일
+    project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
     # creator_id는 기존 필드이므로 여기서 수정 가능하게 추가
     creator_id: Optional[int] = None
 

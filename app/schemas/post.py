@@ -13,8 +13,11 @@ class PostCreate(BaseModel):
     published_url: Optional[str] = None
     order_request_status: Optional[str] = None
     order_request_id: Optional[int] = None
-    start_date: Optional[str] = None
-    due_date: Optional[str] = None
+    start_date: Optional[str] = None  # 기존 호환성
+    due_date: Optional[str] = None    # 기존 호환성
+    start_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
+    due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
+    scheduled_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     product_id: Optional[int] = None
     quantity: Optional[int] = 1
 
@@ -29,8 +32,11 @@ class PostUpdate(BaseModel):
     published_url: Optional[str] = None
     order_request_status: Optional[str] = None
     order_request_id: Optional[int] = None
-    start_date: Optional[str] = None
-    due_date: Optional[str] = None
+    start_date: Optional[str] = None  # 기존 호환성
+    due_date: Optional[str] = None    # 기존 호환성
+    start_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
+    due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
+    scheduled_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     product_id: Optional[int] = None
     quantity: Optional[int] = None
 
@@ -46,8 +52,11 @@ class PostResponse(BaseModel):
     published_url: Optional[str]
     order_request_status: Optional[str]
     order_request_id: Optional[int]
-    start_date: Optional[str]
-    due_date: Optional[str]
+    start_date: Optional[str]  # 기존 호환성
+    due_date: Optional[str]    # 기존 호환성
+    start_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
+    due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
+    scheduled_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     product_id: Optional[int]
     quantity: Optional[int]
     campaign_id: int

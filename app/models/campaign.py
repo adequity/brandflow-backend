@@ -29,6 +29,11 @@ class Campaign(Base, TimestampMixin):
     # 재무 관련 필드
     invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료
     payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료
+
+    # 일정 관련 필드
+    invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일
+    payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일
+    project_due_date = Column(DateTime, nullable=True)  # 프로젝트 완료 마감일
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
