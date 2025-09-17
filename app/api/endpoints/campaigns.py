@@ -102,7 +102,6 @@ async def get_campaigns(
             "name": campaign.name,
             "description": campaign.description,
             "status": campaign.status.value if campaign.status else None,
-            "executionStatus": getattr(campaign, 'executionStatus', '대기'),  # 안전하게 executionStatus 처리
             "client_company": campaign.client_company,
             "budget": campaign.budget,  # budget 필드 추가
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
@@ -782,7 +781,23 @@ async def get_campaign_detail(
                 raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
         
         print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {user_id}")
-        return campaign
+        # 직렬화된 응답 반환 (executionStatus 매핑 포함)
+        response_data = {
+            "id": campaign.id,
+            "name": campaign.name,
+            "description": campaign.description,
+            "status": campaign.status.value if campaign.status else None,
+            "client_company": campaign.client_company,
+            "budget": campaign.budget,
+            "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+            "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
+            "creator_id": campaign.creator_id,
+            "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+            "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+            "creator_name": campaign.creator.name if campaign.creator else None,
+            "client_name": campaign.client_company
+        }
+        return response_data
         
     except HTTPException:
         raise  # HTTPException은 그대로 전달
@@ -1018,7 +1033,24 @@ async def update_campaign(
             await db.refresh(campaign)
             
             print(f"[CAMPAIGN-UPDATE] SUCCESS: Campaign {campaign_id} updated by user {user_id}")
-            return campaign
+
+            # 직렬화된 응답 반환 (executionStatus 매핑 포함)
+            response_data = {
+                "id": campaign.id,
+                "name": campaign.name,
+                "description": campaign.description,
+                "status": campaign.status.value if campaign.status else None,
+                "client_company": campaign.client_company,
+                "budget": campaign.budget,
+                "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+                "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
+                "creator_id": campaign.creator_id,
+                "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+                "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+                "creator_name": campaign.creator.name if campaign.creator else None,
+                "client_name": campaign.client_company
+            }
+            return response_data
             
         except HTTPException:
             raise  # HTTPException은 그대로 전달
@@ -1162,7 +1194,24 @@ async def update_campaign(
             await db.refresh(campaign)
             
             print(f"[CAMPAIGN-UPDATE] SUCCESS: Campaign {campaign_id} updated by JWT user {user_id}")
-            return campaign
+
+            # 직렬화된 응답 반환 (executionStatus 매핑 포함)
+            response_data = {
+                "id": campaign.id,
+                "name": campaign.name,
+                "description": campaign.description,
+                "status": campaign.status.value if campaign.status else None,
+                "client_company": campaign.client_company,
+                "budget": campaign.budget,
+                "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+                "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
+                "creator_id": campaign.creator_id,
+                "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
+                "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
+                "creator_name": campaign.creator.name if campaign.creator else None,
+                "client_name": campaign.client_company
+            }
+            return response_data
             
         except HTTPException:
             raise  # HTTPException은 그대로 전달
