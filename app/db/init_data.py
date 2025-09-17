@@ -417,6 +417,21 @@ async def init_database_data(db: AsyncSession):
             # 5. 테스트 발주요청들 생성
             test_order_requests = await create_test_order_requests(db, all_users, test_campaigns)
 
+            # 6. 시스템 설정 초기화 (동기 세션 필요)
+            from app.db.init_system_settings import init_system_settings
+            from sqlalchemy.orm import sessionmaker
+            from app.db.database import engine
+
+            # 동기 세션 생성하여 시스템 설정 초기화
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            sync_db = SessionLocal()
+            try:
+                init_system_settings(sync_db)
+            except Exception as settings_error:
+                print(f"시스템 설정 초기화 중 오류 (무시): {str(settings_error)}")
+            finally:
+                sync_db.close()
+
             await db.commit()
             print(f"\n=== 개발환경 초기 데이터 생성 완료 ===")
             print(f"사용자 수: {len(all_users)}명")
