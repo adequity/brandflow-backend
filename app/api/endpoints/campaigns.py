@@ -1692,6 +1692,15 @@ async def update_campaign_post(
             post.published_url = post_data['published_url']
             print(f"[UPDATE-POST] Updated published_url: {post_data['published_url']}")
 
+        # 업무 수정 시 발주 요청 상태 초기화
+        print(f"[UPDATE-POST] 업무 수정으로 인한 발주 요청 상태 초기화: Post {post.id}")
+        print(f"[UPDATE-POST] 이전 발주 상태: orderRequestStatus={post.order_request_status}, orderRequestId={post.order_request_id}")
+
+        post.order_request_status = None
+        post.order_request_id = None
+
+        print(f"[UPDATE-POST] 발주 요청 상태 초기화 완료")
+
         await db.commit()
         await db.refresh(post)
 
