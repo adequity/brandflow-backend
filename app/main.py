@@ -253,7 +253,7 @@ except Exception as e:
 # 텔레그램 설정 라우터 등록
 try:
     from app.api.endpoints import telegram_settings
-    app.include_router(telegram_settings.router, prefix="/api/telegram", tags=["텔레그램알림"])
+    app.include_router(telegram_settings.router, prefix="/telegram", tags=["텔레그램알림"])
     print("✅ 텔레그램 설정 라우터 등록 완료")
 except Exception as e:
     print(f"⚠️ 텔레그램 설정 라우터 등록 실패: {str(e)}")
