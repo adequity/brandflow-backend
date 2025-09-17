@@ -8,7 +8,7 @@ import os
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id, add_campaign_date_columns, update_null_campaign_dates
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, system_settings
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple
 
 
 @asynccontextmanager
@@ -224,7 +224,15 @@ app.include_router(security_dashboard.router, prefix="/api/security-dashboard", 
 
 # API 라우터 등록 - 시스템 & 관리
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
-app.include_router(system_settings.router, prefix="/api/admin/system-settings", tags=["시스템설정"])
+
+# 시스템 설정 라우터 별도 import 및 등록
+try:
+    from app.api.endpoints import system_settings
+    app.include_router(system_settings.router, prefix="/api/admin/system-settings", tags=["시스템설정"])
+    print("✅ 시스템 설정 라우터 등록 완료")
+except Exception as e:
+    print(f"⚠️ 시스템 설정 라우터 등록 실패: {str(e)}")
+
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])
 app.include_router(cache.router, prefix="/api/cache", tags=["캐시"])
