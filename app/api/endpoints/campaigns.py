@@ -2268,3 +2268,72 @@ async def debug_amounts(
         raise HTTPException(status_code=500, detail=f"디버그 쿼리 실행 중 오류: {str(e)}")
 
 
+@router.put("/{campaign_id}/reset-order-requests")
+async def reset_campaign_order_requests(
+    campaign_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    캠페인 수정 시 해당 캠페인의 모든 posts의 발주 요청 상태를 초기화합니다.
+    """
+    try:
+        print(f"[RESET-ORDER-REQUESTS] Starting reset for campaign {campaign_id} by user {current_user.id}")
+
+        # 캠페인 존재 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인 (캠페인을 수정할 수 있는 권한이 있는지 확인)
+        user_role = current_user.role
+        user_id = current_user.id
+
+        can_reset = False
+        if user_role == UserRole.SUPER_ADMIN.value:
+            can_reset = True
+        elif user_role == UserRole.AGENCY_ADMIN.value:
+            if campaign.creator and campaign.creator.company == current_user.company:
+                can_reset = True
+        elif user_role == UserRole.STAFF.value:
+            if campaign.creator_id == user_id:
+                can_reset = True
+
+        if not can_reset:
+            raise HTTPException(status_code=403, detail="이 캠페인의 발주 요청을 초기화할 권한이 없습니다.")
+
+        # 해당 캠페인의 모든 posts의 발주 요청 상태 초기화
+        from app.models.post import Post
+        update_query = (
+            update(Post)
+            .where(Post.campaign_id == campaign_id)
+            .values(
+                order_request_status=None,
+                order_request_id=None
+            )
+        )
+
+        result = await db.execute(update_query)
+        await db.commit()
+
+        updated_count = result.rowcount
+        print(f"[RESET-ORDER-REQUESTS] Successfully reset {updated_count} posts for campaign {campaign_id}")
+
+        return {
+            "success": True,
+            "message": f"캠페인 {campaign.name}의 {updated_count}개 업무의 발주 요청 상태가 초기화되었습니다.",
+            "updated_count": updated_count
+        }
+
+    except HTTPException as e:
+        print(f"[RESET-ORDER-REQUESTS] HTTP Error: {e.detail}")
+        raise e
+    except Exception as e:
+        print(f"[RESET-ORDER-REQUESTS] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"발주 요청 상태 초기화 중 오류가 발생했습니다: {str(e)}")
+
+
