@@ -76,9 +76,9 @@ async def lifespan(app: FastAPI):
 
         # 스케줄러를 백그라운드 태스크로 시작
         asyncio.create_task(telegram_scheduler.start())
-        print("✅ 텔레그램 알림 스케줄러 시작됨")
+        print("[OK] 텔레그램 알림 스케줄러 시작됨")
     except Exception as scheduler_error:
-        print(f"⚠️ 텔레그램 스케줄러 시작 실패: {str(scheduler_error)}")
+        print(f"[ERROR] 텔레그램 스케줄러 시작 실패: {str(scheduler_error)}")
 
     print("BrandFlow FastAPI v2.3.0 ready!")
 
@@ -245,18 +245,18 @@ app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
 # 시스템 설정 라우터 별도 import 및 등록
 try:
     from app.api.endpoints import system_settings
-    app.include_router(system_settings.router, prefix="/admin/system-settings", tags=["시스템설정"])
-    print("✅ 시스템 설정 라우터 등록 완료")
+    app.include_router(system_settings.router, prefix="/api/admin/system-settings", tags=["시스템설정"])
+    print("[OK] 시스템 설정 라우터 등록 완료")
 except Exception as e:
-    print(f"⚠️ 시스템 설정 라우터 등록 실패: {str(e)}")
+    print(f"[ERROR] 시스템 설정 라우터 등록 실패: {str(e)}")
 
 # 텔레그램 설정 라우터 등록
 try:
     from app.api.endpoints import telegram_settings
-    app.include_router(telegram_settings.router, prefix="/telegram", tags=["텔레그램알림"])
-    print("✅ 텔레그램 설정 라우터 등록 완료")
+    app.include_router(telegram_settings.router, prefix="/api/telegram", tags=["텔레그램알림"])
+    print("[OK] 텔레그램 설정 라우터 등록 완료")
 except Exception as e:
-    print(f"⚠️ 텔레그램 설정 라우터 등록 실패: {str(e)}")
+    print(f"[ERROR] 텔레그램 설정 라우터 등록 실패: {str(e)}")
 
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])

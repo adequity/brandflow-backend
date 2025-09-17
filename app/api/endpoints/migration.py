@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from alembic import command
 from alembic.config import Config
-from app.database import get_async_session
-from app.auth import get_current_user
+from app.db.database import get_async_db
+from app.core.security import get_current_user
 import os
 import logging
 
@@ -12,7 +12,7 @@ router = APIRouter()
 @router.post("/run-migration")
 async def run_migration(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     데이터베이스 마이그레이션을 실행합니다.
@@ -62,7 +62,7 @@ async def run_migration(
 @router.get("/migration-status")
 async def get_migration_status(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     현재 마이그레이션 상태를 확인합니다.
