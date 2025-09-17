@@ -12,6 +12,8 @@ class CampaignBase(BaseModel):
     budget: Optional[float] = Field(None, ge=0)  # 0 이상 허용, 선택적
     start_date: Optional[datetime] = None  # 선택적
     end_date: Optional[datetime] = None    # 선택적
+    invoice_issued: Optional[bool] = None  # 계산서 발행 완료
+    payment_completed: Optional[bool] = None  # 입금 완료
 
 
 class CampaignCreate(CampaignBase):
@@ -26,6 +28,8 @@ class CampaignUpdate(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[CampaignStatus] = None
+    invoice_issued: Optional[bool] = None  # 계산서 발행 완료
+    payment_completed: Optional[bool] = None  # 입금 완료
     # creator_id는 기존 필드이므로 여기서 수정 가능하게 추가
     creator_id: Optional[int] = None
 

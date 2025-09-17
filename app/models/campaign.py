@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum as SQLEnum, Boolean
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional
@@ -25,6 +25,10 @@ class Campaign(Base, TimestampMixin):
     end_date = Column(DateTime, nullable=False)
     status = Column(SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT)
     # executionStatus = Column(String(50), default="대기", nullable=True)  # 집행 상태 필드 - 임시 비활성화
+
+    # 재무 관련 필드
+    invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료
+    payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
