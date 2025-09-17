@@ -26,9 +26,9 @@ class Campaign(Base, TimestampMixin):
     status = Column(SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT)
     # executionStatus = Column(String(50), default="대기", nullable=True)  # 집행 상태 필드 - 임시 비활성화
 
-    # 재무 관련 필드
-    invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료
-    payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료
+    # 재무 관련 필드 - 데이터베이스 스키마 업데이트 후 활성화 예정
+    # invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료
+    # payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
