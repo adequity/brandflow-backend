@@ -123,11 +123,23 @@ async def get_campaigns(
                     "id": post.id,
                     "title": post.title,
                     "work_type": post.work_type,
+                    "workType": post.work_type,  # 프론트엔드 호환성
+                    "topicStatus": post.topic_status,
+                    "outline": post.outline,
                     "published_url": post.published_url,
                     "publishedUrl": post.published_url,  # 프론트엔드 호환성
+                    "startDate": post.start_date,      # 기존 호환성
+                    "dueDate": post.due_date,          # 기존 호환성
+                    # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,
+                    # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,
+                    "quantity": post.quantity,
                     "is_active": post.is_active
                 } for post in (campaign.posts or []) if post.is_active
-            ]
+            ],
+            # 캠페인 일정 정보 추가 (마이그레이션 후 활성화)
+            # "invoiceDueDate": campaign.invoice_due_date.isoformat() if campaign.invoice_due_date else None,
+            # "paymentDueDate": campaign.payment_due_date.isoformat() if campaign.payment_due_date else None,
+            # "projectDueDate": campaign.project_due_date.isoformat() if campaign.project_due_date else None
         }
         serialized_campaigns.append(campaign_data)
     
@@ -438,12 +450,16 @@ async def get_all_order_requests(
         # 발주요청 조회 (회사별 필터링 적용)
         from app.models.product import Product
 
+        # User alias 생성 (테이블 충돌 방지)
+        from sqlalchemy.orm import aliased
+        RequesterUser = aliased(User)
+
         base_query = select(
             OrderRequest,
             Post,
             Campaign,
             Product,
-            User.name.label('requester_name')
+            RequesterUser.name.label('requester_name')
         ).select_from(
             OrderRequest
         ).join(
@@ -453,7 +469,7 @@ async def get_all_order_requests(
         ).outerjoin(
             Product, Post.product_id == Product.id
         ).join(
-            User, OrderRequest.user_id == User.id
+            RequesterUser, OrderRequest.user_id == RequesterUser.id
         ).where(
             OrderRequest.is_active == True
         )
@@ -466,7 +482,7 @@ async def get_all_order_requests(
         else:
             # 일반 어드민은 본인 회사의 발주요청만 조회 가능
             print(f"[ORDER-REQUESTS-LIST] Company admin: filtering by company '{user_company}'")
-            query = base_query.where(User.company == user_company)
+            query = base_query.where(RequesterUser.company == user_company)
 
         query = query.order_by(OrderRequest.created_at.desc())
 
@@ -613,6 +629,56 @@ async def update_order_request_status(
 
 
 # 정적 경로들 - 동적 경로 {campaign_id} 보다 먼저 정의해야 함
+@router.get("/migrate-db-now")
+async def migrate_database_now():
+    """데이터베이스 마이그레이션 즉시 실행 (임시 무인증 엔드포인트)"""
+    try:
+        from sqlalchemy import text
+        from alembic import command
+        from alembic.config import Config
+        from app.db.database import engine
+
+        # 현재 상태 확인
+        async with engine.begin() as conn:
+            try:
+                result = await conn.execute(text("SELECT version_num FROM alembic_version"))
+                current_version = result.scalar()
+            except:
+                current_version = "none"
+
+        # 마이그레이션 실행
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+
+        # 결과 확인
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT version_num FROM alembic_version"))
+            new_version = result.scalar()
+
+            # 새 컬럼 확인
+            check_result = await conn.execute(text("""
+                SELECT column_name, table_name
+                FROM information_schema.columns
+                WHERE table_name IN ('posts', 'campaigns')
+                AND column_name IN ('start_datetime', 'due_datetime', 'invoice_due_date', 'payment_due_date', 'project_due_date')
+            """))
+            columns = [f"{row[1]}.{row[0]}" for row in check_result.fetchall()]
+
+        return {
+            "success": True,
+            "message": "마이그레이션 완료!",
+            "old_version": current_version,
+            "new_version": new_version,
+            "new_columns": columns
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "마이그레이션 실패"
+        }
+
 @router.get("/test-auth")
 async def test_auth(
     request: Request,
@@ -1454,8 +1520,10 @@ async def get_campaign_posts_jwt(
             "publishedUrl": post.published_url,
             "orderRequestStatus": post.order_request_status,
             "orderRequestId": post.order_request_id,
-            "startDate": post.start_date,
-            "dueDate": post.due_date,
+            "startDate": post.start_date,  # 기존 호환성
+            "dueDate": post.due_date,      # 기존 호환성
+            # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,  # 새로운 DateTime
+            # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,        # 새로운 DateTime
             "productId": post.product_id,
             "productName": product.name if product else None,  # 제품명 추가
             "quantity": post.quantity,

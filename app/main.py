@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
+import os
 
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id, add_campaign_date_columns, update_null_campaign_dates
@@ -49,8 +50,27 @@ async def lifespan(app: FastAPI):
         print("Server starting in offline mode - API endpoints will return appropriate errors")
         # Railway에서도 서버가 시작되도록 모든 DB 에러를 무시
     
+    # 자동 마이그레이션 체크
+    if os.getenv("AUTO_MIGRATE") == "true":
+        print("🔧 AUTO_MIGRATE=true 감지됨. 마이그레이션을 실행합니다...")
+        try:
+            from alembic import command
+            from alembic.config import Config
+
+            alembic_cfg = Config("alembic.ini")
+            command.upgrade(alembic_cfg, "head")
+            print("✅ 자동 마이그레이션 완료!")
+
+            # 마이그레이션 후 환경변수 제거 (무한 실행 방지)
+            if hasattr(os, 'unsetenv'):
+                os.unsetenv("AUTO_MIGRATE")
+
+        except Exception as migrate_error:
+            print(f"❌ 자동 마이그레이션 실패: {str(migrate_error)}")
+            # 마이그레이션 실패해도 서버는 계속 시작
+
     print("BrandFlow FastAPI v2.3.0 ready!")
-    
+
     yield
     # Shutdown
     print("BrandFlow server shutdown completed")
@@ -209,6 +229,11 @@ app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터
 app.include_router(cache.router, prefix="/api/cache", tags=["캐시"])
 app.include_router(health.router, prefix="/api/system", tags=["시스템상태"])
 app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
+
+# 마이그레이션 라우터 추가
+from app.api.endpoints import migration, simple_migration
+app.include_router(migration.router, prefix="/api/migration", tags=["마이그레이션"])
+app.include_router(simple_migration.router, prefix="/api/migrate", tags=["간단마이그레이션"])
 
 
 @app.get("/")

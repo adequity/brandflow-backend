@@ -1,0 +1,45 @@
+# Railway 콘솔에서 실행할 명령어들
+
+# 1. 현재 디렉토리 확인
+pwd
+
+# 2. Python 버전 확인
+python --version
+
+# 3. Alembic 설치 확인
+pip list | grep alembic
+
+# 4. 현재 마이그레이션 상태 확인
+python -c "
+from alembic import command
+from alembic.config import Config
+config = Config('alembic.ini')
+command.current(config)
+"
+
+# 5. 마이그레이션 실행
+python -m alembic upgrade head
+
+# 6. 실행 후 확인
+python -c "
+import asyncio
+from sqlalchemy import text
+from app.database import engine
+
+async def check():
+    async with engine.begin() as conn:
+        result = await conn.execute(text('SELECT version_num FROM alembic_version'))
+        print(f'Current version: {result.scalar()}')
+
+        columns = await conn.execute(text('''
+            SELECT column_name, table_name
+            FROM information_schema.columns
+            WHERE table_name IN ('posts', 'campaigns')
+            AND column_name IN ('start_datetime', 'due_datetime', 'invoice_due_date', 'payment_due_date', 'project_due_date')
+        '''))
+
+        for row in columns.fetchall():
+            print(f'New column: {row[1]}.{row[0]}')
+
+asyncio.run(check())
+"

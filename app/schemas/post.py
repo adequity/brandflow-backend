@@ -17,7 +17,6 @@ class PostCreate(BaseModel):
     due_date: Optional[str] = None    # 기존 호환성
     start_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
-    scheduled_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     product_id: Optional[int] = None
     quantity: Optional[int] = 1
 
@@ -36,7 +35,6 @@ class PostUpdate(BaseModel):
     due_date: Optional[str] = None    # 기존 호환성
     start_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
-    scheduled_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     product_id: Optional[int] = None
     quantity: Optional[int] = None
 
@@ -56,7 +54,6 @@ class PostResponse(BaseModel):
     due_date: Optional[str]    # 기존 호환성
     start_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
-    scheduled_datetime: Optional[datetime] = None  # 새로운 DateTime 필드
     product_id: Optional[int]
     quantity: Optional[int]
     campaign_id: int
