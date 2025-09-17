@@ -54,17 +54,17 @@ class TelegramScheduler:
         try:
             logger.info("마감일 임박 알림 확인 시작")
 
-            # cstaff 역할 사용자들의 활성화된 텔레그램 설정 조회
+            # 클라이언트 역할을 제외한 모든 사용자들의 활성화된 텔레그램 설정 조회
             telegram_users = db.query(UserTelegramSetting).join(User).filter(
                 and_(
-                    User.role == UserRole.STAFF,  # cstaff 역할
+                    User.role != UserRole.CLIENT,  # 클라이언트 역할 제외
                     UserTelegramSetting.is_enabled == True,
                     User.is_active == True
                 )
             ).all()
 
             if not telegram_users:
-                logger.info("알림을 받을 cstaff 사용자가 없습니다")
+                logger.info("알림을 받을 사용자가 없습니다")
                 return
 
             notifications_sent = 0
