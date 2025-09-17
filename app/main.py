@@ -8,7 +8,7 @@ import os
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id, add_campaign_date_columns, update_null_campaign_dates
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, migration
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple
 
 
 @asynccontextmanager
@@ -266,7 +266,7 @@ app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
 
 # 마이그레이션 라우터 추가 (임시 비활성화 - crashed 해결)
 # from app.api.endpoints import migration, simple_migration
-app.include_router(migration.router, prefix="/api/migration", tags=["마이그레이션"])
+# app.include_router(migration.router, prefix="/api/migration", tags=["마이그레이션"])
 # app.include_router(simple_migration.router, prefix="/api/migrate", tags=["간단마이그레이션"])
 
 
