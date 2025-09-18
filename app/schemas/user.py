@@ -12,6 +12,14 @@ class UserBase(BaseModel):
     company: Optional[str] = Field(None, max_length=200)
     contact: Optional[str] = Field(None, max_length=50)
     incentive_rate: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+
+    # 클라이언트 실제 회사 정보 필드들
+    client_company_name: Optional[str] = Field(None, max_length=200)
+    client_business_number: Optional[str] = Field(None, max_length=20)
+    client_ceo_name: Optional[str] = Field(None, max_length=100)
+    client_company_address: Optional[str] = Field(None, max_length=500)
+    client_business_type: Optional[str] = Field(None, max_length=100)
+    client_business_item: Optional[str] = Field(None, max_length=100)
     
     @validator('role', pre=True)
     def validate_role(cls, v):
@@ -40,6 +48,14 @@ class UserUpdate(BaseModel):
     incentive_rate: Optional[float] = Field(None, ge=0.0, le=100.0)
     status: Optional[UserStatus] = None
     password: Optional[str] = Field(None, min_length=6, max_length=50)
+
+    # 클라이언트 실제 회사 정보 필드들
+    client_company_name: Optional[str] = Field(None, max_length=200)
+    client_business_number: Optional[str] = Field(None, max_length=20)
+    client_ceo_name: Optional[str] = Field(None, max_length=100)
+    client_company_address: Optional[str] = Field(None, max_length=500)
+    client_business_type: Optional[str] = Field(None, max_length=100)
+    client_business_item: Optional[str] = Field(None, max_length=100)
     
     @validator('role', pre=True)
     def validate_role(cls, v):
@@ -67,6 +83,14 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    # 클라이언트 실제 회사 정보 필드들
+    client_company_name: Optional[str] = Field(None, max_length=200)
+    client_business_number: Optional[str] = Field(None, max_length=20)
+    client_ceo_name: Optional[str] = Field(None, max_length=100)
+    client_company_address: Optional[str] = Field(None, max_length=500)
+    client_business_type: Optional[str] = Field(None, max_length=100)
+    client_business_item: Optional[str] = Field(None, max_length=100)
 
     class Config:
         from_attributes = True

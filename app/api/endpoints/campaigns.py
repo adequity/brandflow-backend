@@ -48,11 +48,11 @@ async def get_campaigns(
     # 기존 client_company 필드 기반 필터링 (데이터베이스 구조에 맞춰)
     if user_role == UserRole.SUPER_ADMIN.value:
         # 슈퍼 어드민은 모든 캠페인 조회 가능
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.posts))
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts))
         count_query = select(func.count(Campaign.id))
     elif user_role == UserRole.AGENCY_ADMIN.value:
         # 대행사 어드민은 같은 회사의 캠페인들 조회 가능 (creator의 company 기준)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
             User.company == current_user.company
         )
         count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
@@ -68,11 +68,11 @@ async def get_campaigns(
         count_query = select(func.count(Campaign.id)).where(Campaign.client_user_id == user_id)
     elif user_role == UserRole.STAFF.value:
         # 직원은 자신이 생성한 캠페인만 조회 가능 (creator_id 기준)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.posts)).where(Campaign.creator_id == user_id)
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts)).where(Campaign.creator_id == user_id)
         count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
     else:
         # 기본적으로는 같은 회사 기준 필터링 (creator의 company 기준)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
             User.company == current_user.company
         )
         count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
@@ -118,6 +118,21 @@ async def get_campaigns(
                 "role": campaign.creator.role.value,
                 "company": campaign.creator.company
             } if campaign.creator else None,
+            "client_user": {
+                "id": campaign.client_user.id,
+                "name": campaign.client_user.name,
+                "email": campaign.client_user.email,
+                "company": campaign.client_user.company,
+                "business_number": getattr(campaign.client_user, 'business_number', None),
+                "contact": campaign.client_user.contact,
+                # 클라이언트 실제 회사 정보 추가
+                "client_company_name": getattr(campaign.client_user, 'client_company_name', None),
+                "client_business_number": getattr(campaign.client_user, 'client_business_number', None),
+                "client_ceo_name": getattr(campaign.client_user, 'client_ceo_name', None),
+                "client_company_address": getattr(campaign.client_user, 'client_company_address', None),
+                "client_business_type": getattr(campaign.client_user, 'client_business_type', None),
+                "client_business_item": getattr(campaign.client_user, 'client_business_item', None)
+            } if campaign.client_user else None,
             "posts": [
                 {
                     "id": post.id,
@@ -828,8 +843,8 @@ async def get_campaign_detail(
     print(f"[CAMPAIGN-DETAIL-JWT] Request for campaign_id={campaign_id}, user_id={user_id}, user_role={user_role}")
     
     try:
-        # 캠페인 찾기 (creator 관계 포함)
-        query = select(Campaign).options(joinedload(Campaign.creator)).where(Campaign.id == campaign_id)
+        # 캠페인 찾기 (creator, client_user 관계 포함)
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user)).where(Campaign.id == campaign_id)
         result = await db.execute(query)
         campaign = result.scalar_one_or_none()
         
@@ -876,7 +891,22 @@ async def get_campaign_detail(
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
             "creator_name": campaign.creator.name if campaign.creator else None,
-            "client_name": campaign.client_company
+            "client_name": campaign.client_company,
+            "client_user": {
+                "id": campaign.client_user.id,
+                "name": campaign.client_user.name,
+                "email": campaign.client_user.email,
+                "company": campaign.client_user.company,
+                "business_number": getattr(campaign.client_user, 'business_number', None),
+                "contact": campaign.client_user.contact,
+                # 클라이언트 실제 회사 정보 추가
+                "client_company_name": getattr(campaign.client_user, 'client_company_name', None),
+                "client_business_number": getattr(campaign.client_user, 'client_business_number', None),
+                "client_ceo_name": getattr(campaign.client_user, 'client_ceo_name', None),
+                "client_company_address": getattr(campaign.client_user, 'client_company_address', None),
+                "client_business_type": getattr(campaign.client_user, 'client_business_type', None),
+                "client_business_item": getattr(campaign.client_user, 'client_business_item', None)
+            } if campaign.client_user else None
         }
         return response_data
         
@@ -1461,6 +1491,7 @@ async def get_campaign_posts(
                 "dueDate": post.due_date,
                 "productId": post.product_id,
                 "productName": product.name if product else None,  # 제품명 추가
+                "productCost": product.cost if product else None,  # 제품 원가 추가
                 "quantity": post.quantity,
                 "campaignId": post.campaign_id,
                 "createdAt": post.created_at.isoformat() if post.created_at else None

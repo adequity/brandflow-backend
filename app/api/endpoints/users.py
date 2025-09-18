@@ -280,7 +280,7 @@ async def create_user(
         
         # 새 사용자 생성 (Pydantic validator에서 이미 역할명 변환됨)
         hashed_password = get_password_hash(user_data.password)
-        
+
         new_user = User(
             name=user_data.name,
             email=user_data.email,
@@ -289,7 +289,14 @@ async def create_user(
             company=user_data.company,
             contact=user_data.contact,
             incentive_rate=user_data.incentive_rate or 0.0,
-            is_active=True
+            is_active=True,
+            # 클라이언트 실제 회사 정보 필드들
+            client_company_name=user_data.client_company_name,
+            client_business_number=user_data.client_business_number,
+            client_ceo_name=user_data.client_ceo_name,
+            client_company_address=user_data.client_company_address,
+            client_business_type=user_data.client_business_type,
+            client_business_item=user_data.client_business_item
         )
         
         db.add(new_user)
@@ -367,12 +374,16 @@ async def update_user(
         
         # 사용자 정보 업데이트
         update_data = user_data.model_dump(exclude_unset=True)
-        
+
         for field, value in update_data.items():
             if field == 'password' and value:
                 # 비밀번호는 해시화해서 저장
                 setattr(user, 'hashed_password', get_password_hash(value))
             elif hasattr(user, field):
+                setattr(user, field, value)
+            elif field in ['client_company_name', 'client_business_number', 'client_ceo_name',
+                          'client_company_address', 'client_business_type', 'client_business_item']:
+                # 클라이언트 실제 회사 정보 필드들 처리
                 setattr(user, field, value)
         
         await db.commit()

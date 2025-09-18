@@ -532,3 +532,82 @@ async def update_null_campaign_dates_endpoint(
             status_code=500,
             detail=f"Failed to update campaign dates: {str(e)}"
         )
+
+
+@router.post("/add-client-company-fields")
+async def add_client_company_fields_endpoint(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """users 테이블에 클라이언트 실제 회사 정보 컬럼 추가 (슈퍼 어드민 전용)"""
+
+    # 슈퍼 어드민 권한 확인
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="슈퍼 어드민만 스키마를 수정할 수 있습니다."
+        )
+
+    try:
+        from sqlalchemy import text
+        from datetime import datetime
+
+        columns_to_add = [
+            ('client_company_name', 'VARCHAR(200)', '실제 회사명'),
+            ('client_business_number', 'VARCHAR(20)', '실제 사업자번호'),
+            ('client_ceo_name', 'VARCHAR(100)', '실제 대표자명'),
+            ('client_company_address', 'VARCHAR(500)', '실제 회사 주소'),
+            ('client_business_type', 'VARCHAR(100)', '실제 업태'),
+            ('client_business_item', 'VARCHAR(100)', '실제 종목')
+        ]
+
+        operations = []
+        added_columns = []
+
+        for column_name, column_type, description in columns_to_add:
+            # 컬럼이 존재하는지 확인
+            result = await db.execute(text(
+                f"SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='{column_name}'"
+            ))
+            exists = result.fetchone()
+
+            if not exists:
+                operations.append(f'Adding {column_name} column to users table... ({description})')
+                await db.execute(text(
+                    f'ALTER TABLE users ADD COLUMN {column_name} {column_type}'
+                ))
+                operations.append(f'✅ {column_name} column added successfully')
+                added_columns.append(column_name)
+            else:
+                operations.append(f'✅ {column_name} column already exists')
+
+        # 최종 users 테이블 구조 확인
+        final_columns = await db.execute(text("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'users'
+            AND column_name LIKE 'client_%'
+            ORDER BY ordinal_position
+        """))
+
+        client_columns = []
+        for col in final_columns:
+            nullable = "NULL" if col['is_nullable'] == 'YES' else "NOT NULL"
+            client_columns.append(f"{col['column_name']}: {col['data_type']} ({nullable})")
+
+        await db.commit()
+
+        return {
+            "message": "클라이언트 실제 회사 정보 컬럼이 성공적으로 추가되었습니다.",
+            "operations": operations,
+            "added_columns": added_columns,
+            "client_company_columns": client_columns,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"클라이언트 회사 정보 컬럼 추가 중 오류가 발생했습니다: {str(e)}"
+        )
