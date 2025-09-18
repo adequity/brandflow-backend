@@ -13,6 +13,9 @@ class UserBase(BaseModel):
     contact: Optional[str] = Field(None, max_length=50)
     incentive_rate: Optional[float] = Field(default=None, ge=0.0, le=100.0)
 
+    # 사업자번호 (client_business_number와 동일하게 처리)
+    business_number: Optional[str] = Field(None, max_length=20)
+
     # 클라이언트 실제 회사 정보 필드들
     client_company_name: Optional[str] = Field(None, max_length=200)
     client_business_number: Optional[str] = Field(None, max_length=20)
@@ -49,6 +52,9 @@ class UserUpdate(BaseModel):
     status: Optional[UserStatus] = None
     password: Optional[str] = Field(None, min_length=6, max_length=50)
 
+    # 사업자번호 (client_business_number와 동일하게 처리)
+    business_number: Optional[str] = Field(None, max_length=20)
+
     # 클라이언트 실제 회사 정보 필드들
     client_company_name: Optional[str] = Field(None, max_length=200)
     client_business_number: Optional[str] = Field(None, max_length=20)
@@ -84,6 +90,9 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # 사업자번호 (client_business_number와 동일하게 처리)
+    business_number: Optional[str] = Field(None, max_length=20)
+
     # 클라이언트 실제 회사 정보 필드들
     client_company_name: Optional[str] = Field(None, max_length=200)
     client_business_number: Optional[str] = Field(None, max_length=20)
@@ -91,6 +100,11 @@ class UserResponse(BaseModel):
     client_company_address: Optional[str] = Field(None, max_length=500)
     client_business_type: Optional[str] = Field(None, max_length=100)
     client_business_item: Optional[str] = Field(None, max_length=100)
+
+    @validator('business_number', pre=False, always=True)
+    def sync_business_number(cls, v, values):
+        """business_number를 client_business_number와 동기화"""
+        return values.get('client_business_number') or v
 
     class Config:
         from_attributes = True

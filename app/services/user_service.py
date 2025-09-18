@@ -57,7 +57,10 @@ class UserService:
     async def create_user(self, user_data: UserCreate) -> User:
         """새 사용자 생성"""
         hashed_password = get_password_hash(user_data.password)
-        
+
+        # business_number와 client_business_number 동기화
+        business_num = user_data.business_number or user_data.client_business_number
+
         db_user = User(
             name=user_data.name,
             email=user_data.email,
@@ -67,7 +70,14 @@ class UserService:
             contact=user_data.contact,
             incentive_rate=user_data.incentive_rate,
             status=UserStatus.INACTIVE,  # 기본적으로 휴면 상태
-            is_active=True
+            is_active=True,
+            # 클라이언트 실제 회사 정보
+            client_company_name=user_data.client_company_name,
+            client_business_number=business_num,
+            client_ceo_name=user_data.client_ceo_name,
+            client_company_address=user_data.client_company_address,
+            client_business_type=user_data.client_business_type,
+            client_business_item=user_data.client_business_item
         )
         
         self.db.add(db_user)
@@ -80,19 +90,28 @@ class UserService:
         query = select(User).where(User.id == user_id)
         result = await self.db.execute(query)
         db_user = result.scalar_one_or_none()
-        
+
         if not db_user:
             return None
-        
+
         # 업데이트할 필드들
         update_data = user_data.dict(exclude_unset=True)
-        
+
         # 비밀번호 처리
         if "password" in update_data:
             if update_data["password"]:  # 빈 문자열이 아닌 경우만
                 update_data["hashed_password"] = get_password_hash(update_data["password"])
             del update_data["password"]
-        
+
+        # business_number와 client_business_number 동기화
+        if "business_number" in update_data or "client_business_number" in update_data:
+            business_num = update_data.get("business_number") or update_data.get("client_business_number")
+            if business_num:
+                update_data["client_business_number"] = business_num
+            # business_number 필드는 실제 컬럼이 아니므로 제거
+            if "business_number" in update_data:
+                del update_data["business_number"]
+
         for field, value in update_data.items():
             setattr(db_user, field, value)
         

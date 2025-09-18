@@ -27,12 +27,11 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String(255), nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False)
     company = Column(String(200), nullable=True)  # 관리용 대행사 소속
-    # business_number = Column(String(20), nullable=True)  # 사업자번호 추가 - 임시 주석처리 (데이터베이스에 컬럼 없음)
     contact = Column(String(50), nullable=True)
 
     # 클라이언트 실제 회사 정보 (계산서/견적서용)
     client_company_name = Column(String(200), nullable=True)  # 실제 회사명
-    client_business_number = Column(String(20), nullable=True)  # 실제 사업자번호
+    client_business_number = Column(String(20), nullable=True)  # 실제 사업자번호 (business_number도 겸용)
     client_ceo_name = Column(String(100), nullable=True)  # 실제 대표자명
     client_company_address = Column(String(500), nullable=True)  # 실제 회사 주소
     client_business_type = Column(String(100), nullable=True)  # 실제 업태
