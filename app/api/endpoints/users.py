@@ -330,7 +330,8 @@ async def update_user(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """사용자 정보 수정"""
     # Node.js API 호환 모드인지 확인
