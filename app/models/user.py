@@ -27,7 +27,7 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String(255), nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False)
     company = Column(String(200), nullable=True)  # 관리용 대행사 소속
-    business_number = Column(String(20), nullable=True)  # 사업자번호 추가
+    # business_number = Column(String(20), nullable=True)  # 사업자번호 추가 - 임시 주석처리 (데이터베이스에 컬럼 없음)
     contact = Column(String(50), nullable=True)
 
     # 클라이언트 실제 회사 정보 (계산서/견적서용)
