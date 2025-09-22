@@ -1,17 +1,11 @@
 [build]
 builder = "NIXPACKS"
 
-# [deploy]
-# startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+[deploy]
+startCommand = "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+restartPolicyType = "ON_FAILURE"
 
 [env]
-PYTHONIOENCODING = "utf-8"
-LANG = "C.UTF-8"
-LC_ALL = "C.UTF-8"
-ENV = "development"
-DATABASE_URL = "${{Postgres.DATABASE_URL}}"
-POSTGRES_HOST = "${{Postgres.PGHOST}}"
-POSTGRES_PORT = "${{Postgres.PGPORT}}"
-POSTGRES_USER = "${{Postgres.PGUSER}}"
-POSTGRES_PASSWORD = "${{Postgres.PGPASSWORD}}"
-POSTGRES_DB = "${{Postgres.PGDATABASE}}"
+PYTHONPATH = "."
+VERSION = "2.3.0"
+NIXPACKS_PYTHON_VERSION = "3.11.6"
