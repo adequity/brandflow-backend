@@ -305,3 +305,49 @@ async def get_all_telegram_settings(
         "size": size,
         "settings": settings
     }
+
+
+@router.post("/test-deadline-notifications")
+async def test_deadline_notifications(
+    force_all: bool = Query(False, description="모든 알림 시간대에서 강제 실행"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """텔레그램 마감일 알림 테스트 (관리자용)"""
+
+    if user.role not in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from app.services.telegram_scheduler import telegram_scheduler
+
+    try:
+        # 원래 is_notification_time 함수 백업
+        original_is_notification_time = telegram_scheduler.is_notification_time
+
+        if force_all:
+            # 강제 실행: 모든 시간대에서 알림 허용
+            telegram_scheduler.is_notification_time = lambda time_str: True
+
+        # 알림 체크 및 전송 실행
+        await telegram_scheduler.check_and_send_notifications()
+
+        # 원래 함수 복원
+        if force_all:
+            telegram_scheduler.is_notification_time = original_is_notification_time
+
+        return {
+            "success": True,
+            "message": "텔레그램 마감일 알림 테스트가 완료되었습니다.",
+            "force_all": force_all,
+            "executed_at": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        # 오류 발생시 원래 함수 복원
+        if force_all:
+            telegram_scheduler.is_notification_time = original_is_notification_time
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"알림 테스트 실행 중 오류: {str(e)}"
+        )

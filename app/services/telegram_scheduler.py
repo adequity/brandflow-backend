@@ -23,7 +23,7 @@ class TelegramScheduler:
 
     def __init__(self):
         self.running = False
-        self.check_interval = 3600  # 1시간마다 체크
+        self.check_interval = 900  # 15분마다 체크 (더 자주 확인)
 
     async def start(self):
         """스케줄러 시작"""
@@ -52,7 +52,7 @@ class TelegramScheduler:
         db = SessionLocal()
 
         try:
-            logger.info("마감일 임박 알림 확인 시작")
+            logger.info(f"[TELEGRAM] 마감일 임박 알림 확인 시작 - {datetime.utcnow()}")
 
             # 클라이언트 역할을 제외한 모든 사용자들의 활성화된 텔레그램 설정 조회
             telegram_users = db.query(UserTelegramSetting).join(User).filter(
@@ -64,8 +64,10 @@ class TelegramScheduler:
             ).all()
 
             if not telegram_users:
-                logger.info("알림을 받을 사용자가 없습니다")
+                logger.info("[TELEGRAM] 알림을 받을 사용자가 없습니다")
                 return
+
+            logger.info(f"[TELEGRAM] 알림 대상 사용자 수: {len(telegram_users)}")
 
             notifications_sent = 0
 
@@ -96,9 +98,12 @@ class TelegramScheduler:
                         continue
 
                     # 알림 시간 확인 (현재 시간이 설정된 알림 시간과 비슷한지)
+                    current_time = datetime.now().strftime("%H:%M")
                     if not self.is_notification_time(telegram_setting.notification_time):
-                        logger.debug(f"알림 시간이 아님: {telegram_setting.notification_time}")
+                        logger.debug(f"[TELEGRAM] 알림 시간이 아님 - 설정: {telegram_setting.notification_time}, 현재: {current_time}")
                         continue
+
+                    logger.info(f"[TELEGRAM] 알림 시간 조건 만족 - 사용자: {user.name}, 설정시간: {telegram_setting.notification_time}, 현재시간: {current_time}")
 
                     # 텔레그램 알림 전송
                     await self.send_deadline_notification(
@@ -106,7 +111,7 @@ class TelegramScheduler:
                     )
                     notifications_sent += 1
 
-            logger.info(f"마감일 임박 알림 {notifications_sent}개 전송 완료")
+            logger.info(f"[TELEGRAM] 마감일 임박 알림 {notifications_sent}개 전송 완료 - {datetime.utcnow()}")
 
         except Exception as e:
             logger.error(f"알림 확인 중 오류: {str(e)}")
@@ -217,11 +222,11 @@ class TelegramScheduler:
             # 현재 시간
             current_time = datetime.now().time()
 
-            # ±30분 범위 내에서 알림 시간으로 판단
+            # ±2시간 범위 내에서 알림 시간으로 판단 (더 넓은 범위)
             target_minutes = hour * 60 + minute
             current_minutes = current_time.hour * 60 + current_time.minute
 
-            return abs(current_minutes - target_minutes) <= 30
+            return abs(current_minutes - target_minutes) <= 120
 
         except Exception as e:
             logger.error(f"알림 시간 확인 오류: {str(e)}")
