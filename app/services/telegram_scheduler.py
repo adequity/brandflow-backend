@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, time
 from typing import List, Tuple
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 
 from app.db.database import engine
 from app.models.user import User, UserRole
@@ -120,40 +120,64 @@ class TelegramScheduler:
 
     async def get_user_posts_with_upcoming_deadlines(
         self, db: Session, user_id: int, days_before: int
-    ) -> List[Tuple[Post, Campaign, int]]:
-        """사용자의 마감일 임박 posts 조회"""
+    ) -> List[Tuple[Post, Campaign, float]]:
+        """사용자의 마감일 임박 posts 조회 (DateTime 기반)"""
 
         try:
-            # 현재 날짜
-            today = datetime.now().date()
-            target_date = today + timedelta(days=days_before)
+            # 현재 일시 (정확한 시간 고려)
+            now = datetime.now()
+            logger.info(f"[TELEGRAM] 마감일 체크 기준 시간: {now}")
 
-            # 사용자가 생성한 캠페인의 posts 중 마감일이 임박한 것들
+            # 사용자가 생성한 캠페인의 posts 조회 (due_datetime 우선, due_date 대체)
             posts_with_deadlines = db.query(Post, Campaign).join(Campaign).filter(
                 and_(
                     Campaign.creator_id == user_id,
-                    Post.due_date.isnot(None),
+                    # due_datetime 또는 due_date가 있는 경우
+                    or_(Post.due_datetime.isnot(None), Post.due_date.isnot(None)),
                     Post.is_active == True
                 )
             ).all()
 
+            logger.info(f"[TELEGRAM] 사용자 {user_id}의 마감일 있는 posts: {len(posts_with_deadlines)}개")
+
             upcoming_posts = []
 
             for post, campaign in posts_with_deadlines:
-                if post.due_date:
-                    try:
-                        # due_date를 날짜로 파싱 (YYYY-MM-DD 형식)
-                        due_date = datetime.strptime(post.due_date, "%Y-%m-%d").date()
-                        days_left = (due_date - today).days
+                try:
+                    due_datetime = None
 
-                        # 마감일이 설정된 일수 이내인 경우
-                        if 0 <= days_left <= days_before:
+                    # due_datetime 우선 사용, 없으면 due_date 사용
+                    if post.due_datetime:
+                        due_datetime = post.due_datetime
+                        logger.debug(f"[TELEGRAM] Post {post.id}: due_datetime 사용 - {due_datetime}")
+                    elif post.due_date:
+                        # due_date를 due_datetime으로 변환 (기본 시간: 18:00)
+                        try:
+                            due_date_only = datetime.strptime(post.due_date, "%Y-%m-%d").date()
+                            due_datetime = datetime.combine(due_date_only, datetime.strptime("18:00", "%H:%M").time())
+                            logger.debug(f"[TELEGRAM] Post {post.id}: due_date를 due_datetime으로 변환 - {due_datetime}")
+                        except ValueError:
+                            logger.warning(f"[TELEGRAM] 잘못된 날짜 형식: post_id={post.id}, due_date={post.due_date}")
+                            continue
+
+                    if due_datetime:
+                        # 현재 시간부터 마감일까지의 시간 차이 계산
+                        time_diff = due_datetime - now
+                        hours_left = time_diff.total_seconds() / 3600  # 시간 단위
+                        days_left = hours_left / 24  # 일 단위
+
+                        logger.debug(f"[TELEGRAM] Post {post.id}: 마감까지 {hours_left:.1f}시간 ({days_left:.1f}일)")
+
+                        # 마감일이 설정된 일수 이내인 경우 (더 정확한 계산)
+                        if -0.5 <= days_left <= days_before:  # 마감 후 12시간까지도 포함
                             upcoming_posts.append((post, campaign, days_left))
+                            logger.info(f"[TELEGRAM] 알림 대상 추가: Post {post.id} ({post.title}) - {days_left:.1f}일 후 마감")
 
-                    except ValueError:
-                        logger.warning(f"잘못된 날짜 형식: post_id={post.id}, due_date={post.due_date}")
-                        continue
+                except Exception as e:
+                    logger.error(f"[TELEGRAM] Post {post.id} 처리 중 오류: {str(e)}")
+                    continue
 
+            logger.info(f"[TELEGRAM] 총 알림 대상 posts: {len(upcoming_posts)}개")
             return upcoming_posts
 
         except Exception as e:
@@ -166,18 +190,25 @@ class TelegramScheduler:
         user: User,
         post: Post,
         campaign: Campaign,
-        days_left: int,
+        days_left: float,
         telegram_setting: UserTelegramSetting
     ):
         """마감일 알림 전송"""
 
         try:
+            # 마감일 정보 준비 (due_datetime 우선, due_date 대체)
+            due_info = ""
+            if post.due_datetime:
+                due_info = post.due_datetime.strftime("%Y-%m-%d %H:%M")
+            elif post.due_date:
+                due_info = f"{post.due_date} 18:00"  # 기본 마감시간
+
             # 알림 메시지 전송
             result = await telegram_service.send_campaign_deadline_reminder(
                 chat_id=telegram_setting.telegram_chat_id,
                 user_name=user.name,
                 post_title=post.title,
-                due_date=post.due_date,
+                due_date=due_info,  # 시간까지 포함된 정보
                 days_left=days_left,
                 campaign_id=campaign.id,
                 post_id=post.id
@@ -189,7 +220,7 @@ class TelegramScheduler:
                 post_id=post.id,
                 campaign_id=campaign.id,
                 notification_type="due_date_reminder",
-                message_content=f"마감일 {days_left}일 전 알림: {post.title}",
+                message_content=f"마감일 {days_left:.1f}일 전 알림: {post.title} (마감: {due_info})",
                 telegram_chat_id=telegram_setting.telegram_chat_id,
                 is_sent=result.get("success", False),
                 sent_at=datetime.utcnow() if result.get("success") else None,

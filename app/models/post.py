@@ -21,9 +21,9 @@ class Post(Base, TimestampMixin):
     start_date = Column(String(20), nullable=True)  # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
     due_date = Column(String(20), nullable=True)    # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
 
-    # 새로운 DateTime 필드들 (마이그레이션 후 활성화)
-    # start_datetime = Column(DateTime, nullable=True)    # 시작 일시
-    # due_datetime = Column(DateTime, nullable=True)      # 마감 일시
+    # DateTime 필드들 (정확한 시간 지정 가능)
+    start_datetime = Column(DateTime, nullable=True)    # 시작 일시
+    due_datetime = Column(DateTime, nullable=True)      # 마감 일시
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     quantity = Column(Integer, nullable=True, default=1)
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
