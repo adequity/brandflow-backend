@@ -42,8 +42,6 @@ async_engine = create_async_engine(
     pool_size=10,      # 최대 연결 수
     max_overflow=20,   # 추가 연결 수
     connect_args={
-        "connect_timeout": 60,
-        "command_timeout": 60,
         "server_settings": {
             "application_name": "brandflow_fastapi",
         },

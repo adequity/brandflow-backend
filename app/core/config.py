@@ -16,27 +16,26 @@ class Settings(BaseSettings):
     
     @property
     def get_database_url(self) -> str:
-        """Railway PostgreSQL 전용 연결 - .env 파일 및 환경변수 우선 사용"""
+        """Railway PostgreSQL 연결 URL 반환"""
         # 1순위: 환경변수 DATABASE_URL (Railway 배포 환경)
         railway_env_url = os.getenv("DATABASE_URL")
         if railway_env_url:
-            # PostgreSQL URL을 asyncpg 형식으로 변환
             if railway_env_url.startswith("postgresql://"):
                 railway_env_url = railway_env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            print(f"Using Railway Environment DATABASE_URL: {railway_env_url[:50]}...")
+            print(f"Using Railway Environment DATABASE_URL")
             return railway_env_url
 
-        # 2순위: BaseSettings에서 로드된 DATABASE_URL (.env 파일에서)
+        # 2순위: .env 파일의 DATABASE_URL
         if hasattr(self, 'DATABASE_URL') and self.DATABASE_URL:
             env_url = self.DATABASE_URL
             if env_url.startswith("postgresql://"):
                 env_url = env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            print(f"Using .env DATABASE_URL: {env_url[:50]}...")
+            print(f"Using .env DATABASE_URL")
             return env_url
 
-        # 3순위: 하드코딩된 Railway URL (최종 폴백)
+        # 3순위: 최신 Railway 폴백
         railway_url = "postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@maglev.proxy.rlwy.net:32077/railway"
-        print(f"Using Railway PostgreSQL fallback: postgres@maglev.proxy.rlwy.net:32077/railway")
+        print(f"Using Railway PostgreSQL fallback")
         return railway_url
     
     # Security
