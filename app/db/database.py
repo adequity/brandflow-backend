@@ -117,7 +117,7 @@ async def add_client_user_id_column():
                     ALTER TABLE campaigns 
                     ADD COLUMN client_user_id INTEGER REFERENCES users(id)
                 """))
-                print("✅ client_user_id column added successfully")
+                print("[OK] client_user_id column added successfully")
             else:
                 print("client_user_id column already exists")
                 
@@ -144,7 +144,7 @@ async def migrate_client_company_to_user_id():
             """))
             
             updated_count = result.rowcount
-            print(f"✅ Successfully migrated {updated_count} campaigns with client_user_id")
+            print(f"[OK] Successfully migrated {updated_count} campaigns with client_user_id")
             
             # 마이그레이션 결과 확인 (컬럼 존재 여부 다시 확인)
             column_check = await conn.execute(text("""
@@ -194,7 +194,7 @@ async def add_campaign_date_columns():
                     ALTER TABLE campaigns 
                     ADD COLUMN start_date TIMESTAMP
                 """))
-                print("✅ start_date column added successfully")
+                print("[OK] start_date column added successfully")
             else:
                 print("start_date column already exists")
             
@@ -205,7 +205,7 @@ async def add_campaign_date_columns():
                     ALTER TABLE campaigns 
                     ADD COLUMN end_date TIMESTAMP
                 """))
-                print("✅ end_date column added successfully")
+                print("[OK] end_date column added successfully")
             else:
                 print("end_date column already exists")
             
@@ -222,7 +222,7 @@ async def add_campaign_date_columns():
                 # 컬럼을 NOT NULL로 변경
                 await conn.execute(text("ALTER TABLE campaigns ALTER COLUMN start_date SET NOT NULL"))
                 await conn.execute(text("ALTER TABLE campaigns ALTER COLUMN end_date SET NOT NULL"))
-                print("✅ Set start_date and end_date columns to NOT NULL with default values")
+                print("[OK] Set start_date and end_date columns to NOT NULL with default values")
                 
     except Exception as e:
         print(f"⚠️ Failed to add campaign date columns: {e}")
