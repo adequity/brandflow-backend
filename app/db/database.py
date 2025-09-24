@@ -31,13 +31,23 @@ sync_engine = create_engine(
     echo=True
 )
 
-# PostgreSQL용 비동기 엔진
+# PostgreSQL용 비동기 엔진 (Railway 연결 최적화)
 async_engine = create_async_engine(
     database_url,
     echo=True,
     future=True,
     pool_pre_ping=True,
-    pool_recycle=300,
+    pool_recycle=300,  # 5분마다 연결 갱신
+    pool_timeout=30,   # 연결 대기 시간
+    pool_size=10,      # 최대 연결 수
+    max_overflow=20,   # 추가 연결 수
+    connect_args={
+        "connect_timeout": 60,
+        "command_timeout": 60,
+        "server_settings": {
+            "application_name": "brandflow_fastapi",
+        },
+    }
 )
 
 # 세션 생성기

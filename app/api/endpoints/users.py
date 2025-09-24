@@ -334,11 +334,15 @@ async def update_user(
     jwt_user: User = Depends(get_current_active_user)
 ):
     """사용자 정보 수정"""
-    # Node.js API 호환 모드인지 확인
-    if viewerId is not None or adminId is not None:
-        # Node.js API 호환 모드
-        viewer_id = viewerId or adminId
-        viewer_role = viewerRole or adminRole
+    from sqlalchemy.exc import OperationalError
+    import asyncio
+
+    try:
+        # Node.js API 호환 모드인지 확인
+        if viewerId is not None or adminId is not None:
+            # Node.js API 호환 모드
+            viewer_id = viewerId or adminId
+            viewer_role = viewerRole or adminRole
         
         if not viewer_id or not viewer_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
@@ -412,6 +416,21 @@ async def update_user(
                 raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다.")
         
         return await service.update_user(user_id, user_data)
+
+    except OperationalError as e:
+        # PostgreSQL 연결 오류 처리
+        print(f"데이터베이스 연결 오류: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="데이터베이스 연결에 문제가 있습니다. 잠시 후 다시 시도해주세요."
+        )
+    except Exception as e:
+        # 기타 예외 처리
+        print(f"사용자 업데이트 오류: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="사용자 정보 수정 중 오류가 발생했습니다."
+        )
 
 
 @router.delete("/{user_id}")
