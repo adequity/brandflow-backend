@@ -576,7 +576,7 @@ async def update_order_request_status(
             print(f"[ORDER-REQUEST-UPDATE] Super admin access granted")
         else:
             # 일반 어드민은 본인 회사의 발주요청만 관리 가능
-            if user_role != "대행사 어드민":
+            if user_role != UserRole.AGENCY_ADMIN:
                 raise HTTPException(
                     status_code=403,
                     detail=f"발주요청 상태 변경 권한이 없습니다. 현재 역할: {user_role}"

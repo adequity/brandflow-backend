@@ -28,7 +28,7 @@ def check_setting_access(user: User, setting: SystemSetting, operation: str = "r
     if setting.access_level == AccessLevel.SUPER_ADMIN:
         return False
 
-    if setting.access_level == AccessLevel.ADMIN and user.role in ["admin", "agency_admin"]:
+    if setting.access_level == AccessLevel.ADMIN and user.role in [UserRole.AGENCY_ADMIN]:
         return True
 
     if setting.access_level == AccessLevel.USER:
@@ -72,7 +72,7 @@ async def get_system_settings(
 
     # 권한 필터링 (슈퍼 어드민이 아닌 경우)
     if user.role != UserRole.SUPER_ADMIN:
-        if user.role in ["admin", "agency_admin"]:
+        if user.role in [UserRole.AGENCY_ADMIN]:
             # 어드민은 슈퍼 어드민 전용 설정 제외
             query = query.filter(SystemSetting.access_level != AccessLevel.SUPER_ADMIN)
         else:
@@ -105,7 +105,7 @@ async def get_system_settings_stats(
 
     # 권한 필터링
     if user.role != UserRole.SUPER_ADMIN:
-        if user.role in ["admin", "agency_admin"]:
+        if user.role in [UserRole.AGENCY_ADMIN]:
             base_query = base_query.filter(SystemSetting.access_level != AccessLevel.SUPER_ADMIN)
         else:
             base_query = base_query.filter(SystemSetting.access_level == AccessLevel.USER)
@@ -184,11 +184,11 @@ async def create_system_setting(
     """새 시스템 설정 생성"""
 
     # 권한 확인 (어드민 이상만 생성 가능)
-    if user.role not in ["super_admin", "admin", "agency_admin"]:
+    if user.role not in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
         raise HTTPException(status_code=403, detail="설정 생성 권한이 없습니다")
 
     # 슈퍼 어드민 전용 설정은 슈퍼 어드민만 생성 가능
-    if setting_data.access_level == AccessLevel.SUPER_ADMIN and user.role != "super_admin":
+    if setting_data.access_level == AccessLevel.SUPER_ADMIN and user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="슈퍼 어드민 전용 설정을 생성할 권한이 없습니다")
 
     # 중복 키 확인
@@ -263,7 +263,7 @@ async def bulk_update_settings(
 ):
     """여러 설정 일괄 업데이트"""
 
-    if user.role not in ["super_admin", "admin", "agency_admin"]:
+    if user.role not in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
         raise HTTPException(status_code=403, detail="설정을 수정할 권한이 없습니다")
 
     updated_settings = []
