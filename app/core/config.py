@@ -25,7 +25,7 @@ class Settings(BaseSettings):
                 railway_env_url = railway_env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
             print(f"Using Railway Environment DATABASE_URL: {railway_env_url[:50]}...")
             return railway_env_url
-        
+
         # 2순위: BaseSettings에서 로드된 DATABASE_URL (.env 파일에서)
         if hasattr(self, 'DATABASE_URL') and self.DATABASE_URL:
             env_url = self.DATABASE_URL
@@ -33,10 +33,10 @@ class Settings(BaseSettings):
                 env_url = env_url.replace("postgresql://", "postgresql+asyncpg://", 1)
             print(f"Using .env DATABASE_URL: {env_url[:50]}...")
             return env_url
-        
+
         # 3순위: 하드코딩된 Railway URL (최종 폴백)
-        railway_url = "postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@junction.proxy.rlwy.net:21652/railway"
-        print(f"Using Railway PostgreSQL fallback: postgres@junction.proxy.rlwy.net:21652/railway")
+        railway_url = "postgresql+asyncpg://postgres:kAPUkGlWqoHwxIvtWaeukQuwcrZpSzuu@maglev.proxy.rlwy.net:32077/railway"
+        print(f"Using Railway PostgreSQL fallback: postgres@maglev.proxy.rlwy.net:32077/railway")
         return railway_url
     
     # Security

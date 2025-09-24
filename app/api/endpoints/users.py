@@ -337,100 +337,106 @@ async def update_user(
     from sqlalchemy.exc import OperationalError
     import asyncio
 
-    try:
-        # Node.js API 호환 모드인지 확인
-        if viewerId is not None or adminId is not None:
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        try:
             # Node.js API 호환 모드
             viewer_id = viewerId or adminId
             viewer_role = viewerRole or adminRole
-        
-        if not viewer_id or not viewer_role:
-            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩
-        viewer_role = unquote(viewer_role).strip()
-        
-        # 수정할 사용자 조회
-        user_query = select(User).where(User.id == user_id)
-        result = await db.execute(user_query)
-        user = result.scalar_one_or_none()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-        
-        # 권한 확인 (한글/영어 역할명 모두 지원)
-        is_super_admin = (viewer_role in ['슈퍼 어드민', '슈퍼어드민', 'super_admin'] or 
-                         '슈퍼' in viewer_role or 'super' in viewer_role.lower())
-        is_agency_admin = (viewer_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or 
-                          ('대행사' in viewer_role and '어드민' in viewer_role) or 
-                          ('agency' in viewer_role.lower() and 'admin' in viewer_role.lower()))
-        
-        if not is_super_admin and not is_agency_admin:
-            raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자만 사용자 정보를 수정할 수 있습니다.")
-        
-        # 대행사 어드민의 경우 같은 회사 사용자만 수정 가능
-        if is_agency_admin and not is_super_admin:
-            viewer_query = select(User).where(User.id == viewer_id)
-            viewer_result = await db.execute(viewer_query)
-            viewer = viewer_result.scalar_one_or_none()
-            
-            if not viewer or user.company != viewer.company:
-                raise HTTPException(status_code=403, detail="같은 회사 소속 사용자만 수정할 수 있습니다.")
-        
-        # 사용자 정보 업데이트
-        update_data = user_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            if field == 'password' and value:
-                # 비밀번호는 해시화해서 저장
-                setattr(user, 'hashed_password', get_password_hash(value))
-            elif hasattr(user, field):
-                setattr(user, field, value)
-            elif field in ['client_company_name', 'client_business_number', 'client_ceo_name',
-                          'client_company_address', 'client_business_type', 'client_business_item']:
-                # 클라이언트 실제 회사 정보 필드들 처리
-                setattr(user, field, value)
-        
-        await db.commit()
-        await db.refresh(user)
-        
-        return user
+            if not viewer_id or not viewer_role:
+                raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+            # URL 디코딩
+            viewer_role = unquote(viewer_role).strip()
+
+            # 수정할 사용자 조회
+            user_query = select(User).where(User.id == user_id)
+            result = await db.execute(user_query)
+            user = result.scalar_one_or_none()
+
+            if not user:
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+
+            # 권한 확인 (한글/영어 역할명 모두 지원)
+            is_super_admin = (viewer_role in ['슈퍼 어드민', '슈퍼어드민', 'super_admin'] or
+                             '슈퍼' in viewer_role or 'super' in viewer_role.lower())
+            is_agency_admin = (viewer_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or
+                              ('대행사' in viewer_role and '어드민' in viewer_role) or
+                              ('agency' in viewer_role.lower() and 'admin' in viewer_role.lower()))
+
+            if not is_super_admin and not is_agency_admin:
+                raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자만 사용자 정보를 수정할 수 있습니다.")
+
+            # 대행사 어드민의 경우 같은 회사 사용자만 수정 가능
+            if is_agency_admin and not is_super_admin:
+                viewer_query = select(User).where(User.id == viewer_id)
+                viewer_result = await db.execute(viewer_query)
+                viewer = viewer_result.scalar_one_or_none()
+
+                if not viewer or user.company != viewer.company:
+                    raise HTTPException(status_code=403, detail="같은 회사 소속 사용자만 수정할 수 있습니다.")
+
+            # 사용자 정보 업데이트
+            update_data = user_data.model_dump(exclude_unset=True)
+
+            for field, value in update_data.items():
+                if field == 'password' and value:
+                    # 비밀번호는 해시화해서 저장
+                    setattr(user, 'hashed_password', get_password_hash(value))
+                elif hasattr(user, field):
+                    setattr(user, field, value)
+                elif field in ['client_company_name', 'client_business_number', 'client_ceo_name',
+                              'client_company_address', 'client_business_type', 'client_business_item']:
+                    # 클라이언트 실제 회사 정보 필드들 처리
+                    setattr(user, field, value)
+
+            await db.commit()
+            await db.refresh(user)
+
+            return user
+        except OperationalError as e:
+            print(f"데이터베이스 연결 오류: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="데이터베이스 연결에 문제가 있습니다. 잠시 후 다시 시도해주세요."
+            )
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = jwt_user
-        service = UserService(db)
-        
-        # 사용자 존재 확인
-        user = await service.get_user_by_id(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-        
-        # 권한 확인
-        if not service.can_update_user(current_user, user):
-            raise HTTPException(status_code=403, detail="사용자 수정 권한이 없습니다.")
-        
-        # 이메일 중복 확인 (변경하는 경우)
-        if user_data.email and user_data.email != user.email:
-            existing_user = await service.get_user_by_email(user_data.email)
-            if existing_user:
-                raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다.")
-        
-        return await service.update_user(user_id, user_data)
+        try:
+            current_user = jwt_user
+            service = UserService(db)
 
-    except OperationalError as e:
-        # PostgreSQL 연결 오류 처리
-        print(f"데이터베이스 연결 오류: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="데이터베이스 연결에 문제가 있습니다. 잠시 후 다시 시도해주세요."
-        )
-    except Exception as e:
-        # 기타 예외 처리
-        print(f"사용자 업데이트 오류: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="사용자 정보 수정 중 오류가 발생했습니다."
-        )
+            # 사용자 존재 확인
+            user = await service.get_user_by_id(user_id)
+            if not user:
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+            # 권한 확인
+            if not service.can_update_user(current_user, user):
+                raise HTTPException(status_code=403, detail="사용자 수정 권한이 없습니다.")
+
+            # 이메일 중복 확인 (변경하는 경우)
+            if user_data.email and user_data.email != user.email:
+                existing_user = await service.get_user_by_email(user_data.email)
+                if existing_user:
+                    raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다.")
+
+            return await service.update_user(user_id, user_data)
+        except OperationalError as e:
+            # PostgreSQL 연결 오류 처리
+            print(f"데이터베이스 연결 오류: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="데이터베이스 연결에 문제가 있습니다. 잠시 후 다시 시도해주세요."
+            )
+        except Exception as e:
+            # 기타 예외 처리
+            print(f"사용자 업데이트 오류: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="사용자 정보 수정 중 오류가 발생했습니다."
+            )
 
 
 @router.delete("/{user_id}")
