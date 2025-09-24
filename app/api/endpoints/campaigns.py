@@ -490,7 +490,7 @@ async def get_all_order_requests(
         )
 
         # 권한별 필터링
-        if user_role == "슈퍼 어드민":
+        if user_role == UserRole.SUPER_ADMIN:
             # 슈퍼 어드민은 모든 발주요청 조회 가능
             print("[ORDER-REQUESTS-LIST] Super admin: showing all order requests")
             query = base_query
@@ -572,7 +572,7 @@ async def update_order_request_status(
         print(f"[ORDER-REQUEST-UPDATE] User info - Role: '{user_role}', Company: '{user_company}'")
 
         # 슈퍼 어드민은 모든 발주요청 관리 가능
-        if user_role == "슈퍼 어드민":
+        if user_role == UserRole.SUPER_ADMIN:
             print(f"[ORDER-REQUEST-UPDATE] Super admin access granted")
         else:
             # 일반 어드민은 본인 회사의 발주요청만 관리 가능

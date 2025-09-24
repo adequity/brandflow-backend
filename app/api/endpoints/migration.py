@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_async_db
 from app.core.security import get_current_user
+from app.models.user import UserRole
 import os
 import logging
 
@@ -27,7 +28,7 @@ async def run_migration(
     슈퍼 어드민만 실행 가능합니다.
     """
     # 권한 체크 - 슈퍼 어드민만 허용
-    if current_user.role != "슈퍼 어드민":
+    if current_user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(
             status_code=403,
             detail="마이그레이션 실행 권한이 없습니다. 슈퍼 어드민만 가능합니다."

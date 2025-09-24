@@ -4428,7 +4428,7 @@ async def update_user_role(
         old_role = user_data[3]
         
         # super_admin 역할 부여는 super_admin만 가능
-        if role_data.role == "super_admin" and current_user["role"] != "super_admin":
+        if role_data.role == "SUPER_ADMIN" and current_user["role"] != "SUPER_ADMIN":
             raise HTTPException(status_code=403, detail="super_admin 역할은 최고 관리자만 부여할 수 있습니다")
         
         # 새 역할 존재 확인

@@ -6,7 +6,7 @@ from datetime import datetime, date
 
 from app.db.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.system_setting import SystemSetting, SettingCategory, SettingType, AccessLevel
 from app.schemas.system_setting import (
     SystemSettingCreate,
@@ -22,7 +22,7 @@ router = APIRouter()
 
 def check_setting_access(user: User, setting: SystemSetting, operation: str = "read") -> bool:
     """설정 접근 권한 확인"""
-    if user.role == "super_admin":
+    if user.role == UserRole.SUPER_ADMIN:
         return True
 
     if setting.access_level == AccessLevel.SUPER_ADMIN:
@@ -71,7 +71,7 @@ async def get_system_settings(
         )
 
     # 권한 필터링 (슈퍼 어드민이 아닌 경우)
-    if user.role != "super_admin":
+    if user.role != UserRole.SUPER_ADMIN:
         if user.role in ["admin", "agency_admin"]:
             # 어드민은 슈퍼 어드민 전용 설정 제외
             query = query.filter(SystemSetting.access_level != AccessLevel.SUPER_ADMIN)
@@ -104,7 +104,7 @@ async def get_system_settings_stats(
     base_query = db.query(SystemSetting)
 
     # 권한 필터링
-    if user.role != "super_admin":
+    if user.role != UserRole.SUPER_ADMIN:
         if user.role in ["admin", "agency_admin"]:
             base_query = base_query.filter(SystemSetting.access_level != AccessLevel.SUPER_ADMIN)
         else:
@@ -235,7 +235,7 @@ async def update_system_setting(
     if setting.is_system_default:
         restricted_fields = {'access_level', 'is_active'}
         update_fields = set(setting_data.dict(exclude_unset=True).keys())
-        if restricted_fields.intersection(update_fields) and user.role != "super_admin":
+        if restricted_fields.intersection(update_fields) and user.role != UserRole.SUPER_ADMIN:
             raise HTTPException(
                 status_code=403,
                 detail="시스템 기본 설정의 접근 레벨이나 활성 상태는 슈퍼 어드민만 변경할 수 있습니다"
@@ -329,7 +329,7 @@ async def delete_system_setting(
 ):
     """시스템 설정 삭제"""
 
-    if user.role != "super_admin":
+    if user.role != UserRole.SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="설정 삭제는 슈퍼 어드민만 가능합니다")
 
     setting = db.query(SystemSetting).filter(
