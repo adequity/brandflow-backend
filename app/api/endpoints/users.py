@@ -306,7 +306,7 @@ async def create_user(
         return new_user
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
+        current_user = jwt_user
         service = UserService(db)
         
         # 권한 확인
@@ -393,7 +393,7 @@ async def update_user(
         return user
     else:
         # 기존 API 모드 (JWT 토큰 기반)
-        current_user = await get_current_active_user()
+        current_user = jwt_user
         service = UserService(db)
         
         # 사용자 존재 확인
