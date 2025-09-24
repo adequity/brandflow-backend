@@ -5,17 +5,18 @@ from typing import List, Tuple
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import and_, func, or_
 
-from app.db.database import engine
+from app.db.database import sync_engine
 from app.models.user import User, UserRole
 from app.models.post import Post
 from app.models.campaign import Campaign
 from app.models.user_telegram_setting import UserTelegramSetting, TelegramNotificationLog
 from app.services.telegram_service import telegram_service
+from app.utils.date_utils import parse_due_datetime, should_send_telegram_notification, format_due_datetime_for_display
 
 logger = logging.getLogger(__name__)
 
 # 데이터베이스 세션 팩토리
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 
 class TelegramScheduler:
@@ -121,19 +122,19 @@ class TelegramScheduler:
     async def get_user_posts_with_upcoming_deadlines(
         self, db: Session, user_id: int, days_before: int
     ) -> List[Tuple[Post, Campaign, float]]:
-        """사용자의 마감일 임박 posts 조회 (DateTime 기반)"""
+        """사용자의 마감일 임박 posts 조회 (String due_date 기반 + 유틸리티 함수 활용)"""
 
         try:
             # 현재 일시 (정확한 시간 고려)
             now = datetime.now()
             logger.info(f"[TELEGRAM] 마감일 체크 기준 시간: {now}")
 
-            # 사용자가 생성한 캠페인의 posts 조회 (due_datetime 우선, due_date 대체)
+            # 사용자가 생성한 캠페인의 posts 조회 (due_date가 있는 경우)
             posts_with_deadlines = db.query(Post, Campaign).join(Campaign).filter(
                 and_(
                     Campaign.creator_id == user_id,
-                    # due_datetime 또는 due_date가 있는 경우
-                    or_(Post.due_datetime.isnot(None), Post.due_date.isnot(None)),
+                    Post.due_date.isnot(None),
+                    Post.due_date != '',
                     Post.is_active == True
                 )
             ).all()
@@ -144,34 +145,26 @@ class TelegramScheduler:
 
             for post, campaign in posts_with_deadlines:
                 try:
-                    due_datetime = None
+                    # date_utils의 parse_due_datetime 함수 사용
+                    due_datetime = parse_due_datetime(post.due_date, default_time="18:00")
 
-                    # due_datetime 우선 사용, 없으면 due_date 사용
-                    if post.due_datetime:
-                        due_datetime = post.due_datetime
-                        logger.debug(f"[TELEGRAM] Post {post.id}: due_datetime 사용 - {due_datetime}")
-                    elif post.due_date:
-                        # due_date를 due_datetime으로 변환 (기본 시간: 18:00)
-                        try:
-                            due_date_only = datetime.strptime(post.due_date, "%Y-%m-%d").date()
-                            due_datetime = datetime.combine(due_date_only, datetime.strptime("18:00", "%H:%M").time())
-                            logger.debug(f"[TELEGRAM] Post {post.id}: due_date를 due_datetime으로 변환 - {due_datetime}")
-                        except ValueError:
-                            logger.warning(f"[TELEGRAM] 잘못된 날짜 형식: post_id={post.id}, due_date={post.due_date}")
-                            continue
+                    if not due_datetime:
+                        logger.warning(f"[TELEGRAM] 날짜 파싱 실패: post_id={post.id}, due_date={post.due_date}")
+                        continue
 
-                    if due_datetime:
-                        # 현재 시간부터 마감일까지의 시간 차이 계산
-                        time_diff = due_datetime - now
-                        hours_left = time_diff.total_seconds() / 3600  # 시간 단위
-                        days_left = hours_left / 24  # 일 단위
+                    logger.debug(f"[TELEGRAM] Post {post.id}: 파싱된 마감일시 - {due_datetime}")
 
-                        logger.debug(f"[TELEGRAM] Post {post.id}: 마감까지 {hours_left:.1f}시간 ({days_left:.1f}일)")
+                    # should_send_telegram_notification 함수 사용하여 알림 여부 판단
+                    should_send, days_left = should_send_telegram_notification(
+                        due_datetime=due_datetime,
+                        days_before_setting=days_before,
+                        current_time=now,
+                        grace_period_hours=12.0  # 마감 후 12시간까지 유예
+                    )
 
-                        # 마감일이 설정된 일수 이내인 경우 (더 정확한 계산)
-                        if -0.5 <= days_left <= days_before:  # 마감 후 12시간까지도 포함
-                            upcoming_posts.append((post, campaign, days_left))
-                            logger.info(f"[TELEGRAM] 알림 대상 추가: Post {post.id} ({post.title}) - {days_left:.1f}일 후 마감")
+                    if should_send:
+                        upcoming_posts.append((post, campaign, days_left))
+                        logger.info(f"[TELEGRAM] 알림 대상 추가: Post {post.id} ({post.title}) - {days_left:.1f}일 후 마감")
 
                 except Exception as e:
                     logger.error(f"[TELEGRAM] Post {post.id} 처리 중 오류: {str(e)}")
@@ -196,12 +189,9 @@ class TelegramScheduler:
         """마감일 알림 전송"""
 
         try:
-            # 마감일 정보 준비 (due_datetime 우선, due_date 대체)
-            due_info = ""
-            if post.due_datetime:
-                due_info = post.due_datetime.strftime("%Y-%m-%d %H:%M")
-            elif post.due_date:
-                due_info = f"{post.due_date} 18:00"  # 기본 마감시간
+            # 마감일 정보 준비 (due_date 파싱 후 포맷팅)
+            due_datetime = parse_due_datetime(post.due_date, default_time="18:00")
+            due_info = format_due_datetime_for_display(due_datetime) if due_datetime else f"{post.due_date} 18:00"
 
             # 알림 메시지 전송
             result = await telegram_service.send_campaign_deadline_reminder(
