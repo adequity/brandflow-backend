@@ -176,8 +176,8 @@ async def send_test_telegram_message(
         # 성공 로그 저장
         log = TelegramNotificationLog(
             user_id=user.id,
-            post_id=0,  # 테스트 메시지는 post_id가 없음
-            campaign_id=0,  # 테스트 메시지는 campaign_id가 없음
+            post_id=None,  # 테스트 메시지는 post_id가 없음
+            campaign_id=None,  # 테스트 메시지는 campaign_id가 없음
             notification_type="test_message",
             message_content=test_data.message,
             telegram_chat_id=setting.telegram_chat_id,
@@ -197,8 +197,8 @@ async def send_test_telegram_message(
         # 실패 로그 저장
         log = TelegramNotificationLog(
             user_id=user.id,
-            post_id=0,
-            campaign_id=0,
+            post_id=None,
+            campaign_id=None,
             notification_type="test_message",
             message_content=test_data.message,
             telegram_chat_id=setting.telegram_chat_id,

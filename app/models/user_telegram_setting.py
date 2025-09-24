@@ -35,8 +35,8 @@ class TelegramNotificationLog(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
-    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=True)  # 테스트 메시지는 None 가능
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=True)  # 테스트 메시지는 None 가능
 
     # 알림 정보
     notification_type = Column(String(50), default="due_date_reminder", nullable=False)
