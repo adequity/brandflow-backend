@@ -6,16 +6,16 @@ from .base import Base, TimestampMixin
 
 
 class UserRole(str, enum.Enum):
-    SUPER_ADMIN = "슈퍼 어드민"
-    AGENCY_ADMIN = "대행사 어드민"
-    STAFF = "직원"
-    CLIENT = "클라이언트"
+    SUPER_ADMIN = "SUPER_ADMIN"
+    AGENCY_ADMIN = "AGENCY_ADMIN"
+    STAFF = "STAFF"
+    CLIENT = "CLIENT"
 
 
 class UserStatus(str, enum.Enum):
-    ACTIVE = "활성"
-    INACTIVE = "휴면"
-    BANNED = "차단"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    BANNED = "BANNED"
 
 
 class User(Base, TimestampMixin):
