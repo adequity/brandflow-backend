@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 from app.models.campaign import CampaignStatus
+from app.schemas.user import UserResponse
 
 
 class CampaignBase(BaseModel):
@@ -44,12 +45,14 @@ class CampaignResponse(CampaignBase):
     id: int
     status: CampaignStatus
     creator_id: int
+    client_user_id: Optional[int] = None  # 클라이언트 사용자 ID 추가
     created_at: datetime
     updated_at: datetime
 
     # 관계 정보 (선택적)
     creator_name: Optional[str] = None
     client_name: Optional[str] = None
+    client_user: Optional[UserResponse] = None  # 클라이언트 사용자 정보 추가
 
     class Config:
         from_attributes = True
