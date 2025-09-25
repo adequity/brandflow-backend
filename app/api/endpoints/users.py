@@ -411,25 +411,40 @@ async def update_user(
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         try:
+            print(f"[DEBUG] JWT 모드로 사용자 {user_id} 수정 시작")
             current_user = jwt_user
+            print(f"[DEBUG] 현재 사용자: {current_user.id}, 역할: {current_user.role}")
             service = UserService(db)
 
             # 사용자 존재 확인
+            print(f"[DEBUG] 사용자 {user_id} 조회 중...")
             user = await service.get_user_by_id(user_id)
             if not user:
+                print(f"[DEBUG] 사용자 {user_id} 찾을 수 없음")
                 raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+            print(f"[DEBUG] 사용자 {user_id} 찾음: {user.name}")
 
             # 권한 확인
+            print(f"[DEBUG] 권한 확인 중...")
             if not service.can_update_user(current_user, user):
+                print(f"[DEBUG] 권한 없음")
                 raise HTTPException(status_code=403, detail="사용자 수정 권한이 없습니다.")
+            print(f"[DEBUG] 권한 확인 완료")
 
             # 이메일 중복 확인 (변경하는 경우)
             if user_data.email and user_data.email != user.email:
+                print(f"[DEBUG] 이메일 중복 확인: {user_data.email}")
                 existing_user = await service.get_user_by_email(user_data.email)
                 if existing_user:
+                    print(f"[DEBUG] 이메일 중복됨")
                     raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다.")
+                print(f"[DEBUG] 이메일 사용 가능")
 
-            return await service.update_user(user_id, user_data)
+            print(f"[DEBUG] 사용자 업데이트 시작...")
+            print(f"[DEBUG] 업데이트 데이터: {user_data.model_dump(exclude_unset=True)}")
+            result = await service.update_user(user_id, user_data)
+            print(f"[DEBUG] 사용자 업데이트 완료")
+            return result
         except OperationalError as e:
             # PostgreSQL 연결 오류 처리
             print(f"데이터베이스 연결 오류: {str(e)}")
