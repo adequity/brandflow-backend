@@ -853,7 +853,20 @@ async def get_campaign_detail(
             raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
         
         print(f"[CAMPAIGN-DETAIL-JWT] Found campaign: {campaign.name}")
-        
+        print(f"[CAMPAIGN-DETAIL-JWT] Campaign client_user_id: {campaign.client_user_id}")
+        print(f"[CAMPAIGN-DETAIL-JWT] Campaign client_user: {campaign.client_user}")
+        if campaign.client_user:
+            print(f"[CAMPAIGN-DETAIL-JWT] Client user details: id={campaign.client_user.id}, name={campaign.client_user.name}")
+            print(f"[CAMPAIGN-DETAIL-JWT] Client company info:")
+            print(f"  - client_company_name: {getattr(campaign.client_user, 'client_company_name', None)}")
+            print(f"  - client_business_number: {getattr(campaign.client_user, 'client_business_number', None)}")
+            print(f"  - client_ceo_name: {getattr(campaign.client_user, 'client_ceo_name', None)}")
+            print(f"  - client_company_address: {getattr(campaign.client_user, 'client_company_address', None)}")
+            print(f"  - client_business_type: {getattr(campaign.client_user, 'client_business_type', None)}")
+            print(f"  - client_business_item: {getattr(campaign.client_user, 'client_business_item', None)}")
+        else:
+            print(f"[CAMPAIGN-DETAIL-JWT] WARNING: client_user is None!")
+
         # JWT 기반 권한 확인
         if user_role == UserRole.SUPER_ADMIN.value:
             # 슈퍼 어드민은 모든 캠페인 접근 가능
