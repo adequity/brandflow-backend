@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -22,6 +22,9 @@ class Post(Base, TimestampMixin):
     due_date = Column(String(20), nullable=True)    # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     quantity = Column(Integer, nullable=True, default=1)
+    cost = Column(Float, nullable=True)  # 포스트별 작업 단가
+    product_cost = Column(Float, nullable=True)  # 제품 단가 (원가)
+    product_name = Column(String(200), nullable=True)  # 제품명
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
     is_active = Column(Boolean, default=True)
 

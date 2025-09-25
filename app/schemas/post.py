@@ -19,6 +19,9 @@ class PostCreate(BaseModel):
     due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
     product_id: Optional[int] = None
     quantity: Optional[int] = 1
+    cost: Optional[float] = None  # 포스트별 작업 단가
+    product_cost: Optional[float] = None  # 제품 단가 (원가)
+    product_name: Optional[str] = None  # 제품명
 
 
 class PostUpdate(BaseModel):
@@ -37,6 +40,9 @@ class PostUpdate(BaseModel):
     due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
     product_id: Optional[int] = None
     quantity: Optional[int] = None
+    cost: Optional[float] = None  # 포스트별 작업 단가
+    product_cost: Optional[float] = None  # 제품 단가 (원가)
+    product_name: Optional[str] = None  # 제품명
 
 
 class PostResponse(BaseModel):
@@ -56,6 +62,9 @@ class PostResponse(BaseModel):
     due_datetime: Optional[datetime] = None    # 새로운 DateTime 필드
     product_id: Optional[int]
     quantity: Optional[int]
+    cost: Optional[float]  # 포스트별 작업 단가
+    product_cost: Optional[float]  # 제품 단가 (원가)
+    product_name: Optional[str]  # 제품명
     campaign_id: int
     created_at: datetime
     updated_at: datetime
