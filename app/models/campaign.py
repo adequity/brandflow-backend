@@ -41,7 +41,7 @@ class Campaign(Base, TimestampMixin):
     
     # 관계 설정
     creator = relationship("User", back_populates="campaigns", foreign_keys=[creator_id])
-    client_user = relationship("User", foreign_keys=[client_user_id])  # 클라이언트 사용자 관계
+    client_user = relationship("User", foreign_keys=[client_user_id], lazy="selectin")  # 클라이언트 사용자 관계 (eager loading)
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     posts = relationship("Post", back_populates="campaign")
     
