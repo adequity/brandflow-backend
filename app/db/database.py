@@ -122,7 +122,7 @@ async def add_client_user_id_column():
                 print("client_user_id column already exists")
                 
     except Exception as e:
-        print(f"⚠️ Failed to add client_user_id column: {e}")
+        print(f"[WARNING] Failed to add client_user_id column: {e}")
         # 에러가 발생해도 애플리케이션 시작은 계속 진행
 
 
@@ -169,7 +169,7 @@ async def migrate_client_company_to_user_id():
                 print("Warning: client_user_id column still not found after migration")
                 
     except Exception as e:
-        print(f"⚠️ Failed to migrate client_company data: {e}")
+        print(f"[WARNING] Failed to migrate client_company data: {e}")
         # 에러가 발생해도 애플리케이션 시작은 계속 진행
 
 
@@ -225,7 +225,7 @@ async def add_campaign_date_columns():
                 print("[OK] Set start_date and end_date columns to NOT NULL with default values")
                 
     except Exception as e:
-        print(f"⚠️ Failed to add campaign date columns: {e}")
+        print(f"[WARNING] Failed to add campaign date columns: {e}")
         # 에러가 발생해도 애플리케이션 시작은 계속 진행
 
 
@@ -270,4 +270,4 @@ async def update_null_campaign_dates():
                 print("All campaigns already have date values")
                 
     except Exception as e:
-        print(f"⚠️ Failed to update NULL campaign dates: {e}")
+        print(f"[WARNING] Failed to update NULL campaign dates: {e}")

@@ -401,6 +401,13 @@ async def update_user(
                 status_code=500,
                 detail="데이터베이스 연결에 문제가 있습니다. 잠시 후 다시 시도해주세요."
             )
+        except Exception as e:
+            await db.rollback()
+            print(f"사용자 정보 수정 중 오류: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="사용자 정보 수정 중 오류가 발생했습니다."
+            )
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         try:

@@ -52,21 +52,21 @@ async def lifespan(app: FastAPI):
     
     # 자동 마이그레이션 체크 (임시 비활성화 - crashed 해결)
     # if os.getenv("AUTO_MIGRATE") == "true":
-    #     print("🔧 AUTO_MIGRATE=true 감지됨. 마이그레이션을 실행합니다...")
+    #     print("[MIGRATION] AUTO_MIGRATE=true 감지됨. 마이그레이션을 실행합니다...")
     #     try:
     #         from alembic import command
     #         from alembic.config import Config
 
     #         alembic_cfg = Config("alembic.ini")
     #         command.upgrade(alembic_cfg, "head")
-    #         print("✅ 자동 마이그레이션 완료!")
+    #         print("[OK] 자동 마이그레이션 완료!")
 
     #         # 마이그레이션 후 환경변수 제거 (무한 실행 방지)
     #         if hasattr(os, 'unsetenv'):
     #             os.unsetenv("AUTO_MIGRATE")
 
     #     except Exception as migrate_error:
-    #         print(f"❌ 자동 마이그레이션 실패: {str(migrate_error)}")
+    #         print(f"[ERROR] 자동 마이그레이션 실패: {str(migrate_error)}")
     #         # 마이그레이션 실패해도 서버는 계속 시작
 
     # 텔레그램 스케줄러 시작 (백그라운드)
