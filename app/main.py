@@ -8,7 +8,7 @@ import os
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id, add_campaign_date_columns, update_null_campaign_dates
 from app.db.init_data import init_database_data
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, migration
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, migration, monthly_incentives
 
 
 @asynccontextmanager
@@ -230,6 +230,7 @@ app.include_router(products.router, prefix="/api/products", tags=["상품"])
 app.include_router(work_types.router, prefix="/api/work-types", tags=["작업유형"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["알림"])
 app.include_router(file_upload.router, prefix="/api/files", tags=["파일"])
+app.include_router(monthly_incentives.router, prefix="/api/monthly-incentives", tags=["월간인센티브"])
 
 # API 라우터 등록 - 대시보드 & 분석
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["대시보드"])
