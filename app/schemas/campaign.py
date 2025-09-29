@@ -1,9 +1,8 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 from app.models.campaign import CampaignStatus
-from app.schemas.user import UserResponse
 
 
 class CampaignBase(BaseModel):
@@ -52,7 +51,7 @@ class CampaignResponse(CampaignBase):
     # 관계 정보 (선택적)
     creator_name: Optional[str] = None
     client_name: Optional[str] = None
-    client_user: Optional[UserResponse] = None  # 클라이언트 사용자 정보 추가
+    client_user: Optional[Dict[str, Any]] = None  # 클라이언트 사용자 정보 추가
 
     class Config:
         from_attributes = True
