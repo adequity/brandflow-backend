@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, and_, extract
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from urllib.parse import unquote
@@ -27,6 +27,9 @@ async def get_campaigns(
     # 페이지네이션 파라미터
     page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
     size: int = Query(10, ge=1, le=100, description="페이지당 항목 수"),
+    # 월별 필터링 파라미터
+    year: Optional[int] = Query(None, description="연도 필터"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="월 필터 (1-12)"),
     # JWT 인증된 사용자
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
@@ -78,7 +81,34 @@ async def get_campaigns(
         count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
             User.company == current_user.company
         )
-    
+
+    # 월별 필터링 적용 (year, month 파라미터가 있는 경우)
+    if year is not None and month is not None:
+        print(f"[CAMPAIGNS-LIST] 월별 필터링 적용: {year}년 {month}월")
+        date_filter = and_(
+            extract('year', Campaign.start_date) == year,
+            extract('month', Campaign.start_date) == month
+        )
+
+        # 기존 쿼리에 날짜 필터 추가
+        if user_role == UserRole.SUPER_ADMIN.value:
+            query = query.where(date_filter)
+            count_query = count_query.where(date_filter)
+        elif user_role == UserRole.AGENCY_ADMIN.value:
+            query = query.where(date_filter)
+            count_query = count_query.where(date_filter)
+        elif user_role == UserRole.CLIENT.value:
+            query = query.where(date_filter)
+            count_query = count_query.where(date_filter)
+        elif user_role == UserRole.STAFF.value:
+            query = query.where(date_filter)
+            count_query = count_query.where(date_filter)
+        else:
+            query = query.where(date_filter)
+            count_query = count_query.where(date_filter)
+    else:
+        print(f"[CAMPAIGNS-LIST] 월별 필터링 없음 - 전체 기간 조회")
+
     # 전체 개수 조회
     total_count_result = await db.execute(count_query)
     total_count = total_count_result.scalar()
