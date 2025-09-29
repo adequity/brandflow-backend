@@ -96,6 +96,8 @@ async def calculate_monthly_incentives(
                     summary["skipped"] += 1
                     continue
 
+                print(f"[MONTHLY-INCENTIVE] 사용자 {user.name} (ID: {user.id}) 캠페인 조회 - 요청 년/월: {request.year}/{request.month}")
+
                 # 해당 사용자의 캠페인 데이터 조회 (campaign.start_date 기준)
                 campaign_query = select(Campaign).where(
                     and_(
@@ -109,6 +111,21 @@ async def calculate_monthly_incentives(
 
                 campaigns_result = await db.execute(campaign_query)
                 campaigns = campaigns_result.scalars().all()
+
+                print(f"[MONTHLY-INCENTIVE] 필터링 결과: {len(campaigns)}개 캠페인 발견")
+                for campaign in campaigns:
+                    print(f"  - 캠페인 {campaign.id}: {campaign.name}, 시작일: {campaign.start_date}")
+
+                # 모든 캠페인도 확인 (디버깅용)
+                all_campaigns_query = select(Campaign).where(Campaign.staff_id == user.id)
+                all_campaigns_result = await db.execute(all_campaigns_query)
+                all_campaigns = all_campaigns_result.scalars().all()
+
+                print(f"[MONTHLY-INCENTIVE] 전체 캠페인 ({len(all_campaigns)}개):")
+                for campaign in all_campaigns:
+                    campaign_year = campaign.start_date.year if campaign.start_date else None
+                    campaign_month = campaign.start_date.month if campaign.start_date else None
+                    print(f"  - 캠페인 {campaign.id}: {campaign.name}, 시작일: {campaign.start_date} ({campaign_year}/{campaign_month})")
 
                 # 매출/이익 계산
                 total_revenue = 0.0
