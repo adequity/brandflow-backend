@@ -110,6 +110,7 @@ async def get_campaigns(
             "invoiceIssued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
             "paymentCompleted": getattr(campaign, 'payment_completed', False) if hasattr(campaign, 'payment_completed') else False,  # 입금 완료
             "creator_id": campaign.creator_id,
+            "staff_id": campaign.staff_id,  # 캠페인 담당 직원 ID 추가
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
             "User": {
@@ -902,6 +903,7 @@ async def get_campaign_detail(
             "invoiceIssued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
             "paymentCompleted": getattr(campaign, 'payment_completed', False) if hasattr(campaign, 'payment_completed') else False,  # 입금 완료
             "creator_id": campaign.creator_id,
+            "staff_id": campaign.staff_id,  # 캠페인 담당 직원 ID 추가
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
             "creator_name": campaign.creator.name if campaign.creator else None,
