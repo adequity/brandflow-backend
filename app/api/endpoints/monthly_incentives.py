@@ -96,16 +96,12 @@ async def calculate_monthly_incentives(
                     summary["skipped"] += 1
                     continue
 
-                # 해당 사용자의 캠페인 데이터 조회
+                # 해당 사용자의 캠페인 데이터 조회 (상태 필터 제거)
                 campaign_query = select(Campaign).where(
                     and_(
                         Campaign.staff_id == user.id,
                         extract('year', Campaign.start_date) == request.year,
-                        extract('month', Campaign.start_date) == request.month,
-                        Campaign.status.in_([
-                            CampaignStatus.COMPLETED,
-                            CampaignStatus.ACTIVE
-                        ])
+                        extract('month', Campaign.start_date) == request.month
                     )
                 ).options(
                     selectinload(Campaign.posts)
