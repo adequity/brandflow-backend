@@ -30,6 +30,20 @@ class ProductCreate(BaseModel):
     tags: Optional[str] = ""
 
 
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    sku: Optional[str] = None
+    category: Optional[str] = None  # work_type name for backwards compatibility
+    work_type_id: Optional[int] = None  # work_type ID
+    costPrice: Optional[float] = None
+    sellingPrice: Optional[float] = None
+    unit: Optional[str] = None
+    minQuantity: Optional[int] = None
+    maxQuantity: Optional[int] = None
+    tags: Optional[str] = None
+
+
 @router.get("/", response_model=List[dict])
 async def get_products(
     # Node.js API 호환성을 위한 쿼리 파라미터
@@ -302,3 +316,122 @@ async def delete_product(
         print(f"[PRODUCT-DELETE] Unexpected error: {type(e).__name__}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"상품 삭제 중 오류: {str(e)}")
+
+
+@router.put("/{product_id}", response_model=dict)
+async def update_product(
+    product_id: int,
+    product_data: ProductUpdate,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    adminId: Optional[int] = Query(None, alias="adminId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    adminRole: Optional[str] = Query(None, alias="adminRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """상품 정보 수정"""
+    print(f"[PRODUCT-UPDATE] Updating product ID: {product_id} with data: {product_data.dict(exclude_unset=True)}")
+
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None or adminId is not None:
+        # Node.js API 호환 모드
+        user_id = viewerId or adminId
+        user_role = viewerRole or adminRole
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+
+        # 현재 사용자 조회
+        current_user_query = select(User).where(User.id == user_id)
+        result = await db.execute(current_user_query)
+        current_user = result.scalar_one_or_none()
+
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+
+        print(f"[PRODUCT-UPDATE] Node.js API mode - user_id={user_id}, role={user_role}")
+
+    else:
+        # JWT 기반 모드
+        current_user = jwt_user
+        user_role = current_user.role.value
+
+        print(f"[PRODUCT-UPDATE] JWT mode - user_id={current_user.id}, role={user_role}")
+
+    try:
+        # 상품 존재 확인
+        product_query = select(Product).where(Product.id == product_id)
+        result = await db.execute(product_query)
+        product = result.scalar_one_or_none()
+
+        if not product:
+            raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다")
+
+        if not product.is_active:
+            raise HTTPException(status_code=404, detail="삭제된 상품은 수정할 수 없습니다")
+
+        # SKU 중복 확인 (변경된 경우에만)
+        if product_data.sku and product_data.sku != product.sku:
+            existing_sku_query = select(Product).where(
+                Product.sku == product_data.sku,
+                Product.id != product_id
+            )
+            result = await db.execute(existing_sku_query)
+            existing_product = result.scalar_one_or_none()
+            if existing_product:
+                raise HTTPException(status_code=400, detail="이미 존재하는 SKU입니다")
+
+        # work_type 처리 - category name으로 work_type_id 찾기
+        work_type_id = product_data.work_type_id
+        if product_data.category and not work_type_id:
+            work_type_query = select(WorkType).where(
+                WorkType.name == product_data.category,
+                WorkType.is_active == True
+            )
+            result = await db.execute(work_type_query)
+            work_type = result.scalar_one_or_none()
+            if work_type:
+                work_type_id = work_type.id
+
+        # 제공된 필드만 업데이트 (부분 업데이트)
+        update_data = product_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            if field == "costPrice":
+                # costPrice를 price 필드와 cost 필드 모두에 저장
+                product.price = value
+                product.cost = value
+            elif hasattr(product, field):
+                setattr(product, field, value)
+
+        await db.commit()
+        await db.refresh(product)
+
+        print(f"[PRODUCT-UPDATE] SUCCESS: Updated product {product_id} by user {current_user.id}")
+
+        return {
+            "id": product.id,
+            "name": product.name,
+            "description": product.description,
+            "category": product.category,
+            "sku": product.sku,
+            "costPrice": product.price,
+            "sellingPrice": product_data.sellingPrice,  # 프론트엔드 호환성을 위해 포함
+            "unit": product_data.unit or "건",  # 프론트엔드 호환성을 위해 포함
+            "minQuantity": product_data.minQuantity or 1,  # 프론트엔드 호환성을 위해 포함
+            "maxQuantity": product_data.maxQuantity,  # 프론트엔드 호환성을 위해 포함
+            "tags": product_data.tags or "",  # 프론트엔드 호환성을 위해 포함
+            "isActive": product.is_active,
+            "createdAt": product.created_at.isoformat() if product.created_at else None,
+            "updatedAt": product.updated_at.isoformat() if product.updated_at else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PRODUCT-UPDATE] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"상품 수정 중 오류: {str(e)}")
