@@ -26,11 +26,13 @@ class Post(Base, TimestampMixin):
     product_cost = Column(Float, nullable=True)  # 제품 단가 (원가)
     product_name = Column(String(200), nullable=True)  # 제품명
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 포스트 담당자
     is_active = Column(Boolean, default=True)
 
     # 관계 설정
     campaign = relationship("Campaign", back_populates="posts")
     product = relationship("Product")
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
 
     def __repr__(self):
         return f"<Post(id={self.id}, title={self.title}, campaign_id={self.campaign_id})>"

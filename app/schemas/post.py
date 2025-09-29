@@ -22,6 +22,7 @@ class PostCreate(BaseModel):
     cost: Optional[float] = None  # 포스트별 작업 단가
     product_cost: Optional[float] = None  # 제품 단가 (원가)
     product_name: Optional[str] = None  # 제품명
+    assigned_user_id: Optional[int] = None  # 포스트 담당자
 
 
 class PostUpdate(BaseModel):
@@ -43,6 +44,7 @@ class PostUpdate(BaseModel):
     cost: Optional[float] = None  # 포스트별 작업 단가
     product_cost: Optional[float] = None  # 제품 단가 (원가)
     product_name: Optional[str] = None  # 제품명
+    assigned_user_id: Optional[int] = None  # 포스트 담당자
 
 
 class PostResponse(BaseModel):
@@ -65,6 +67,7 @@ class PostResponse(BaseModel):
     cost: Optional[float]  # 포스트별 작업 단가
     product_cost: Optional[float]  # 제품 단가 (원가)
     product_name: Optional[str]  # 제품명
+    assigned_user_id: Optional[int]  # 포스트 담당자
     campaign_id: int
     created_at: datetime
     updated_at: datetime
