@@ -10,6 +10,7 @@ class CampaignBase(BaseModel):
     description: Optional[str] = None  # Add description field for frontend compatibility
     client_company: Optional[str] = Field(None, max_length=200)
     budget: Optional[float] = Field(None, ge=0)  # 0 이상 허용, 선택적
+    staff_id: Optional[int] = None  # 캠페인 담당 직원 ID
     start_date: Optional[datetime] = None  # 선택적
     end_date: Optional[datetime] = None    # 선택적
     invoice_issued: Optional[bool] = None  # 계산서 발행 완료
@@ -38,6 +39,7 @@ class CampaignUpdate(BaseModel):
     project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
     # creator_id는 기존 필드이므로 여기서 수정 가능하게 추가
     creator_id: Optional[int] = None
+    staff_id: Optional[int] = None  # 캠페인 담당 직원 ID
 
 
 class CampaignResponse(CampaignBase):
@@ -45,6 +47,7 @@ class CampaignResponse(CampaignBase):
     status: CampaignStatus
     creator_id: int
     client_user_id: Optional[int] = None  # 클라이언트 사용자 ID 추가
+    staff_id: Optional[int] = None  # 캠페인 담당 직원 ID
     created_at: datetime
     updated_at: datetime
 

@@ -38,10 +38,12 @@ class Campaign(Base, TimestampMixin):
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     client_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 클라이언트 사용자 ID
+    staff_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 캠페인 담당 직원 ID
     
     # 관계 설정
     creator = relationship("User", back_populates="campaigns", foreign_keys=[creator_id])
     client_user = relationship("User", foreign_keys=[client_user_id], lazy="selectin")  # 클라이언트 사용자 관계 (eager loading)
+    staff_user = relationship("User", foreign_keys=[staff_id], lazy="selectin")  # 담당 직원 관계 (eager loading)
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     posts = relationship("Post", back_populates="campaign")
     
