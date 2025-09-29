@@ -119,6 +119,12 @@ async def get_campaigns(
                 "role": campaign.creator.role.value,
                 "company": campaign.creator.company
             } if campaign.creator else None,
+            "staff_user": {
+                "id": campaign.staff_user.id,
+                "name": campaign.staff_user.name,
+                "role": campaign.staff_user.role.value,
+                "company": campaign.staff_user.company
+            } if campaign.staff_user else None,
             "client_user": {
                 "id": campaign.client_user.id,
                 "name": campaign.client_user.name,
@@ -915,6 +921,12 @@ async def get_campaign_detail(
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
             "creator_name": campaign.creator.name if campaign.creator else None,
+            "staff_user": {
+                "id": campaign.staff_user.id,
+                "name": campaign.staff_user.name,
+                "role": campaign.staff_user.role.value,
+                "company": campaign.staff_user.company
+            } if campaign.staff_user else None,
             "client_name": campaign.client_company,
             "client_user": {
                 "id": campaign.client_user.id,
