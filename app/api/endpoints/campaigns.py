@@ -298,20 +298,28 @@ async def get_staff_members(
     
     print(f"[STAFF-MEMBERS-JWT] Request from user_id={user_id}, user_role={user_role}")
     
-    # 대행사 어드민만 직원 목록 조회 가능
-    if user_role != UserRole.AGENCY_ADMIN.value:
+    # 대행사 어드민과 슈퍼 어드민만 직원 목록 조회 가능
+    if user_role not in [UserRole.AGENCY_ADMIN.value, UserRole.SUPER_ADMIN.value]:
         print(f"[STAFF-MEMBERS-JWT] ERROR: Insufficient permissions - user_role={user_role}")
-        raise HTTPException(status_code=403, detail="직원 목록 조회 권한이 없습니다. 대행사 어드민만 접근 가능합니다.")
+        raise HTTPException(status_code=403, detail="직원 목록 조회 권한이 없습니다. 대행사 어드민 또는 슈퍼 어드민만 접근 가능합니다.")
     
     try:
         print(f"[STAFF-MEMBERS-JWT] Found user: {current_user.name}, company={current_user.company}")
         
-        # 같은 회사의 직원들 조회 (직원 역할만)
-        staff_query = select(User).where(
-            User.company == current_user.company,
-            User.role == UserRole.STAFF,
-            User.is_active == True
-        )
+        # 직원들 조회 (권한별 필터링)
+        if user_role == UserRole.SUPER_ADMIN.value:
+            # 슈퍼 어드민은 모든 직원과 대행사 어드민 조회 가능
+            staff_query = select(User).where(
+                User.role.in_([UserRole.STAFF, UserRole.AGENCY_ADMIN]),
+                User.is_active == True
+            )
+        else:
+            # 대행사 어드민은 같은 회사의 직원들만 조회
+            staff_query = select(User).where(
+                User.company == current_user.company,
+                User.role == UserRole.STAFF,
+                User.is_active == True
+            )
         result = await db.execute(staff_query)
         staff_members = result.scalars().all()
         
