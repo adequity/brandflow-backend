@@ -1107,8 +1107,10 @@ async def update_campaign(
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Changed creator_id from {campaign.creator_id} to {value} ({new_staff.name})")
                 elif field == 'staff_id' and value:
-                    # 캠페인 담당자 변경 (대행사 어드민만 가능)
-                    if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()):
+                    # 캠페인 담당자 변경 (대행사 어드민과 슈퍼 어드민 가능)
+                    if (user_role != UserRole.AGENCY_ADMIN.value and
+                        user_role != UserRole.SUPER_ADMIN.value and
+                        not ('agency' in user_role.lower() and 'admin' in user_role.lower())):
                         print(f"[CAMPAIGN-UPDATE] Permission denied: user_role={user_role} cannot change staff_id")
                         continue
 
@@ -1121,7 +1123,8 @@ async def update_campaign(
                         print(f"[CAMPAIGN-UPDATE] New staff not found: {value}")
                         continue
 
-                    if new_staff.company != viewer.company:
+                    # SUPER_ADMIN은 회사 제약 없이 모든 직원 할당 가능
+                    if user_role != UserRole.SUPER_ADMIN.value and new_staff.company != viewer.company:
                         print(f"[CAMPAIGN-UPDATE] New staff not in same company: {new_staff.company} != {viewer.company}")
                         continue
 
