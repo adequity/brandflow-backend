@@ -96,45 +96,38 @@ async def calculate_monthly_incentives(
                     summary["skipped"] += 1
                     continue
 
-                # 해당 사용자의 캠페인 데이터 조회 (posts 날짜 기준으로 변경)
+                # 해당 사용자의 캠페인 데이터 조회 (campaign.start_date 기준)
                 campaign_query = select(Campaign).where(
-                    Campaign.staff_id == user.id
+                    and_(
+                        Campaign.staff_id == user.id,
+                        extract('year', Campaign.start_date) == request.year,
+                        extract('month', Campaign.start_date) == request.month
+                    )
                 ).options(
-                    selectinload(Campaign.posts)
+                    selectinload(Campaign.posts).selectinload(Post.product)
                 )
 
                 campaigns_result = await db.execute(campaign_query)
                 campaigns = campaigns_result.scalars().all()
 
-                # 매출/이익 계산 (posts 날짜 기준 필터링)
+                # 매출/이익 계산
                 total_revenue = 0.0
                 total_cost = 0.0
-                relevant_posts = []
+                campaign_count = len(campaigns)
 
                 for campaign in campaigns:
+                    # 매출 (캠페인 예산)
+                    campaign_revenue = campaign.budget or 0.0
+                    total_revenue += campaign_revenue
+
+                    # 원가 계산 (product.cost × posts.quantity)
+                    campaign_cost = 0.0
                     for post in campaign.posts:
-                        # posts.start_date가 해당 년/월에 속하는지 확인
-                        if post.start_date:
-                            try:
-                                # 'YYYY-MM-DD' 형식에서 년/월 추출
-                                post_year, post_month, _ = post.start_date.split('-')
-                                if int(post_year) == request.year and int(post_month) == request.month:
-                                    relevant_posts.append(post)
+                        if post.product and post.product.cost:
+                            post_cost = post.product.cost * (post.quantity or 1)
+                            campaign_cost += post_cost
 
-                                    # 매출 계산 - 해당 포스트 비율로 캠페인 예산 배분
-                                    campaign_posts_count = len([p for p in campaign.posts if p.start_date])
-                                    if campaign_posts_count > 0:
-                                        post_revenue = (campaign.budget or 0.0) / campaign_posts_count
-                                        total_revenue += post_revenue
-
-                                    # 원가 계산 (post.cost 또는 post.product_cost 사용)
-                                    post_cost = (post.cost or post.product_cost or 0.0) * (post.quantity or 1)
-                                    total_cost += post_cost
-                            except (ValueError, AttributeError):
-                                # 날짜 파싱 실패 시 무시
-                                continue
-
-                campaign_count = len(set(post.campaign_id for post in relevant_posts))
+                    total_cost += campaign_cost
 
                 total_profit = total_revenue - total_cost
 
