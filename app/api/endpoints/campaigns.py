@@ -228,7 +228,7 @@ async def create_campaign(
             except (ValueError, AttributeError) as e:
                 print(f"[CAMPAIGN-CREATE-JWT] Failed to extract client_user_id: {e}")
 
-        # 캠페인 생성 - client_user_id는 스키마 동기화 후에만 사용
+        # 캠페인 생성 - client_user_id와 staff_id 처리
         campaign_kwargs = {
             "name": campaign_data.name.strip() if campaign_data.name else "새 캠페인",
             "description": campaign_data.description or '',
@@ -237,6 +237,7 @@ async def create_campaign(
             "start_date": safe_datetime_parse(campaign_data.start_date),
             "end_date": safe_datetime_parse(campaign_data.end_date),
             "creator_id": user_id,
+            "staff_id": campaign_data.staff_id if campaign_data.staff_id else user_id,  # 담당자 설정
             "status": CampaignStatus.ACTIVE
         }
         
@@ -1083,6 +1084,27 @@ async def update_campaign(
                         
                     setattr(campaign, field, value)
                     print(f"[CAMPAIGN-UPDATE] Changed creator_id from {campaign.creator_id} to {value} ({new_staff.name})")
+                elif field == 'staff_id' and value:
+                    # 캠페인 담당자 변경 (대행사 어드민만 가능)
+                    if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()):
+                        print(f"[CAMPAIGN-UPDATE] Permission denied: user_role={user_role} cannot change staff_id")
+                        continue
+
+                    # 새로운 담당 직원이 같은 회사인지 확인
+                    new_staff_query = select(User).where(User.id == value)
+                    new_staff_result = await db.execute(new_staff_query)
+                    new_staff = new_staff_result.scalar_one_or_none()
+
+                    if not new_staff:
+                        print(f"[CAMPAIGN-UPDATE] New staff not found: {value}")
+                        continue
+
+                    if new_staff.company != viewer.company:
+                        print(f"[CAMPAIGN-UPDATE] New staff not in same company: {new_staff.company} != {viewer.company}")
+                        continue
+
+                    setattr(campaign, field, value)
+                    print(f"[CAMPAIGN-UPDATE] Changed staff_id from {getattr(campaign, 'staff_id', 'None')} to {value} ({new_staff.name})")
                 elif field in ['start_date', 'end_date']:
                     # 날짜 필드는 안전하게 파싱 - 빈 값도 허용
                     def safe_datetime_parse(date_input):
@@ -1142,6 +1164,28 @@ async def update_campaign(
                             print("[CAMPAIGN-UPDATE] client_user_id field not available, skipping")
                     except Exception as e:
                         print(f"[CAMPAIGN-UPDATE] Warning: Could not update client_user_id: {e}")
+                elif field == 'staff_id' and value:
+                    # 캠페인 담당자 변경 (대행사 어드민만 가능)
+                    if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()) and user_role != UserRole.SUPER_ADMIN.value:
+                        print(f"[CAMPAIGN-UPDATE] Permission denied: user_role={user_role} cannot change staff_id")
+                        continue
+
+                    # 새로운 담당 직원이 같은 회사인지 확인
+                    new_staff_query = select(User).where(User.id == value)
+                    new_staff_result = await db.execute(new_staff_query)
+                    new_staff = new_staff_result.scalar_one_or_none()
+
+                    if not new_staff:
+                        print(f"[CAMPAIGN-UPDATE] New staff not found: {value}")
+                        continue
+
+                    # 대행사 어드민의 경우 같은 회사 직원만 배정 가능
+                    if user_role == UserRole.AGENCY_ADMIN.value and hasattr(viewer, 'company') and new_staff.company != viewer.company:
+                        print(f"[CAMPAIGN-UPDATE] New staff not in same company: {new_staff.company} != {viewer.company}")
+                        continue
+
+                    setattr(campaign, field, value)
+                    print(f"[CAMPAIGN-UPDATE] Changed staff_id from {getattr(campaign, 'staff_id', 'None')} to {value} ({new_staff.name})")
                 elif field in ['invoice_issued', 'payment_completed']:
                     # 재무 상태 필드 처리
                     try:
@@ -1313,6 +1357,28 @@ async def update_campaign(
                             print("[CAMPAIGN-UPDATE] client_user_id field not available, skipping")
                     except Exception as e:
                         print(f"[CAMPAIGN-UPDATE] Warning: Could not update client_user_id: {e}")
+                elif field == 'staff_id' and value:
+                    # 캠페인 담당자 변경 (대행사 어드민만 가능)
+                    if user_role != UserRole.AGENCY_ADMIN.value and not ('agency' in user_role.lower() and 'admin' in user_role.lower()) and user_role != UserRole.SUPER_ADMIN.value:
+                        print(f"[CAMPAIGN-UPDATE] Permission denied: user_role={user_role} cannot change staff_id")
+                        continue
+
+                    # 새로운 담당 직원이 같은 회사인지 확인
+                    new_staff_query = select(User).where(User.id == value)
+                    new_staff_result = await db.execute(new_staff_query)
+                    new_staff = new_staff_result.scalar_one_or_none()
+
+                    if not new_staff:
+                        print(f"[CAMPAIGN-UPDATE] New staff not found: {value}")
+                        continue
+
+                    # 대행사 어드민의 경우 같은 회사 직원만 배정 가능
+                    if user_role == UserRole.AGENCY_ADMIN.value and hasattr(viewer, 'company') and new_staff.company != viewer.company:
+                        print(f"[CAMPAIGN-UPDATE] New staff not in same company: {new_staff.company} != {viewer.company}")
+                        continue
+
+                    setattr(campaign, field, value)
+                    print(f"[CAMPAIGN-UPDATE] Changed staff_id from {getattr(campaign, 'staff_id', 'None')} to {value} ({new_staff.name})")
                 elif field in ['invoice_issued', 'payment_completed']:
                     # 재무 상태 필드 처리
                     try:
