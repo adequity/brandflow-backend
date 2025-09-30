@@ -46,10 +46,32 @@ async def get_company_settings(
 
     # 딕셔너리로 변환
     settings_dict = {}
-    for setting in settings:
-        settings_dict[setting.setting_key] = setting.setting_value
 
-    print(f"[COMPANY-SETTINGS-INFO] Settings dict: {settings_dict}")
+    if settings:
+        # company_settings에 데이터가 있으면 사용
+        for setting in settings:
+            settings_dict[setting.setting_key] = setting.setting_value
+        print(f"[COMPANY-SETTINGS-INFO] Using company_settings data: {settings_dict}")
+    else:
+        # company_settings에 데이터가 없으면 users 테이블에서 가져오기
+        print(f"[COMPANY-SETTINGS-INFO] No company_settings found, reading from users table...")
+
+        # SUPER_ADMIN 또는 AGENCY_ADMIN의 client_* 필드에서 읽기
+        if user.role in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
+            if user.client_company_name:
+                settings_dict['company_name'] = user.client_company_name
+            if user.client_business_number:
+                settings_dict['business_number'] = user.client_business_number
+            if user.client_ceo_name:
+                settings_dict['ceo_name'] = user.client_ceo_name
+            if user.client_company_address:
+                settings_dict['company_address'] = user.client_company_address
+            if user.client_business_type:
+                settings_dict['business_type'] = user.client_business_type
+            if user.client_business_item:
+                settings_dict['business_item'] = user.client_business_item
+
+            print(f"[COMPANY-SETTINGS-INFO] Read from users table: {settings_dict}")
 
     # CompanyInfo 헬퍼 클래스 사용
     company_info = CompanyInfo(user_company, settings_dict)

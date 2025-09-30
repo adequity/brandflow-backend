@@ -46,7 +46,8 @@ async def lifespan(app: FastAPI):
 
         # 기존 캠페인들의 NULL 날짜 필드들에 기본값 설정
         await update_null_campaign_dates()
-        
+
+
         # 초기 데이터 생성 (선택적)
         try:
             print("Initializing database data...")

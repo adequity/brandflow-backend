@@ -272,3 +272,117 @@ async def update_null_campaign_dates():
                 
     except Exception as e:
         print(f"[WARNING] Failed to update NULL campaign dates: {e}")
+
+
+async def migrate_user_company_info_to_settings():
+    """Users 테이블의 회사 정보를 company_settings 테이블로 마이그레이션"""
+    try:
+        from sqlalchemy import text
+        from app.models.company_settings import CompanySettings
+
+        async with async_engine.begin() as conn:
+            print("Starting migration from users table to company_settings...")
+
+            # SUPER_ADMIN과 AGENCY_ADMIN 사용자들의 회사 정보 조회
+            result = await conn.execute(text("""
+                SELECT id, role, company,
+                       client_company_name, client_business_number, client_ceo_name,
+                       client_company_address, client_business_type, client_business_item
+                FROM users
+                WHERE role IN ('SUPER_ADMIN', 'AGENCY_ADMIN')
+                AND (client_company_name IS NOT NULL OR client_business_number IS NOT NULL)
+            """))
+
+            users_with_company_info = result.fetchall()
+            print(f"Found {len(users_with_company_info)} users with company information")
+
+            migrated_count = 0
+
+            for user in users_with_company_info:
+                # 회사명 결정 (SUPER_ADMIN은 "SUPER_ADMIN_DEFAULT", AGENCY_ADMIN은 company 필드 값 사용)
+                if user.role == 'SUPER_ADMIN':
+                    company_name = user.company or "SUPER_ADMIN_DEFAULT"
+                else:
+                    company_name = user.company or user.client_company_name or f"COMPANY_{user.id}"
+
+                print(f"Migrating user {user.id} ({user.role}) -> company: {company_name}")
+
+                # 기존 company_settings에 데이터가 있는지 확인
+                existing_check = await conn.execute(text("""
+                    SELECT COUNT(*) as count
+                    FROM company_settings
+                    WHERE company = :company_name
+                """), {"company_name": company_name})
+
+                existing_count = existing_check.scalar()
+
+                if existing_count > 0:
+                    print(f"  Company '{company_name}' already has settings, skipping...")
+                    continue
+
+                # 매핑 정보 생성
+                settings_to_insert = []
+
+                if user.client_company_name:
+                    settings_to_insert.append({
+                        'company': company_name,
+                        'setting_key': 'company_name',
+                        'setting_value': user.client_company_name,
+                        'modified_by': user.id
+                    })
+
+                if user.client_business_number:
+                    settings_to_insert.append({
+                        'company': company_name,
+                        'setting_key': 'business_number',
+                        'setting_value': user.client_business_number,
+                        'modified_by': user.id
+                    })
+
+                if user.client_ceo_name:
+                    settings_to_insert.append({
+                        'company': company_name,
+                        'setting_key': 'ceo_name',
+                        'setting_value': user.client_ceo_name,
+                        'modified_by': user.id
+                    })
+
+                if user.client_company_address:
+                    settings_to_insert.append({
+                        'company': company_name,
+                        'setting_key': 'company_address',
+                        'setting_value': user.client_company_address,
+                        'modified_by': user.id
+                    })
+
+                if user.client_business_type:
+                    settings_to_insert.append({
+                        'company': company_name,
+                        'setting_key': 'business_type',
+                        'setting_value': user.client_business_type,
+                        'modified_by': user.id
+                    })
+
+                if user.client_business_item:
+                    settings_to_insert.append({
+                        'company': company_name,
+                        'setting_key': 'business_item',
+                        'setting_value': user.client_business_item,
+                        'modified_by': user.id
+                    })
+
+                # 설정값들을 company_settings 테이블에 삽입
+                for setting in settings_to_insert:
+                    await conn.execute(text("""
+                        INSERT INTO company_settings (company, setting_key, setting_value, modified_by, created_at, updated_at)
+                        VALUES (:company, :setting_key, :setting_value, :modified_by, NOW(), NOW())
+                    """), setting)
+
+                migrated_count += 1
+                print(f"  Migrated {len(settings_to_insert)} settings for company '{company_name}'")
+
+            print(f"[OK] Successfully migrated company information for {migrated_count} users")
+
+    except Exception as e:
+        print(f"[WARNING] Failed to migrate company information: {e}")
+        # 에러가 발생해도 애플리케이션 시작은 계속 진행
