@@ -198,8 +198,7 @@ async def download_file(
 @router.get("/view/{category}/{filename}")
 async def view_file(
     category: str,
-    filename: str,
-    current_user: User = Depends(get_current_active_user)
+    filename: str
 ):
     """
     파일 뷰어 (이미지, PDF 등)
