@@ -208,6 +208,7 @@ async def view_file(
     """
     try:
         from urllib.parse import unquote
+        import mimetypes
 
         # URL 디코딩 처리 (한글 파일명 지원)
         decoded_filename = unquote(filename)
@@ -221,17 +222,29 @@ async def view_file(
         print(f"🔍 File exists: {full_path.exists()}")
 
         if not full_path.exists():
+            print(f"❌ 파일이 존재하지 않음: {file_path}")
             raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {file_path}")
 
-        # 파일 정보 조회
-        file_info = file_manager.get_file_info(file_path)
+        # MIME 타입 직접 추정 (file_manager 의존성 제거)
+        content_type, _ = mimetypes.guess_type(str(full_path))
+        if not content_type:
+            # 확장자 기반으로 기본 MIME 타입 설정
+            ext = decoded_filename.lower().split('.')[-1]
+            if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+                content_type = f'image/{ext}' if ext != 'jpg' else 'image/jpeg'
+            else:
+                content_type = 'application/octet-stream'
+
+        print(f"🔍 Content-Type: {content_type}")
 
         return FileResponse(
             path=str(full_path),
             filename=decoded_filename,
-            media_type=file_info['content_type'] or 'application/octet-stream'
+            media_type=content_type
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ 파일 조회 실패: {str(e)}")
         raise HTTPException(status_code=500, detail=f"파일 조회 실패: {str(e)}")
