@@ -51,11 +51,11 @@ async def get_campaigns(
     # 기존 client_company 필드 기반 필터링 (데이터베이스 구조에 맞춰)
     if user_role == UserRole.SUPER_ADMIN.value:
         # 슈퍼 어드민은 모든 캠페인 조회 가능
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts))
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts))
         count_query = select(func.count(Campaign.id))
     elif user_role == UserRole.AGENCY_ADMIN.value:
         # 대행사 어드민은 같은 회사의 캠페인들 조회 가능 (creator의 company 기준)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
             User.company == current_user.company
         )
         count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
@@ -66,16 +66,17 @@ async def get_campaigns(
         query = select(Campaign).options(
             joinedload(Campaign.creator),
             joinedload(Campaign.client_user),
+            joinedload(Campaign.staff_user),
             joinedload(Campaign.posts)
         ).where(Campaign.client_user_id == user_id)
         count_query = select(func.count(Campaign.id)).where(Campaign.client_user_id == user_id)
     elif user_role == UserRole.STAFF.value:
         # 직원은 자신이 생성한 캠페인만 조회 가능 (creator_id 기준)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts)).where(Campaign.creator_id == user_id)
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).where(Campaign.creator_id == user_id)
         count_query = select(func.count(Campaign.id)).where(Campaign.creator_id == user_id)
     else:
         # 기본적으로는 같은 회사 기준 필터링 (creator의 company 기준)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
+        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
             User.company == current_user.company
         )
         count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
@@ -889,8 +890,12 @@ async def get_campaign_detail(
     print(f"[CAMPAIGN-DETAIL-JWT] Request for campaign_id={campaign_id}, user_id={user_id}, user_role={user_role}")
     
     try:
-        # 캠페인 찾기 (creator, client_user 관계 포함)
-        query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user)).where(Campaign.id == campaign_id)
+        # 캠페인 찾기 (creator, client_user, staff_user 관계 포함)
+        query = select(Campaign).options(
+            joinedload(Campaign.creator),
+            joinedload(Campaign.client_user),
+            joinedload(Campaign.staff_user)
+        ).where(Campaign.id == campaign_id)
         result = await db.execute(query)
         campaign = result.scalar_one_or_none()
         
