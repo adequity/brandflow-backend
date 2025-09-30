@@ -349,6 +349,47 @@ async def cleanup_old_files(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 정리 실패: {str(e)}")
 
+@router.get("/debug/filesystem")
+async def debug_filesystem():
+    """
+    파일 시스템 상태 디버깅 (인증 없음)
+    """
+    try:
+        import os
+        result = {
+            "upload_dir": str(file_manager.upload_dir),
+            "upload_dir_exists": file_manager.upload_dir.exists(),
+            "categories": {}
+        }
+
+        # 각 카테고리 디렉토리 확인
+        for category in file_manager.ALLOWED_EXTENSIONS.keys():
+            category_dir = file_manager.upload_dir / category
+            result["categories"][category] = {
+                "path": str(category_dir),
+                "exists": category_dir.exists(),
+                "files": []
+            }
+
+            if category_dir.exists():
+                try:
+                    files = list(category_dir.glob('*'))
+                    result["categories"][category]["files"] = [
+                        {
+                            "name": f.name,
+                            "size": f.stat().st_size if f.is_file() else 0,
+                            "is_file": f.is_file()
+                        } for f in files[:10]  # 최대 10개만
+                    ]
+                    result["categories"][category]["file_count"] = len([f for f in files if f.is_file()])
+                except Exception as e:
+                    result["categories"][category]["error"] = str(e)
+
+        return result
+
+    except Exception as e:
+        return {"error": f"디버깅 실패: {str(e)}"}
+
 @router.get("/stats")
 async def get_upload_stats(
     current_user: User = Depends(get_current_active_user)
