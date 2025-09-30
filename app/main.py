@@ -271,6 +271,14 @@ try:
 except Exception as e:
     print(f"[ERROR] 텔레그램 설정 라우터 등록 실패: {str(e)}")
 
+# 회사별 설정 라우터 등록
+try:
+    from app.api.endpoints import company_settings
+    app.include_router(company_settings.router, prefix="/api/company-settings", tags=["회사설정"])
+    print("[OK] 회사별 설정 라우터 등록 완료")
+except Exception as e:
+    print(f"[ERROR] 회사별 설정 라우터 등록 실패: {str(e)}")
+
 app.include_router(performance.router, prefix="/api/performance", tags=["성능"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["모니터링"])
 app.include_router(cache.router, prefix="/api/cache", tags=["캐시"])
