@@ -25,6 +25,10 @@ async def get_company_settings(
 
     user_company = get_user_company(user)
 
+    # SUPER_ADMIN의 경우 자신의 company 필드 사용
+    if user_company is None and user.role == UserRole.SUPER_ADMIN:
+        user_company = user.company
+
     if user_company is None:
         raise HTTPException(status_code=400, detail="사용자에게 회사 정보가 없습니다")
 
@@ -38,10 +42,13 @@ async def get_company_settings(
     for setting in settings:
         settings_dict[setting.setting_key] = setting.setting_value
 
+    # CompanyInfo 헬퍼 클래스 사용
+    company_info = CompanyInfo(user_company, settings_dict)
+
     return {
         "success": True,
         "company": user_company,
-        "settings": settings_dict
+        "info": company_info.to_dict()
     }
 
 
@@ -54,6 +61,10 @@ async def bulk_update_company_settings(
     """현재 사용자 회사의 설정 일괄 업데이트"""
 
     user_company = get_user_company(user)
+
+    # SUPER_ADMIN의 경우 자신의 company 필드 사용
+    if user_company is None and user.role == UserRole.SUPER_ADMIN:
+        user_company = user.company
 
     if user_company is None:
         raise HTTPException(status_code=400, detail="사용자에게 회사 정보가 없습니다")
@@ -145,6 +156,10 @@ async def get_company_setting(
 
     user_company = get_user_company(user)
 
+    # SUPER_ADMIN의 경우 자신의 company 필드 사용
+    if user_company is None and user.role == UserRole.SUPER_ADMIN:
+        user_company = user.company
+
     if user_company is None:
         raise HTTPException(status_code=400, detail="사용자에게 회사 정보가 없습니다")
 
@@ -177,6 +192,10 @@ async def update_company_setting(
     """특정 회사 설정 업데이트"""
 
     user_company = get_user_company(user)
+
+    # SUPER_ADMIN의 경우 자신의 company 필드 사용
+    if user_company is None and user.role == UserRole.SUPER_ADMIN:
+        user_company = user.company
 
     if user_company is None:
         raise HTTPException(status_code=400, detail="사용자에게 회사 정보가 없습니다")
@@ -224,6 +243,10 @@ async def delete_company_setting(
     """특정 회사 설정 삭제"""
 
     user_company = get_user_company(user)
+
+    # SUPER_ADMIN의 경우 자신의 company 필드 사용
+    if user_company is None and user.role == UserRole.SUPER_ADMIN:
+        user_company = user.company
 
     if user_company is None:
         raise HTTPException(status_code=400, detail="사용자에게 회사 정보가 없습니다")
