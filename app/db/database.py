@@ -15,6 +15,7 @@ from app.models.sales import Sales
 from app.models.company_logo import CompanyLogo
 from app.models.post import Post
 from app.models.order_request import OrderRequest
+from app.models.company_settings import CompanySettings
 
 
 # Railway PostgreSQL 데이터베이스 URL 가져오기
