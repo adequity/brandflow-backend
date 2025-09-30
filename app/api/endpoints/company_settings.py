@@ -155,7 +155,16 @@ async def get_company_info(
 
     user_company = get_user_company(user)
 
+    print(f"[COMPANY-SETTINGS-INFO] /info endpoint - user_id={user.id}, role={user.role.value}, user.company={user.company}")
+    print(f"[COMPANY-SETTINGS-INFO] /info endpoint - get_user_company() result: {user_company}")
+
+    # SUPER_ADMIN의 경우 자신의 company 필드 사용, 없으면 기본값 설정
+    if user_company is None and user.role == UserRole.SUPER_ADMIN:
+        user_company = user.company or "SUPER_ADMIN_DEFAULT"
+        print(f"[COMPANY-SETTINGS-INFO] /info endpoint - SUPER_ADMIN: using user.company = {user_company}")
+
     if user_company is None:
+        print(f"[COMPANY-SETTINGS-INFO] /info endpoint - ERROR: user_company is still None")
         raise HTTPException(status_code=400, detail="사용자에게 회사 정보가 없습니다")
 
     # 회사별 설정 조회
@@ -163,10 +172,36 @@ async def get_company_info(
         CompanySettings.company == user_company
     ).all()
 
-    # CompanyInfo 헬퍼 클래스 사용
+    print(f"[COMPANY-SETTINGS-INFO] /info endpoint - Found {len(settings)} settings for company: {user_company}")
+
+    # 딕셔너리로 변환
     settings_dict = {}
-    for setting in settings:
-        settings_dict[setting.setting_key] = setting.setting_value
+
+    if settings:
+        # company_settings에 데이터가 있으면 사용
+        for setting in settings:
+            settings_dict[setting.setting_key] = setting.setting_value
+        print(f"[COMPANY-SETTINGS-INFO] /info endpoint - Using company_settings data: {settings_dict}")
+    else:
+        # company_settings에 데이터가 없으면 users 테이블에서 가져오기
+        print(f"[COMPANY-SETTINGS-INFO] /info endpoint - No company_settings found, reading from users table...")
+
+        # SUPER_ADMIN 또는 AGENCY_ADMIN의 client_* 필드에서 읽기
+        if user.role in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
+            if user.client_company_name:
+                settings_dict['company_name'] = user.client_company_name
+            if user.client_business_number:
+                settings_dict['business_number'] = user.client_business_number
+            if user.client_ceo_name:
+                settings_dict['ceo_name'] = user.client_ceo_name
+            if user.client_company_address:
+                settings_dict['company_address'] = user.client_company_address
+            if user.client_business_type:
+                settings_dict['business_type'] = user.client_business_type
+            if user.client_business_item:
+                settings_dict['business_item'] = user.client_business_item
+
+            print(f"[COMPANY-SETTINGS-INFO] /info endpoint - Read from users table: {settings_dict}")
 
     company_info = CompanyInfo(user_company, settings_dict)
 
