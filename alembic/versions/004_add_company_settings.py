@@ -19,11 +19,11 @@ depends_on = None
 def upgrade() -> None:
     # Insert new company settings for bank account and seal image
     op.execute("""
-        INSERT INTO system_settings (setting_key, setting_name, default_value, category, description, value_type) VALUES
-        ('company_info_bank_name', '은행명', '', 'branding', '공급자 은행명', 'text'),
-        ('company_info_account_number', '계좌번호', '', 'branding', '공급자 계좌번호', 'text'),
-        ('company_info_account_holder', '예금주', '', 'branding', '공급자 계좌 예금주명', 'text'),
-        ('company_info_seal_image_url', '도장 이미지 URL', '', 'branding', '공급자 도장 이미지 파일 URL', 'text')
+        INSERT INTO system_settings (setting_key, setting_name, default_value, category, description, value_type, access_level) VALUES
+        ('company_info_bank_name', '은행명', '', 'branding', '공급자 은행명', 'text', 'ADMIN'),
+        ('company_info_account_number', '계좌번호', '', 'branding', '공급자 계좌번호', 'text', 'ADMIN'),
+        ('company_info_account_holder', '예금주', '', 'branding', '공급자 계좌 예금주명', 'text', 'ADMIN'),
+        ('company_info_seal_image_url', '도장 이미지 URL', '', 'branding', '공급자 도장 이미지 파일 URL', 'text', 'ADMIN')
         ON CONFLICT (setting_key) DO NOTHING;
     """)
 
