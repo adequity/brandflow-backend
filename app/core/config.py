@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: Optional[str] = None
     
     # File Upload
-    UPLOAD_DIR: str = "./uploads"
+    UPLOAD_DIR: str = "/app/data/uploads" if os.getenv("RAILWAY_ENVIRONMENT") else "./uploads"
     MAX_FILE_SIZE: int = 10485760  # 10MB
     
     class Config:
