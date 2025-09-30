@@ -171,23 +171,27 @@ async def download_file(
 ):
     """
     파일 다운로드
-    
+
     - **category**: 파일 카테고리
     - **filename**: 파일명
     """
     try:
-        file_path = f"{category}/{filename}"
+        from urllib.parse import unquote
+
+        # URL 디코딩 처리 (한글 파일명 지원)
+        decoded_filename = unquote(filename)
+        file_path = f"{category}/{decoded_filename}"
         full_path = file_manager.upload_dir / file_path
-        
+
         if not full_path.exists():
             raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-        
+
         return FileResponse(
             path=str(full_path),
-            filename=filename,
+            filename=decoded_filename,
             media_type='application/octet-stream'
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 다운로드 실패: {str(e)}")
 
@@ -199,27 +203,38 @@ async def view_file(
 ):
     """
     파일 뷰어 (이미지, PDF 등)
-    
+
     - **category**: 파일 카테고리
     - **filename**: 파일명
     """
     try:
-        file_path = f"{category}/{filename}"
+        from urllib.parse import unquote
+
+        # URL 디코딩 처리 (한글 파일명 지원)
+        decoded_filename = unquote(filename)
+        print(f"🔍 Original filename: {filename}")
+        print(f"🔍 Decoded filename: {decoded_filename}")
+
+        file_path = f"{category}/{decoded_filename}"
         full_path = file_manager.upload_dir / file_path
-        
+
+        print(f"🔍 Full path: {full_path}")
+        print(f"🔍 File exists: {full_path.exists()}")
+
         if not full_path.exists():
-            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-        
+            raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {file_path}")
+
         # 파일 정보 조회
         file_info = file_manager.get_file_info(file_path)
-        
+
         return FileResponse(
             path=str(full_path),
-            filename=filename,
+            filename=decoded_filename,
             media_type=file_info['content_type'] or 'application/octet-stream'
         )
-        
+
     except Exception as e:
+        print(f"❌ 파일 조회 실패: {str(e)}")
         raise HTTPException(status_code=500, detail=f"파일 조회 실패: {str(e)}")
 
 @router.get("/thumbnail/{filename}")
