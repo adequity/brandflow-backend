@@ -28,7 +28,7 @@ def check_setting_access(user: User, setting: SystemSetting, operation: str = "r
     if setting.access_level == AccessLevel.SUPER_ADMIN:
         return False
 
-    if setting.access_level == AccessLevel.ADMIN and user.role in [UserRole.AGENCY_ADMIN, UserRole.ADMIN]:
+    if setting.access_level == AccessLevel.ADMIN and user.role == UserRole.AGENCY_ADMIN:
         return True
 
     if setting.access_level == AccessLevel.USER:
