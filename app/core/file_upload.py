@@ -297,4 +297,4 @@ class FileUploadManager:
         return deleted_count
 
 # 전역 파일 업로드 관리자 인스턴스
-file_manager = FileUploadManager()
+file_manager = FileUploadManager(upload_dir=settings.UPLOAD_DIR)

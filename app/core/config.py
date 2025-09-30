@@ -45,7 +45,10 @@ class Settings(BaseSettings):
     
     # Application settings
     DEBUG: bool = False  # Production mode
-    
+
+    # File Storage
+    UPLOAD_DIR: str = "/app/data/uploads"  # Railway Volume 마운트 경로
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
     

@@ -62,6 +62,15 @@ async def lifespan(app: FastAPI):
         print(f"Database connection failed: {str(db_error)}")
         print("Server starting in offline mode - API endpoints will return appropriate errors")
         # Railway에서도 서버가 시작되도록 모든 DB 에러를 무시
+
+    # 파일 업로드 디렉토리 초기화 (Railway Volume 지원)
+    try:
+        from app.core.file_upload import file_manager
+        await file_manager.ensure_upload_dir()
+        print(f"✅ Upload directory initialized: {file_manager.upload_dir}")
+    except Exception as e:
+        print(f"❌ Upload directory initialization error: {str(e)}")
+        print("Continuing with application startup...")
     
     # 자동 마이그레이션 체크 (임시 비활성화 - crashed 해결)
     # if os.getenv("AUTO_MIGRATE") == "true":
