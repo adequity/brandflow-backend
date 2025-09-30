@@ -8,6 +8,9 @@ import os
 from app.core.config import settings
 from app.db.database import create_tables, create_performance_indexes, get_async_db, add_client_user_id_column, migrate_client_company_to_user_id, add_campaign_date_columns, update_null_campaign_dates
 from app.db.init_data import init_database_data
+from alembic.config import Config
+from alembic import command
+import subprocess
 from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, migration, monthly_incentives
 
 
@@ -22,16 +25,25 @@ async def lifespan(app: FastAPI):
         print("Attempting database connection...")
         await create_tables()
         print("Database tables created successfully")
-        
+
+        # Alembic 마이그레이션 실행
+        try:
+            print("Running Alembic migrations...")
+            alembic_cfg = Config("alembic.ini")
+            command.upgrade(alembic_cfg, "head")
+            print("Alembic migrations completed successfully")
+        except Exception as alembic_error:
+            print(f"Alembic migration failed (non-critical): {str(alembic_error)}")
+
         # client_user_id 컬럼 추가 (스키마 마이그레이션)
         await add_client_user_id_column()
-        
+
         # 기존 client_company 데이터를 client_user_id로 마이그레이션
         await migrate_client_company_to_user_id()
-        
+
         # campaigns 테이블에 start_date, end_date 컬럼 추가
         await add_campaign_date_columns()
-        
+
         # 기존 캠페인들의 NULL 날짜 필드들에 기본값 설정
         await update_null_campaign_dates()
         
