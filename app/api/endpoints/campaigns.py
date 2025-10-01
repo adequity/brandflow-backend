@@ -937,10 +937,10 @@ async def get_campaign_detail(
                 print(f"[CAMPAIGN-DETAIL-JWT] AGENCY_ADMIN permission denied: creator.company={campaign.creator.company}, user.company={current_user.company}")
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
         elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 캠페인만 조회 가능
-            if campaign.creator_id != user_id:
-                print(f"[CAMPAIGN-DETAIL-JWT] STAFF permission denied: campaign.creator_id={campaign.creator_id}, user_id={user_id}")
-                raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 접근할 수 있습니다.")
+            # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 조회 가능
+            if campaign.creator_id != user_id and campaign.staff_id != user_id:
+                print(f"[CAMPAIGN-DETAIL-JWT] STAFF permission denied: campaign.creator_id={campaign.creator_id}, campaign.staff_id={campaign.staff_id}, user_id={user_id}")
+                raise HTTPException(status_code=403, detail="자신이 생성하거나 담당하는 캠페인만 접근할 수 있습니다.")
         
         print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {user_id}")
         # 직렬화된 응답 반환 (executionStatus 매핑 포함)
@@ -1096,9 +1096,9 @@ async def update_campaign(
                 if not can_edit:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             elif user_role == UserRole.STAFF.value:
-                # 직원은 자신이 생성한 캠페인만 수정 가능
-                if campaign.creator_id != user_id:
-                    raise HTTPException(status_code=403, detail="자신이 생성한 캠페인만 수정할 수 있습니다.")
+                # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 수정 가능
+                if campaign.creator_id != user_id and campaign.staff_id != user_id:
+                    raise HTTPException(status_code=403, detail="자신이 생성하거나 담당하는 캠페인만 수정할 수 있습니다.")
             
             # 캠페인 정보 업데이트
             update_data = campaign_data.model_dump(exclude_unset=True)
@@ -1734,9 +1734,10 @@ async def create_campaign_post(
         if not campaign:
             raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
 
-        # 권한 확인: 캠페인 생성자이거나 관리자 권한 필요
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
         user_role = current_user.role.value
         if (campaign.creator_id != current_user.id and
+            campaign.staff_id != current_user.id and
             user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
             raise HTTPException(status_code=403, detail="이 캠페인에 업무를 생성할 권한이 없습니다")
 
@@ -1830,9 +1831,10 @@ async def update_campaign_post(
         if not post:
             raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다")
 
-        # 권한 확인: 캠페인 생성자이거나 관리자 권한 필요
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
         user_role = current_user.role.value
         if (campaign.creator_id != current_user.id and
+            campaign.staff_id != current_user.id and
             user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
             raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
 
@@ -2001,12 +2003,15 @@ async def delete_campaign(
                 else:
                     print(f"[CAMPAIGN-DELETE] Agency admin cannot delete - different company")
             elif user_role == UserRole.STAFF.value:
-                # 직원은 자신이 생성한 캠페인만 삭제 가능
+                # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 삭제 가능
                 if campaign.creator_id == user_id:
                     can_delete = True
-                    print(f"[CAMPAIGN-DELETE] Staff can delete own campaign")
+                    print(f"[CAMPAIGN-DELETE] Staff can delete own created campaign")
+                elif campaign.staff_id == user_id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE] Staff can delete assigned campaign")
                 else:
-                    print(f"[CAMPAIGN-DELETE] Staff cannot delete - not creator")
+                    print(f"[CAMPAIGN-DELETE] Staff cannot delete - not creator or assigned staff")
             elif user_role == UserRole.CLIENT.value:
                 # 클라이언트는 자신의 회사와 연결된 캠페인만 삭제 가능 (제한적)
                 if campaign.creator and campaign.creator.company == viewer.company:
@@ -2110,13 +2115,16 @@ async def delete_campaign(
                 else:
                     print(f"[CAMPAIGN-DELETE-JWT] ❌ Agency admin cannot delete - different company")
             elif current_user.role == UserRole.STAFF:
-                # 직원은 자신이 생성한 캠페인만 삭제 가능
-                print(f"[CAMPAIGN-DELETE-JWT] Staff check - User ID: {current_user.id}, Campaign creator ID: {campaign.creator_id}")
+                # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 삭제 가능
+                print(f"[CAMPAIGN-DELETE-JWT] Staff check - User ID: {current_user.id}, Campaign creator ID: {campaign.creator_id}, Campaign staff ID: {campaign.staff_id}")
                 if campaign.creator_id == current_user.id:
                     can_delete = True
-                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Staff can delete own campaign")
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Staff can delete own created campaign")
+                elif campaign.staff_id == current_user.id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Staff can delete assigned campaign")
                 else:
-                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Staff cannot delete - not creator")
+                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Staff cannot delete - not creator or assigned staff")
             elif current_user.role == UserRole.CLIENT:
                 # 클라이언트는 자신의 회사와 연결된 캠페인만 삭제 가능 (제한적)
                 print(f"[CAMPAIGN-DELETE-JWT] Client check - User company: '{current_user.company}', Campaign creator company: '{campaign.creator.company if campaign.creator else 'None'}'")
