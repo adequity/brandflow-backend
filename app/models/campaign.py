@@ -45,7 +45,7 @@ class Campaign(Base, TimestampMixin):
     client_user = relationship("User", foreign_keys=[client_user_id], lazy="selectin")  # 클라이언트 사용자 관계 (eager loading)
     staff_user = relationship("User", foreign_keys=[staff_id], lazy="selectin")  # 담당 직원 관계 (eager loading)
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
-    posts = relationship("Post", back_populates="campaign")
+    posts = relationship("Post", back_populates="campaign", cascade="all, delete-orphan")
     
     @property
     def creator_name(self) -> Optional[str]:

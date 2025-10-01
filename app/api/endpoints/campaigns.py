@@ -2025,7 +2025,18 @@ async def delete_campaign(
                 print(f"[CAMPAIGN-DELETE] Found {len(purchase_requests)} related purchase requests")
                 # 구매요청이 있는 경우 경고하지만 삭제는 허용 (CASCADE)
                 
-            # 캠페인 삭제 (관련 데이터는 CASCADE로 자동 삭제)
+            # 관련 posts 먼저 삭제
+            from app.models.post import Post
+            posts_query = select(Post).where(Post.campaign_id == campaign_id)
+            posts_result = await db.execute(posts_query)
+            related_posts = posts_result.scalars().all()
+
+            if related_posts:
+                print(f"[CAMPAIGN-DELETE] Found {len(related_posts)} related posts, deleting them first")
+                for post in related_posts:
+                    await db.delete(post)
+
+            # 캠페인 삭제
             await db.delete(campaign)
             await db.commit()
             
@@ -2129,7 +2140,18 @@ async def delete_campaign(
                 print(f"[CAMPAIGN-DELETE-JWT] Found {len(purchase_requests)} related purchase requests")
                 # 구매요청이 있는 경우 경고하지만 삭제는 허용 (CASCADE)
 
-            # 캠페인 삭제 (관련 데이터는 CASCADE로 자동 삭제)
+            # 관련 posts 먼저 삭제
+            from app.models.post import Post
+            posts_query = select(Post).where(Post.campaign_id == campaign_id)
+            posts_result = await db.execute(posts_query)
+            related_posts = posts_result.scalars().all()
+
+            if related_posts:
+                print(f"[CAMPAIGN-DELETE] Found {len(related_posts)} related posts, deleting them first")
+                for post in related_posts:
+                    await db.delete(post)
+
+            # 캠페인 삭제
             await db.delete(campaign)
             await db.commit()
 
