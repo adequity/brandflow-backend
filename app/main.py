@@ -305,6 +305,78 @@ async def migrate_products_company():
     except Exception as e:
         return {"status": "error", "message": f"Database connection failed: {str(e)}"}
 
+
+# 임시 마이그레이션 엔드포인트 (work_types.company 컬럼 추가)
+@app.get("/api/admin/migrate-work-types-company")
+async def migrate_work_types_company():
+    """Railway에서 work_types.company 컬럼을 수동으로 추가하는 임시 엔드포인트"""
+    try:
+        from sqlalchemy import text
+
+        async for db in get_async_db():
+            try:
+                # 1. work_types.company 컬럼 존재 여부 확인
+                result = await db.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'work_types' AND column_name = 'company'
+                """))
+                column_exists = result.fetchone()
+
+                if column_exists:
+                    return {"status": "success", "message": "work_types.company column already exists"}
+
+                # 2. work_types 테이블에 company 컬럼 추가
+                await db.execute(text("""
+                    ALTER TABLE work_types
+                    ADD COLUMN company VARCHAR(200) DEFAULT 'default_company'
+                """))
+
+                # 3. company 컬럼에 인덱스 생성
+                await db.execute(text("""
+                    CREATE INDEX ix_work_types_company ON work_types (company)
+                """))
+
+                # 4. 기존 데이터에 기본값 설정
+                await db.execute(text("""
+                    UPDATE work_types
+                    SET company = 'default_company'
+                    WHERE company IS NULL
+                """))
+
+                # 5. unique constraint 제거 (회사별 중복 허용)
+                try:
+                    await db.execute(text("""
+                        ALTER TABLE work_types DROP CONSTRAINT IF EXISTS work_types_name_key
+                    """))
+                except Exception as constraint_error:
+                    print(f"Constraint removal warning: {constraint_error}")
+
+                # 6. 변경사항 커밋
+                await db.commit()
+
+                # 7. 결과 확인
+                work_type_count = await db.execute(text("SELECT COUNT(*) FROM work_types"))
+                count_result = work_type_count.fetchone()
+                total_work_types = count_result[0] if count_result else 0
+
+                return {
+                    "status": "success",
+                    "message": "work_types.company column added successfully",
+                    "total_work_types": total_work_types,
+                    "note": "WorkType company segregation is now active"
+                }
+
+            except Exception as e:
+                await db.rollback()
+                return {"status": "error", "message": f"Migration failed: {str(e)}"}
+            finally:
+                await db.close()
+                break
+
+    except Exception as e:
+        return {"status": "error", "message": f"Database connection failed: {str(e)}"}
+
 # API 라우터 등록 - 핵심 기능
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(users.router, prefix="/api/users", tags=["사용자"])

@@ -51,8 +51,12 @@ async def get_work_types(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 작업 유형 조회 (Node.js API 모드)
-        query = select(WorkType).where(WorkType.is_active == True)
+        # 작업 유형 조회 (Node.js API 모드) - 회사별 필터링
+        user_company = current_user.company or 'default_company'
+        query = select(WorkType).where(
+            WorkType.is_active == True,
+            (WorkType.company == user_company) | (WorkType.company.is_(None))
+        )
         result = await db.execute(query)
         work_types = result.scalars().all()
         
@@ -75,8 +79,12 @@ async def get_work_types(
         print(f"[WORK-TYPES-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
         
         try:
-            # JWT 기반 작업 유형 목록 조회 (모든 역할이 조회 가능)
-            query = select(WorkType).where(WorkType.is_active == True)
+            # JWT 기반 작업 유형 목록 조회 (회사별 필터링)
+            user_company = current_user.company or 'default_company'
+            query = select(WorkType).where(
+                WorkType.is_active == True,
+                (WorkType.company == user_company) | (WorkType.company.is_(None))
+            )
             result = await db.execute(query)
             work_types = result.scalars().all()
             
@@ -153,18 +161,25 @@ async def create_work_type(
         print(f"[WORK-TYPE-CREATE] JWT mode - user_id={current_user.id}, role={user_role}")
 
     try:
-        # 중복 이름 확인
-        existing_query = select(WorkType).where(WorkType.name == work_type_data.name, WorkType.is_active == True)
+        # 중복 이름 확인 (회사별)
+        user_company = current_user.company or 'default_company'
+        existing_query = select(WorkType).where(
+            WorkType.name == work_type_data.name,
+            WorkType.is_active == True,
+            (WorkType.company == user_company) | (WorkType.company.is_(None))
+        )
         result = await db.execute(existing_query)
         existing_work_type = result.scalar_one_or_none()
 
         if existing_work_type:
-            raise HTTPException(status_code=400, detail="같은 이름의 작업 유형이 이미 존재합니다")
+            raise HTTPException(status_code=400, detail="같은 회사에서 같은 이름의 작업 유형이 이미 존재합니다")
 
-        # 새 작업 유형 생성
+        # 새 작업 유형 생성 (회사별 자동 설정)
+        user_company = current_user.company or 'default_company'
         new_work_type = WorkType(
             name=work_type_data.name,
             description=work_type_data.description or "",
+            company=user_company,  # 생성자의 회사로 자동 설정
             is_active=True
         )
 
