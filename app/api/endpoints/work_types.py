@@ -51,12 +51,30 @@ async def get_work_types(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 작업 유형 조회 (Node.js API 모드) - 임시로 company 필터링 비활성화
-        # user_company = current_user.company or 'default_company'
-        query = select(WorkType).where(
-            WorkType.is_active == True
-            # (WorkType.company == user_company) | (WorkType.company.is_(None))
-        )
+        # 작업 유형 조회 (Node.js API 모드) - 회사별 필터링 (스키마 체크)
+        user_company = current_user.company or 'default_company'
+
+        # company 컬럼 존재 여부 확인
+        from sqlalchemy import text
+        check_column_query = text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'work_types' AND column_name = 'company'
+        """)
+        column_result = await db.execute(check_column_query)
+        company_column_exists = column_result.fetchone() is not None
+
+        if company_column_exists:
+            # company 컬럼이 있는 경우 회사별 필터링
+            query = select(WorkType).where(
+                WorkType.is_active == True,
+                (WorkType.company == user_company) | (WorkType.company.is_(None))
+            )
+            print(f"[WORK-TYPES] Using company filtering for user company: {user_company}")
+        else:
+            # company 컬럼이 없는 경우 fallback
+            query = select(WorkType).where(WorkType.is_active == True)
+            print(f"[WORK-TYPES] Company column not found, using fallback query")
         result = await db.execute(query)
         work_types = result.scalars().all()
         
@@ -79,12 +97,30 @@ async def get_work_types(
         print(f"[WORK-TYPES-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
         
         try:
-            # JWT 기반 작업 유형 목록 조회 - 임시로 company 필터링 비활성화
-            # user_company = current_user.company or 'default_company'
-            query = select(WorkType).where(
-                WorkType.is_active == True
-                # (WorkType.company == user_company) | (WorkType.company.is_(None))
-            )
+            # JWT 기반 작업 유형 목록 조회 (회사별 필터링 - 스키마 체크)
+            user_company = current_user.company or 'default_company'
+
+            # company 컬럼 존재 여부 확인
+            from sqlalchemy import text
+            check_column_query = text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'work_types' AND column_name = 'company'
+            """)
+            column_result = await db.execute(check_column_query)
+            company_column_exists = column_result.fetchone() is not None
+
+            if company_column_exists:
+                # company 컬럼이 있는 경우 회사별 필터링
+                query = select(WorkType).where(
+                    WorkType.is_active == True,
+                    (WorkType.company == user_company) | (WorkType.company.is_(None))
+                )
+                print(f"[WORK-TYPES-JWT] Using company filtering for user company: {user_company}")
+            else:
+                # company 컬럼이 없는 경우 fallback
+                query = select(WorkType).where(WorkType.is_active == True)
+                print(f"[WORK-TYPES-JWT] Company column not found, using fallback query")
             result = await db.execute(query)
             work_types = result.scalars().all()
             
@@ -161,27 +197,58 @@ async def create_work_type(
         print(f"[WORK-TYPE-CREATE] JWT mode - user_id={current_user.id}, role={user_role}")
 
     try:
-        # 중복 이름 확인 - 임시로 company 체크 비활성화
-        # user_company = current_user.company or 'default_company'
-        existing_query = select(WorkType).where(
-            WorkType.name == work_type_data.name,
-            WorkType.is_active == True
-            # (WorkType.company == user_company) | (WorkType.company.is_(None))
-        )
-        result = await db.execute(existing_query)
-        existing_work_type = result.scalar_one_or_none()
+        # company 컬럼 존재 여부 확인
+        from sqlalchemy import text
+        check_column_query = text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'work_types' AND column_name = 'company'
+        """)
+        column_result = await db.execute(check_column_query)
+        company_column_exists = column_result.fetchone() is not None
 
-        if existing_work_type:
-            raise HTTPException(status_code=400, detail="같은 회사에서 같은 이름의 작업 유형이 이미 존재합니다")
+        user_company = current_user.company or 'default_company'
 
-        # 새 작업 유형 생성 - 임시로 company 설정 비활성화
-        # user_company = current_user.company or 'default_company'
-        new_work_type = WorkType(
-            name=work_type_data.name,
-            description=work_type_data.description or "",
-            # company=user_company,  # 생성자의 회사로 자동 설정
-            is_active=True
-        )
+        if company_column_exists:
+            # 중복 이름 확인 (회사별)
+            existing_query = select(WorkType).where(
+                WorkType.name == work_type_data.name,
+                WorkType.is_active == True,
+                (WorkType.company == user_company) | (WorkType.company.is_(None))
+            )
+            result = await db.execute(existing_query)
+            existing_work_type = result.scalar_one_or_none()
+
+            if existing_work_type:
+                raise HTTPException(status_code=400, detail="같은 회사에서 같은 이름의 작업 유형이 이미 존재합니다")
+
+            # 새 작업 유형 생성 (회사별 자동 설정)
+            new_work_type = WorkType(
+                name=work_type_data.name,
+                description=work_type_data.description or "",
+                company=user_company,  # 생성자의 회사로 자동 설정
+                is_active=True
+            )
+            print(f"[WORK-TYPE-CREATE] Creating with company: {user_company}")
+        else:
+            # company 컬럼이 없는 경우 fallback
+            existing_query = select(WorkType).where(
+                WorkType.name == work_type_data.name,
+                WorkType.is_active == True
+            )
+            result = await db.execute(existing_query)
+            existing_work_type = result.scalar_one_or_none()
+
+            if existing_work_type:
+                raise HTTPException(status_code=400, detail="같은 이름의 작업 유형이 이미 존재합니다")
+
+            # 새 작업 유형 생성 (company 컬럼 없이)
+            new_work_type = WorkType(
+                name=work_type_data.name,
+                description=work_type_data.description or "",
+                is_active=True
+            )
+            print(f"[WORK-TYPE-CREATE] Creating without company column (fallback mode)")
 
         db.add(new_work_type)
         await db.commit()
