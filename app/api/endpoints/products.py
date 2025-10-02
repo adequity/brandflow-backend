@@ -76,9 +76,11 @@ async def get_products(
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
         # 모든 역할이 상품 목록 조회 가능 (활성 상품만, 회사별 필터링)
+        # company 필드가 None인 경우 기본값으로 처리
+        user_company = current_user.company or 'default_company'
         products_query = select(Product).where(
             Product.is_active == True,
-            Product.company == current_user.company
+            (Product.company == user_company) | (Product.company.is_(None))
         )
         result = await db.execute(products_query)
         products = result.scalars().all()
@@ -111,9 +113,11 @@ async def get_products(
         
         try:
             # JWT 기반 상품 목록 조회 (활성 상품만, 회사별 필터링)
+            # company 필드가 None인 경우 기본값으로 처리
+            user_company = current_user.company or 'default_company'
             query = select(Product).where(
                 Product.is_active == True,
-                Product.company == current_user.company
+                (Product.company == user_company) | (Product.company.is_(None))
             )
             result = await db.execute(query)
             products = result.scalars().all()
@@ -205,9 +209,10 @@ async def create_product(
 
         # SKU 중복 확인 (회사 내에서만)
         if product_data.sku:
+            user_company = current_user.company or 'default_company'
             existing_sku_query = select(Product).where(
                 Product.sku == product_data.sku,
-                Product.company == current_user.company
+                (Product.company == user_company) | (Product.company.is_(None))
             )
             result = await db.execute(existing_sku_query)
             existing_product = result.scalar_one_or_none()
@@ -215,6 +220,7 @@ async def create_product(
                 raise HTTPException(status_code=400, detail="이미 존재하는 SKU입니다")
 
         # 새 상품 생성 (기존 DB 스키마와 호환)
+        user_company = current_user.company or 'default_company'
         new_product = Product(
             name=product_data.name,
             description=product_data.description or "",
@@ -223,7 +229,7 @@ async def create_product(
             category=product_data.category,  # 기존 category 필드 사용
             sku=product_data.sku,
             is_active=True,
-            company=current_user.company  # 회사별 데이터 분리
+            company=user_company  # 회사별 데이터 분리
         )
 
         db.add(new_product)
@@ -303,7 +309,7 @@ async def delete_product(
         # 상품 존재 확인 (회사별 필터링)
         product_query = select(Product).where(
             Product.id == product_id,
-            Product.company == current_user.company
+            (Product.company == (current_user.company or 'default_company')) | (Product.company.is_(None))
         )
         result = await db.execute(product_query)
         product = result.scalar_one_or_none()
@@ -379,7 +385,7 @@ async def update_product(
         # 상품 존재 확인 (회사별 필터링)
         product_query = select(Product).where(
             Product.id == product_id,
-            Product.company == current_user.company
+            (Product.company == (current_user.company or 'default_company')) | (Product.company.is_(None))
         )
         result = await db.execute(product_query)
         product = result.scalar_one_or_none()
@@ -395,7 +401,7 @@ async def update_product(
             existing_sku_query = select(Product).where(
                 Product.sku == product_data.sku,
                 Product.id != product_id,
-                Product.company == current_user.company
+                (Product.company == (current_user.company or 'default_company')) | (Product.company.is_(None))
             )
             result = await db.execute(existing_sku_query)
             existing_product = result.scalar_one_or_none()
