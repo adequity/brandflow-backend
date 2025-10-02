@@ -109,18 +109,31 @@ async def get_products(
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = jwt_user
-        print(f"[PRODUCTS-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
-        
+        print(f"[PRODUCTS-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}, user_company={current_user.company}")
+
         try:
+            # 먼저 모든 상품을 조회해서 company 값들을 확인
+            all_products_query = select(Product).where(Product.is_active == True)
+            all_result = await db.execute(all_products_query)
+            all_products = all_result.scalars().all()
+
+            print(f"[PRODUCTS-DEBUG] Total active products: {len(all_products)}")
+            for product in all_products:
+                print(f"[PRODUCTS-DEBUG] Product ID {product.id}: name='{product.name}', company='{product.company}'")
+
             # JWT 기반 상품 목록 조회 (활성 상품만, 회사별 필터링)
             # company 필드가 None인 경우 기본값으로 처리
             user_company = current_user.company or 'default_company'
+            print(f"[PRODUCTS-FILTER] Filtering products for user_company: '{user_company}'")
+
             query = select(Product).where(
                 Product.is_active == True,
                 (Product.company == user_company) | (Product.company.is_(None))
             )
             result = await db.execute(query)
             products = result.scalars().all()
+
+            print(f"[PRODUCTS-FILTER] Filtered products count: {len(products)}")
             
             # 응답 데이터 구성
             products_data = []
