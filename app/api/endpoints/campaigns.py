@@ -1741,6 +1741,18 @@ async def create_campaign_post(
             user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
             raise HTTPException(status_code=403, detail="이 캠페인에 업무를 생성할 권한이 없습니다")
 
+        # 상품 정보 조회 (원가 자동 연동을 위해)
+        product_cost = None
+        product_name = None
+        if post_data.product_id:
+            from app.models.product import Product
+            product_query = select(Product).where(Product.id == post_data.product_id)
+            product_result = await db.execute(product_query)
+            product = product_result.scalar_one_or_none()
+            if product:
+                product_cost = product.cost  # 상품 원가 자동 연동
+                product_name = product.name
+
         # 새 포스트 생성
         new_post = Post(
             title=post_data.title,
@@ -1755,6 +1767,8 @@ async def create_campaign_post(
             start_date=post_data.start_date,
             due_date=post_data.due_date,
             product_id=post_data.product_id,
+            product_cost=product_cost,  # 상품 원가 자동 연동
+            product_name=product_name,  # 상품명 자동 연동
             quantity=post_data.quantity or 1,
             campaign_id=campaign_id
         )
@@ -1763,18 +1777,9 @@ async def create_campaign_post(
         await db.commit()
         await db.refresh(new_post)
 
-        # Product 정보도 함께 조회해서 반환
-        product_name = None
-        if new_post.product_id:
-            from app.models.product import Product
-            product_query = select(Product).where(Product.id == new_post.product_id)
-            product_result = await db.execute(product_query)
-            product = product_result.scalar_one_or_none()
-            product_name = product.name if product else None
+        print(f"[CREATE-POST] SUCCESS: Created post {new_post.id} for campaign {campaign_id} with product_cost: {product_cost}")
 
-        print(f"[CREATE-POST] SUCCESS: Created post {new_post.id} for campaign {campaign_id}")
-
-        # 수동으로 직렬화해서 productName 포함
+        # 수동으로 직렬화해서 productName과 product_cost 포함
         return {
             "id": new_post.id,
             "title": new_post.title,
@@ -1789,7 +1794,9 @@ async def create_campaign_post(
             "start_date": new_post.start_date,
             "due_date": new_post.due_date,
             "product_id": new_post.product_id,
-            "productName": product_name,  # 제품명 추가
+            "product_cost": new_post.product_cost,  # 상품 원가 포함
+            "product_name": new_post.product_name,  # 상품명 포함
+            "productName": new_post.product_name,  # 호환성을 위한 별칭
             "quantity": new_post.quantity,
             "campaign_id": new_post.campaign_id,
             "created_at": new_post.created_at.isoformat() if new_post.created_at else None,
@@ -1854,7 +1861,26 @@ async def update_campaign_post(
         if 'productId' in post_data:
             # productId를 정수로 변환
             try:
-                post.product_id = int(post_data['productId']) if post_data['productId'] else None
+                new_product_id = int(post_data['productId']) if post_data['productId'] else None
+                post.product_id = new_product_id
+
+                # 상품이 변경되면 원가와 상품명도 자동 업데이트
+                if new_product_id:
+                    from app.models.product import Product
+                    product_query = select(Product).where(Product.id == new_product_id)
+                    product_result = await db.execute(product_query)
+                    product = product_result.scalar_one_or_none()
+                    if product:
+                        post.product_cost = product.cost  # 상품 원가 자동 연동
+                        post.product_name = product.name  # 상품명 자동 연동
+                        print(f"[UPDATE-POST] Auto-updated product_cost: {product.cost}, product_name: {product.name}")
+                    else:
+                        post.product_cost = None
+                        post.product_name = None
+                else:
+                    post.product_cost = None
+                    post.product_name = None
+
                 print(f"[UPDATE-POST] Updated product_id: {post.product_id}")
             except (ValueError, TypeError) as e:
                 print(f"[UPDATE-POST] Invalid productId: {post_data['productId']}, error: {e}")
@@ -1887,16 +1913,7 @@ async def update_campaign_post(
         await db.commit()
         await db.refresh(post)
 
-        # Product 정보도 함께 조회해서 반환
-        product_name = None
-        if post.product_id:
-            from app.models.product import Product
-            product_query = select(Product).where(Product.id == post.product_id)
-            product_result = await db.execute(product_query)
-            product = product_result.scalar_one_or_none()
-            product_name = product.name if product else None
-
-        print(f"[UPDATE-POST] SUCCESS: Updated post {post.id} for campaign {campaign_id}")
+        print(f"[UPDATE-POST] SUCCESS: Updated post {post.id} for campaign {campaign_id} with product_cost: {post.product_cost}")
 
         # 수정된 포스트 반환
         return {
@@ -1914,7 +1931,9 @@ async def update_campaign_post(
             "start_date": post.start_date,
             "due_date": post.due_date,
             "product_id": post.product_id,
-            "productName": product_name,
+            "product_cost": post.product_cost,  # 상품 원가 포함
+            "product_name": post.product_name,  # 상품명 포함
+            "productName": post.product_name,   # 호환성을 위한 별칭
             "quantity": post.quantity,
             "campaign_id": post.campaign_id,
             "created_at": post.created_at.isoformat() if post.created_at else None,
