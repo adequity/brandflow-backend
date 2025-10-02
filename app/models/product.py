@@ -14,6 +14,7 @@ class Product(Base, TimestampMixin):
     category = Column(String(100), nullable=True)
     sku = Column(String(50), unique=True, nullable=True)
     is_active = Column(Boolean, default=True)
+    company = Column(String(200), nullable=False, index=True)  # 회사별 데이터 분리
     
     def __repr__(self):
         return f"<Product(id={self.id}, name={self.name}, price={self.price})>"

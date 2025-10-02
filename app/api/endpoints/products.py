@@ -75,8 +75,11 @@ async def get_products(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 모든 역할이 상품 목록 조회 가능 (활성 상품만)
-        products_query = select(Product).where(Product.is_active == True)
+        # 모든 역할이 상품 목록 조회 가능 (활성 상품만, 회사별 필터링)
+        products_query = select(Product).where(
+            Product.is_active == True,
+            Product.company == current_user.company
+        )
         result = await db.execute(products_query)
         products = result.scalars().all()
         
@@ -107,8 +110,11 @@ async def get_products(
         print(f"[PRODUCTS-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
         
         try:
-            # JWT 기반 상품 목록 조회 (활성 상품만)
-            query = select(Product).where(Product.is_active == True)
+            # JWT 기반 상품 목록 조회 (활성 상품만, 회사별 필터링)
+            query = select(Product).where(
+                Product.is_active == True,
+                Product.company == current_user.company
+            )
             result = await db.execute(query)
             products = result.scalars().all()
             
@@ -197,9 +203,12 @@ async def create_product(
             if work_type:
                 work_type_id = work_type.id
 
-        # SKU 중복 확인
+        # SKU 중복 확인 (회사 내에서만)
         if product_data.sku:
-            existing_sku_query = select(Product).where(Product.sku == product_data.sku)
+            existing_sku_query = select(Product).where(
+                Product.sku == product_data.sku,
+                Product.company == current_user.company
+            )
             result = await db.execute(existing_sku_query)
             existing_product = result.scalar_one_or_none()
             if existing_product:
@@ -213,7 +222,8 @@ async def create_product(
             cost=product_data.costPrice,   # 호환성을 위해 cost도 저장
             category=product_data.category,  # 기존 category 필드 사용
             sku=product_data.sku,
-            is_active=True
+            is_active=True,
+            company=current_user.company  # 회사별 데이터 분리
         )
 
         db.add(new_product)
@@ -290,8 +300,11 @@ async def delete_product(
         print(f"[PRODUCT-DELETE] JWT mode - user_id={current_user.id}, role={user_role}")
 
     try:
-        # 상품 존재 확인
-        product_query = select(Product).where(Product.id == product_id)
+        # 상품 존재 확인 (회사별 필터링)
+        product_query = select(Product).where(
+            Product.id == product_id,
+            Product.company == current_user.company
+        )
         result = await db.execute(product_query)
         product = result.scalar_one_or_none()
 
@@ -363,8 +376,11 @@ async def update_product(
         print(f"[PRODUCT-UPDATE] JWT mode - user_id={current_user.id}, role={user_role}")
 
     try:
-        # 상품 존재 확인
-        product_query = select(Product).where(Product.id == product_id)
+        # 상품 존재 확인 (회사별 필터링)
+        product_query = select(Product).where(
+            Product.id == product_id,
+            Product.company == current_user.company
+        )
         result = await db.execute(product_query)
         product = result.scalar_one_or_none()
 
@@ -374,11 +390,12 @@ async def update_product(
         if not product.is_active:
             raise HTTPException(status_code=404, detail="삭제된 상품은 수정할 수 없습니다")
 
-        # SKU 중복 확인 (변경된 경우에만)
+        # SKU 중복 확인 (변경된 경우에만, 회사 내에서만)
         if product_data.sku and product_data.sku != product.sku:
             existing_sku_query = select(Product).where(
                 Product.sku == product_data.sku,
-                Product.id != product_id
+                Product.id != product_id,
+                Product.company == current_user.company
             )
             result = await db.execute(existing_sku_query)
             existing_product = result.scalar_one_or_none()
