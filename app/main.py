@@ -378,6 +378,77 @@ async def migrate_work_types_company():
         return {"status": "error", "message": f"Database connection failed: {str(e)}"}
 
 
+@app.get("/api/admin/debug-campaigns")
+async def debug_campaigns():
+    """캠페인과 사용자 company 정보 디버깅"""
+    try:
+        from sqlalchemy import text
+
+        async for db in get_async_db():
+            try:
+                # 캠페인과 creator의 company 정보 조회
+                campaigns_query = text("""
+                    SELECT
+                        c.id as campaign_id,
+                        c.name as campaign_name,
+                        c.creator_id,
+                        u.name as creator_name,
+                        u.email as creator_email,
+                        u.company as creator_company,
+                        u.role as creator_role
+                    FROM campaigns c
+                    LEFT JOIN users u ON c.creator_id = u.id
+                    ORDER BY c.id
+                """)
+
+                campaigns_result = await db.execute(campaigns_query)
+                campaigns_data = campaigns_result.fetchall()
+
+                # 모든 사용자 정보
+                users_query = text("""
+                    SELECT id, name, email, company, role
+                    FROM users
+                    ORDER BY id
+                """)
+
+                users_result = await db.execute(users_query)
+                users_data = users_result.fetchall()
+
+                return {
+                    "status": "success",
+                    "campaigns": [
+                        {
+                            "campaign_id": row[0],
+                            "campaign_name": row[1],
+                            "creator_id": row[2],
+                            "creator_name": row[3],
+                            "creator_email": row[4],
+                            "creator_company": row[5],
+                            "creator_role": row[6]
+                        }
+                        for row in campaigns_data
+                    ],
+                    "users": [
+                        {
+                            "id": row[0],
+                            "name": row[1],
+                            "email": row[2],
+                            "company": row[3],
+                            "role": row[4]
+                        }
+                        for row in users_data
+                    ]
+                }
+
+            except Exception as e:
+                await db.rollback()
+                raise e
+            finally:
+                await db.close()
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/admin/check-test-data")
 async def check_test_data():
     """Railway 환경의 테스트 데이터 존재 여부 확인"""
