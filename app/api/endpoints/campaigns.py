@@ -54,25 +54,33 @@ async def get_campaigns(
         query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts))
         count_query = select(func.count(Campaign.id))
     elif user_role == UserRole.AGENCY_ADMIN.value:
-        # 대행사 어드민은 같은 회사의 캠페인들 조회 가능 (creator의 company 기준)
-        # 임시: company가 NULL이거나 빈 값인 경우도 포함하여 기존 캠페인들을 표시
-        # current_user.company가 None이거나 빈 값인 경우 모든 캠페인을 표시
+        # 대행사 어드민은 다음 조건의 캠페인들 조회 가능:
+        # 1. creator의 company가 같은 캠페인
+        # 2. campaigns.staff_id가 현재 사용자인 캠페인
+        # 3. company가 NULL이거나 빈 값인 경우 포함 (기존 데이터 호환)
+
         if current_user.company is None or current_user.company == '':
+            # company가 없는 경우 모든 캠페인 표시
             query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts))
             count_query = select(func.count(Campaign.id))
         else:
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
+            # company 기반 필터링 + staff_id 기반 필터링
+            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).outerjoin(User, Campaign.creator_id == User.id).where(
                 or_(
+                    # 조건 1: creator의 company가 같은 캠페인
                     User.company == current_user.company,
                     User.company.is_(None),
-                    User.company == ''
+                    User.company == '',
+                    # 조건 2: campaigns.staff_id가 현재 사용자인 캠페인
+                    Campaign.staff_id == user_id
                 )
             )
-            count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
+            count_query = select(func.count(Campaign.id)).outerjoin(User, Campaign.creator_id == User.id).where(
                 or_(
                     User.company == current_user.company,
                     User.company.is_(None),
-                    User.company == ''
+                    User.company == '',
+                    Campaign.staff_id == user_id
                 )
             )
     elif user_role == UserRole.CLIENT.value:
