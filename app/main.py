@@ -452,10 +452,10 @@ async def check_test_data():
 async def create_test_users_endpoint():
     """Railway 환경에서 테스트 사용자 수동 생성"""
     try:
-        from app.db.database import get_async_db_direct
+        from app.db.database import get_async_db
         from app.db.init_data import create_test_users
 
-        async for db in get_async_db_direct():
+        async for db in get_async_db():
             try:
                 # 테스트 사용자 생성
                 test_users = await create_test_users(db)
