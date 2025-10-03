@@ -448,6 +448,43 @@ async def check_test_data():
         return {"status": "error", "message": f"Data check failed: {str(e)}"}
 
 
+@app.get("/api/admin/create-test-users")
+async def create_test_users_endpoint():
+    """Railway 환경에서 테스트 사용자 수동 생성"""
+    try:
+        from app.db.database import get_async_db_direct
+        from app.db.init_data import create_test_users
+
+        async for db in get_async_db_direct():
+            try:
+                # 테스트 사용자 생성
+                test_users = await create_test_users(db)
+                await db.commit()
+
+                return {
+                    "status": "success",
+                    "message": f"테스트 사용자 {len(test_users)}명 생성 완료",
+                    "users": [
+                        {
+                            "name": user.name,
+                            "email": user.email,
+                            "role": user.role.value,
+                            "company": user.company,
+                            "password": "TestPassword123!"
+                        }
+                        for user in test_users
+                    ]
+                }
+            except Exception as e:
+                await db.rollback()
+                return {"status": "error", "message": f"테스트 사용자 생성 실패: {str(e)}"}
+            finally:
+                await db.close()
+                break
+    except Exception as e:
+        return {"status": "error", "message": f"Database connection failed: {str(e)}"}
+
+
 # API 라우터 등록 - 핵심 기능
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(users.router, prefix="/api/users", tags=["사용자"])
