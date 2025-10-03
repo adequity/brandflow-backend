@@ -377,6 +377,77 @@ async def migrate_work_types_company():
     except Exception as e:
         return {"status": "error", "message": f"Database connection failed: {str(e)}"}
 
+
+@app.get("/api/admin/check-test-data")
+async def check_test_data():
+    """Railway 환경의 테스트 데이터 존재 여부 확인"""
+    try:
+        from sqlalchemy import text
+        import os
+
+        database_url = os.getenv('DATABASE_URL')
+        if not database_url:
+            return {"status": "error", "message": "DATABASE_URL not found"}
+
+        from sqlalchemy.ext.asyncio import create_async_engine
+        engine = create_async_engine(database_url, echo=False)
+
+        async with engine.begin() as conn:
+            # 사용자 수 확인
+            users_count = await conn.execute(text("SELECT COUNT(*) FROM users"))
+            users_total = users_count.fetchone()[0]
+
+            # 캠페인 수 확인
+            campaigns_count = await conn.execute(text("SELECT COUNT(*) FROM campaigns"))
+            campaigns_total = campaigns_count.fetchone()[0]
+
+            # 상품 수 확인
+            products_count = await conn.execute(text("SELECT COUNT(*) FROM products"))
+            products_total = products_count.fetchone()[0]
+
+            # 업무타입 수 확인
+            work_types_count = await conn.execute(text("SELECT COUNT(*) FROM work_types"))
+            work_types_total = work_types_count.fetchone()[0]
+
+            # 샘플 사용자 정보
+            sample_users = await conn.execute(text("""
+                SELECT name, email, role, company
+                FROM users
+                ORDER BY created_at
+                LIMIT 5
+            """))
+            users_sample = [dict(row._mapping) for row in sample_users.fetchall()]
+
+            # 샘플 캠페인 정보
+            sample_campaigns = await conn.execute(text("""
+                SELECT name, client_company, status, budget
+                FROM campaigns
+                ORDER BY created_at
+                LIMIT 3
+            """))
+            campaigns_sample = [dict(row._mapping) for row in sample_campaigns.fetchall()]
+
+            await engine.dispose()
+
+            return {
+                "status": "success",
+                "data_summary": {
+                    "users": users_total,
+                    "campaigns": campaigns_total,
+                    "products": products_total,
+                    "work_types": work_types_total
+                },
+                "sample_data": {
+                    "users": users_sample,
+                    "campaigns": campaigns_sample
+                },
+                "has_test_data": users_total > 0 and campaigns_total > 0
+            }
+
+    except Exception as e:
+        return {"status": "error", "message": f"Data check failed: {str(e)}"}
+
+
 # API 라우터 등록 - 핵심 기능
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(users.router, prefix="/api/users", tags=["사용자"])
