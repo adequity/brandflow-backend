@@ -449,6 +449,72 @@ async def debug_campaigns():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/admin/fix-campaign-company")
+async def fix_campaign_company():
+    """기존 캠페인들을 AGENCY_ADMIN company로 업데이트"""
+    try:
+        from sqlalchemy import text
+
+        async for db in get_async_db():
+            try:
+                # AGENCY_ADMIN 사용자 찾기 (2222@brandflow.com)
+                agency_admin_query = text("""
+                    SELECT id, company FROM users
+                    WHERE email = '2222@brandflow.com' AND role = 'AGENCY_ADMIN'
+                """)
+
+                admin_result = await db.execute(agency_admin_query)
+                admin_data = admin_result.fetchone()
+
+                if not admin_data:
+                    return {"status": "error", "message": "AGENCY_ADMIN user not found"}
+
+                admin_id = admin_data[0]
+                admin_company = admin_data[1]
+
+                # 모든 캠페인의 creator를 AGENCY_ADMIN으로 업데이트
+                update_campaigns_query = text("""
+                    UPDATE campaigns
+                    SET creator_id = :admin_id
+                    WHERE creator_id IS NOT NULL
+                """)
+
+                update_result = await db.execute(update_campaigns_query, {"admin_id": admin_id})
+
+                # 캠페인 creator들의 company를 AGENCY_ADMIN company로 업데이트 (다른 방법)
+                # 또는 AGENCY_ADMIN과 다른 company를 가진 creator들을 AGENCY_ADMIN company로 업데이트
+                update_users_query = text("""
+                    UPDATE users
+                    SET company = :admin_company
+                    WHERE id IN (
+                        SELECT DISTINCT creator_id FROM campaigns WHERE creator_id IS NOT NULL
+                    ) AND company != :admin_company
+                """)
+
+                users_update_result = await db.execute(update_users_query, {"admin_company": admin_company})
+
+                await db.commit()
+
+                return {
+                    "status": "success",
+                    "message": "캠페인 company 정보 업데이트 완료",
+                    "agency_admin": {
+                        "id": admin_id,
+                        "company": admin_company
+                    },
+                    "campaigns_updated": update_result.rowcount,
+                    "users_updated": users_update_result.rowcount
+                }
+
+            except Exception as e:
+                await db.rollback()
+                raise e
+            finally:
+                await db.close()
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/admin/check-test-data")
 async def check_test_data():
     """Railway 환경의 테스트 데이터 존재 여부 확인"""
