@@ -55,11 +55,22 @@ async def get_campaigns(
         count_query = select(func.count(Campaign.id))
     elif user_role == UserRole.AGENCY_ADMIN.value:
         # 대행사 어드민은 같은 회사의 캠페인들 조회 가능 (creator의 company 기준)
+        # 임시: company가 NULL이거나 빈 값인 경우도 포함하여 기존 캠페인들을 표시
         query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).join(User, Campaign.creator_id == User.id).where(
-            User.company == current_user.company
+            or_(
+                User.company == current_user.company,
+                User.company.is_(None),
+                User.company == '',
+                current_user.company.is_(None)  # 현재 사용자의 company가 None인 경우 모든 캠페인 표시
+            )
         )
         count_query = select(func.count(Campaign.id)).join(User, Campaign.creator_id == User.id).where(
-            User.company == current_user.company
+            or_(
+                User.company == current_user.company,
+                User.company.is_(None),
+                User.company == '',
+                current_user.company.is_(None)
+            )
         )
     elif user_role == UserRole.CLIENT.value:
         # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_user_id 외래키 관계 사용)
