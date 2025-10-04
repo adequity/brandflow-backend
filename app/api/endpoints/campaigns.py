@@ -967,9 +967,18 @@ async def get_campaign_detail(
                 print(f"[CAMPAIGN-DETAIL-JWT] CLIENT permission denied: client_user_id={campaign.client_user_id}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
         elif user_role == UserRole.AGENCY_ADMIN.value:
-            # 대행사 어드민은 같은 회사 캠페인만 조회 가능
-            if campaign.creator and campaign.creator.company != current_user.company:
-                print(f"[CAMPAIGN-DETAIL-JWT] AGENCY_ADMIN permission denied: creator.company={campaign.creator.company}, user.company={current_user.company}")
+            # 대행사 어드민은 같은 회사 캠페인만 조회 가능 (리스트 API와 동일한 로직)
+            # 조건 1: creator의 company가 일치하는 캠페인
+            # 조건 2: staff가 현재 사용자이고, staff의 company도 같은 캠페인
+            creator_company_match = campaign.creator and campaign.creator.company == current_user.company
+            staff_match = (campaign.staff_id == user_id and
+                          campaign.staff_user and
+                          campaign.staff_user.company == current_user.company)
+
+            if not (creator_company_match or staff_match):
+                creator_company = campaign.creator.company if campaign.creator else "None"
+                staff_company = campaign.staff_user.company if campaign.staff_user else "None"
+                print(f"[CAMPAIGN-DETAIL-JWT] AGENCY_ADMIN permission denied: creator.company={creator_company}, staff.company={staff_company}, user.company={current_user.company}, staff_id={campaign.staff_id}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="이 캠페인에 접근할 권한이 없습니다.")
         elif user_role == UserRole.STAFF.value:
             # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 조회 가능
