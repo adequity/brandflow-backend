@@ -54,48 +54,80 @@ async def get_campaigns(
         query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts))
         count_query = select(func.count(Campaign.id))
     elif user_role == UserRole.AGENCY_ADMIN.value:
-        # 대행사 어드민은 다음 조건의 캠페인들 조회 가능:
-        # 1. creator의 company가 같은 캠페인
-        # 2. campaigns.staff_id가 현재 사용자인 캠페인
-        # 3. company가 NULL이거나 빈 값인 경우 포함 (기존 데이터 호환)
+        # AGENCY_ADMIN은 다음 조건의 캠페인 조회 가능:
+        # 1. campaigns.company가 사용자 company와 일치
+        # 2. campaigns.staff_id가 현재 사용자인 캠페인 (회사별 데이터 분리를 위해 user company도 확인)
 
-        # AGENCY_ADMIN은 오직 자신의 company와 관련된 캠페인만 조회 가능
         if current_user.company is None or current_user.company == '':
             # company가 없는 사용자는 캠페인 조회 불가 (보안 강화)
             query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).where(False)
             count_query = select(func.count(Campaign.id)).where(False)
         else:
-            # 엄격한 company 기반 필터링 (보안 강화)
-            # 조건 1: creator의 company가 정확히 일치
-            # 조건 2: staff_id가 현재 사용자이고, 현재 사용자의 company와 일치
-            creator_alias = User.__table__.alias('creator')
-            staff_alias = User.__table__.alias('staff')
+            # Campaign.company 컬럼을 직접 사용한 간단한 쿼리 (성능 개선)
+            # Runtime 컬럼 존재 확인을 통한 Graceful Fallback
+            from sqlalchemy import text
 
-            query = select(Campaign).options(
-                joinedload(Campaign.creator),
-                joinedload(Campaign.client_user),
-                joinedload(Campaign.staff_user),
-                joinedload(Campaign.posts)
-            ).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
-                or_(
-                    # 조건 1: creator의 company가 정확히 일치하는 캠페인
-                    creator_alias.c.company == current_user.company,
-                    # 조건 2: staff가 현재 사용자이고, staff의 company도 같은 캠페인
-                    and_(
+            # company 컬럼 존재 여부 확인
+            check_column_query = text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'campaigns' AND column_name = 'company'
+            """)
+            column_result = await db.execute(check_column_query)
+            company_column_exists = column_result.fetchone() is not None
+
+            if company_column_exists:
+                # campaigns.company 컬럼이 있는 경우 - 직접 필터링 (성능 최적화)
+                query = select(Campaign).options(
+                    joinedload(Campaign.creator),
+                    joinedload(Campaign.client_user),
+                    joinedload(Campaign.staff_user),
+                    joinedload(Campaign.posts)
+                ).where(
+                    or_(
+                        # 조건 1: campaign.company가 사용자 company와 일치
+                        Campaign.company == current_user.company,
+                        # 조건 2: staff_id가 현재 사용자 (회사별 분리를 위해 추가 확인)
                         Campaign.staff_id == user_id,
-                        staff_alias.c.company == current_user.company
+                        # 조건 3: 기존 데이터 호환성 (company가 NULL인 경우)
+                        Campaign.company.is_(None)
                     )
                 )
-            )
-            count_query = select(func.count(Campaign.id)).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
-                or_(
-                    creator_alias.c.company == current_user.company,
-                    and_(
+                count_query = select(func.count(Campaign.id)).where(
+                    or_(
+                        Campaign.company == current_user.company,
                         Campaign.staff_id == user_id,
-                        staff_alias.c.company == current_user.company
+                        Campaign.company.is_(None)
                     )
                 )
-            )
+            else:
+                # campaigns.company 컬럼이 없는 경우 - 기존 User JOIN 방식 사용 (Fallback)
+                creator_alias = User.__table__.alias('creator')
+                staff_alias = User.__table__.alias('staff')
+
+                query = select(Campaign).options(
+                    joinedload(Campaign.creator),
+                    joinedload(Campaign.client_user),
+                    joinedload(Campaign.staff_user),
+                    joinedload(Campaign.posts)
+                ).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
+                    or_(
+                        creator_alias.c.company == current_user.company,
+                        and_(
+                            Campaign.staff_id == user_id,
+                            staff_alias.c.company == current_user.company
+                        )
+                    )
+                )
+                count_query = select(func.count(Campaign.id)).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
+                    or_(
+                        creator_alias.c.company == current_user.company,
+                        and_(
+                            Campaign.staff_id == user_id,
+                            staff_alias.c.company == current_user.company
+                        )
+                    )
+                )
     elif user_role == UserRole.CLIENT.value:
         # 클라이언트는 자신을 대상으로 한 캠페인만 조회 가능 (client_user_id 외래키 관계 사용)
         query = select(Campaign).options(
