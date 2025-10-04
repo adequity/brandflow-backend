@@ -676,6 +676,71 @@ async def fix_campaign_50():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/admin/migrate-campaign-company")
+async def migrate_campaign_company():
+    """기존 캠페인들에 적절한 company 값 설정"""
+    try:
+        from sqlalchemy import text
+
+        async for db in get_async_db():
+            try:
+                # campaigns.company 컬럼이 존재하는지 확인
+                check_column_query = text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'company'
+                """)
+                column_result = await db.execute(check_column_query)
+                company_column_exists = column_result.fetchone() is not None
+
+                if not company_column_exists:
+                    return {"status": "error", "message": "campaigns.company 컬럼이 존재하지 않습니다"}
+
+                # company가 NULL인 캠페인들에 creator의 company 값 설정
+                update_query = text("""
+                    UPDATE campaigns
+                    SET company = users.company
+                    FROM users
+                    WHERE campaigns.creator_id = users.id
+                      AND campaigns.company IS NULL
+                      AND users.company IS NOT NULL
+                """)
+
+                update_result = await db.execute(update_query)
+                await db.commit()
+
+                # 결과 확인
+                check_query = text("""
+                    SELECT
+                        COUNT(*) as total_campaigns,
+                        COUNT(company) as campaigns_with_company,
+                        COUNT(CASE WHEN company IS NULL THEN 1 END) as campaigns_without_company
+                    FROM campaigns
+                """)
+
+                check_result = await db.execute(check_query)
+                stats = check_result.fetchone()
+
+                return {
+                    "status": "success",
+                    "message": f"캠페인 company 마이그레이션 완료: {update_result.rowcount}개 캠페인 업데이트",
+                    "updated_rows": update_result.rowcount,
+                    "stats": {
+                        "total_campaigns": stats[0],
+                        "campaigns_with_company": stats[1],
+                        "campaigns_without_company": stats[2]
+                    }
+                }
+
+            except Exception as e:
+                await db.rollback()
+                raise e
+            finally:
+                await db.close()
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/admin/check-test-data")
 async def check_test_data():
     """Railway 환경의 테스트 데이터 존재 여부 확인"""

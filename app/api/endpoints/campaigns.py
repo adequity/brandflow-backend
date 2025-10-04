@@ -85,19 +85,16 @@ async def get_campaigns(
                     joinedload(Campaign.posts)
                 ).where(
                     or_(
-                        # 조건 1: campaign.company가 사용자 company와 일치
+                        # 조건 1: campaign.company가 사용자 company와 정확히 일치
                         Campaign.company == current_user.company,
-                        # 조건 2: staff_id가 현재 사용자 (회사별 분리를 위해 추가 확인)
-                        Campaign.staff_id == user_id,
-                        # 조건 3: 기존 데이터 호환성 (company가 NULL인 경우)
-                        Campaign.company.is_(None)
+                        # 조건 2: staff_id가 현재 사용자인 캠페인 (보안 강화)
+                        Campaign.staff_id == user_id
                     )
                 )
                 count_query = select(func.count(Campaign.id)).where(
                     or_(
                         Campaign.company == current_user.company,
-                        Campaign.staff_id == user_id,
-                        Campaign.company.is_(None)
+                        Campaign.staff_id == user_id
                     )
                 )
             else:
