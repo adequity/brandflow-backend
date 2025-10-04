@@ -12,6 +12,7 @@ class OrderRequest(Base, TimestampMixin):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String(50), nullable=False, default="대기")  # 대기, 승인, 거부, 완료
+    company = Column(String(200), nullable=True, index=True, default='default_company')  # 회사별 주문요청 분리
     cost_price = Column(Integer, nullable=True)  # 원가 (원 단위)
     resource_type = Column(String(100), nullable=True)
 

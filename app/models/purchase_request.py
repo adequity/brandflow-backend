@@ -19,6 +19,7 @@ class PurchaseRequest(Base, TimestampMixin):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     amount = Column(Float, nullable=False)
+    company = Column(String(200), nullable=True, index=True, default='default_company')  # 회사별 구매요청 분리
     quantity = Column(Integer, default=1)
     vendor = Column(String(200), nullable=True)
     status = Column(SQLEnum(RequestStatus), default=RequestStatus.PENDING)

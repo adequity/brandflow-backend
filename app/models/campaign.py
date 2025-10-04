@@ -20,6 +20,7 @@ class Campaign(Base, TimestampMixin):
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)  # Add description field for frontend compatibility
     client_company = Column(String(200), nullable=True)  # 기존 호환성 유지 (nullable로 변경)
+    company = Column(String(200), nullable=True, index=True, default='default_company')  # 회사별 캠페인 분리
     budget = Column(Float, nullable=False)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=False)
