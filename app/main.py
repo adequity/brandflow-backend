@@ -515,6 +515,96 @@ async def fix_campaign_company():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/admin/check-campaign-50")
+async def check_campaign_50():
+    """campaign 50의 상세 정보 확인"""
+    try:
+        from sqlalchemy import text
+
+        async for db in get_async_db():
+            try:
+                # campaign 50의 상세 정보 조회
+                campaign_query = text("""
+                    SELECT
+                        c.id as campaign_id,
+                        c.name as campaign_name,
+                        c.creator_id,
+                        c.staff_id,
+                        c.client_user_id,
+                        creator.name as creator_name,
+                        creator.email as creator_email,
+                        creator.company as creator_company,
+                        creator.role as creator_role,
+                        staff.name as staff_name,
+                        staff.email as staff_email,
+                        staff.company as staff_company,
+                        staff.role as staff_role
+                    FROM campaigns c
+                    LEFT JOIN users creator ON c.creator_id = creator.id
+                    LEFT JOIN users staff ON c.staff_id = staff.id
+                    WHERE c.id = 50
+                """)
+
+                campaign_result = await db.execute(campaign_query)
+                campaign_data = campaign_result.fetchone()
+
+                if not campaign_data:
+                    return {"status": "error", "message": "Campaign 50 not found"}
+
+                # 현재 AGENCY_ADMIN 사용자 정보
+                agency_admin_query = text("""
+                    SELECT id, name, email, company, role
+                    FROM users
+                    WHERE email = '2222@brandflow.com' AND role = 'AGENCY_ADMIN'
+                """)
+
+                admin_result = await db.execute(agency_admin_query)
+                admin_data = admin_result.fetchone()
+
+                return {
+                    "status": "success",
+                    "campaign_50": {
+                        "id": campaign_data[0],
+                        "name": campaign_data[1],
+                        "creator_id": campaign_data[2],
+                        "staff_id": campaign_data[3],
+                        "client_user_id": campaign_data[4],
+                        "creator": {
+                            "name": campaign_data[5],
+                            "email": campaign_data[6],
+                            "company": campaign_data[7],
+                            "role": campaign_data[8]
+                        },
+                        "staff": {
+                            "name": campaign_data[9],
+                            "email": campaign_data[10],
+                            "company": campaign_data[11],
+                            "role": campaign_data[12]
+                        } if campaign_data[9] else None
+                    },
+                    "agency_admin": {
+                        "id": admin_data[0],
+                        "name": admin_data[1],
+                        "email": admin_data[2],
+                        "company": admin_data[3],
+                        "role": admin_data[4]
+                    } if admin_data else None,
+                    "visibility_analysis": {
+                        "creator_company_match": campaign_data[7] == admin_data[3] if admin_data else False,
+                        "staff_id_match": campaign_data[3] == admin_data[0] if admin_data else False,
+                        "should_be_visible": (campaign_data[7] == admin_data[3]) or (campaign_data[3] == admin_data[0]) if admin_data else False
+                    }
+                }
+
+            except Exception as e:
+                await db.rollback()
+                raise e
+            finally:
+                await db.close()
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/admin/check-test-data")
 async def check_test_data():
     """Railway 환경의 테스트 데이터 존재 여부 확인"""
