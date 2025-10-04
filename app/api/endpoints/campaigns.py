@@ -59,28 +59,41 @@ async def get_campaigns(
         # 2. campaigns.staff_id가 현재 사용자인 캠페인
         # 3. company가 NULL이거나 빈 값인 경우 포함 (기존 데이터 호환)
 
+        # AGENCY_ADMIN은 오직 자신의 company와 관련된 캠페인만 조회 가능
         if current_user.company is None or current_user.company == '':
-            # company가 없는 경우 모든 캠페인 표시
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts))
-            count_query = select(func.count(Campaign.id))
+            # company가 없는 사용자는 캠페인 조회 불가 (보안 강화)
+            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).where(False)
+            count_query = select(func.count(Campaign.id)).where(False)
         else:
-            # company 기반 필터링 + staff_id 기반 필터링
-            query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).outerjoin(User, Campaign.creator_id == User.id).where(
+            # 엄격한 company 기반 필터링 (보안 강화)
+            # 조건 1: creator의 company가 정확히 일치
+            # 조건 2: staff_id가 현재 사용자이고, 현재 사용자의 company와 일치
+            creator_alias = User.__table__.alias('creator')
+            staff_alias = User.__table__.alias('staff')
+
+            query = select(Campaign).options(
+                joinedload(Campaign.creator),
+                joinedload(Campaign.client_user),
+                joinedload(Campaign.staff_user),
+                joinedload(Campaign.posts)
+            ).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
                 or_(
-                    # 조건 1: creator의 company가 같은 캠페인
-                    User.company == current_user.company,
-                    User.company.is_(None),
-                    User.company == '',
-                    # 조건 2: campaigns.staff_id가 현재 사용자인 캠페인
-                    Campaign.staff_id == user_id
+                    # 조건 1: creator의 company가 정확히 일치하는 캠페인
+                    creator_alias.c.company == current_user.company,
+                    # 조건 2: staff가 현재 사용자이고, staff의 company도 같은 캠페인
+                    and_(
+                        Campaign.staff_id == user_id,
+                        staff_alias.c.company == current_user.company
+                    )
                 )
             )
-            count_query = select(func.count(Campaign.id)).outerjoin(User, Campaign.creator_id == User.id).where(
+            count_query = select(func.count(Campaign.id)).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
                 or_(
-                    User.company == current_user.company,
-                    User.company.is_(None),
-                    User.company == '',
-                    Campaign.staff_id == user_id
+                    creator_alias.c.company == current_user.company,
+                    and_(
+                        Campaign.staff_id == user_id,
+                        staff_alias.c.company == current_user.company
+                    )
                 )
             )
     elif user_role == UserRole.CLIENT.value:
