@@ -605,6 +605,77 @@ async def check_campaign_50():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/admin/fix-campaign-50")
+async def fix_campaign_50():
+    """campaign 50을 agency_admin이 볼 수 있도록 staff_id 업데이트"""
+    try:
+        from sqlalchemy import text
+
+        async for db in get_async_db():
+            try:
+                # AGENCY_ADMIN 사용자 ID 찾기
+                agency_admin_query = text("""
+                    SELECT id FROM users
+                    WHERE email = '2222@brandflow.com' AND role = 'AGENCY_ADMIN'
+                """)
+
+                admin_result = await db.execute(agency_admin_query)
+                admin_data = admin_result.fetchone()
+
+                if not admin_data:
+                    return {"status": "error", "message": "AGENCY_ADMIN user not found"}
+
+                admin_id = admin_data[0]
+
+                # Campaign 50의 staff_id를 AGENCY_ADMIN으로 업데이트
+                update_query = text("""
+                    UPDATE campaigns
+                    SET staff_id = :admin_id
+                    WHERE id = 50
+                """)
+
+                update_result = await db.execute(update_query, {"admin_id": admin_id})
+
+                # 업데이트된 campaign 50 정보 확인
+                check_query = text("""
+                    SELECT c.id, c.name, c.creator_id, c.staff_id,
+                           creator.company as creator_company,
+                           staff.company as staff_company
+                    FROM campaigns c
+                    LEFT JOIN users creator ON c.creator_id = creator.id
+                    LEFT JOIN users staff ON c.staff_id = staff.id
+                    WHERE c.id = 50
+                """)
+
+                check_result = await db.execute(check_query)
+                check_data = check_result.fetchone()
+
+                await db.commit()
+
+                return {
+                    "status": "success",
+                    "message": "Campaign 50 staff_id가 AGENCY_ADMIN으로 업데이트되었습니다",
+                    "agency_admin_id": admin_id,
+                    "updated_rows": update_result.rowcount,
+                    "campaign_50_after_update": {
+                        "id": check_data[0],
+                        "name": check_data[1],
+                        "creator_id": check_data[2],
+                        "staff_id": check_data[3],
+                        "creator_company": check_data[4],
+                        "staff_company": check_data[5]
+                    } if check_data else None
+                }
+
+            except Exception as e:
+                await db.rollback()
+                raise e
+            finally:
+                await db.close()
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/admin/check-test-data")
 async def check_test_data():
     """Railway 환경의 테스트 데이터 존재 여부 확인"""
