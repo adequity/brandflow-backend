@@ -1113,30 +1113,41 @@ async def update_campaign(
             elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
                 # 대행사 어드민은 다음 캠페인을 수정 가능:
                 # 1) 같은 회사 직원이 생성한 캠페인
-                # 2) 클라이언트를 위해 생성된 캠페인 (client_user_id 기반)
+                # 2) 자신이 담당 스태프로 지정된 캠페인 (같은 회사)
+                # 3) 클라이언트를 위해 생성된 캠페인 (client_user_id 기반)
                 can_edit = False
-                
+
                 # 1) 캠페인 생성자가 같은 회사인지 확인
                 creator_query = select(User).where(User.id == campaign.creator_id)
                 creator_result = await db.execute(creator_query)
                 creator = creator_result.scalar_one_or_none()
-                
+
                 if creator and creator.company == viewer.company:
                     can_edit = True
                     print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: same company creator")
-                
-                # 2) 클라이언트 사용자가 있고, 그 클라이언트의 캠페인을 대행사에서 관리하는지 확인
+
+                # 2) 자신이 담당 스태프로 지정되었고 같은 회사인지 확인
+                if not can_edit and campaign.staff_id == user_id:
+                    staff_query = select(User).where(User.id == campaign.staff_id)
+                    staff_result = await db.execute(staff_query)
+                    staff_user = staff_result.scalar_one_or_none()
+
+                    if staff_user and staff_user.company == viewer.company:
+                        can_edit = True
+                        print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: assigned as staff with same company")
+
+                # 3) 클라이언트 사용자가 있고, 그 클라이언트의 캠페인을 대행사에서 관리하는지 확인
                 if not can_edit and campaign.client_user_id:
                     client_query = select(User).where(User.id == campaign.client_user_id)
                     client_result = await db.execute(client_query)
                     client_user = client_result.scalar_one_or_none()
-                    
+
                     # client_company 필드와 대행사가 관리하는 클라이언트인지 확인 (추가 로직 필요)
                     # 현재는 단순히 client_user_id가 있으면 편집 가능하게 설정
                     if client_user:
                         can_edit = True
                         print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: client campaign for user_id={campaign.client_user_id}")
-                
+
                 if not can_edit:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             elif user_role == UserRole.STAFF.value:
@@ -1391,21 +1402,35 @@ async def update_campaign(
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
                 can_edit = False
+
+                # 1) 캠페인 생성자가 같은 회사인지 확인
                 creator_query = select(User).where(User.id == campaign.creator_id)
                 creator_result = await db.execute(creator_query)
                 creator = creator_result.scalar_one_or_none()
-                
+
                 if creator and creator.company == jwt_user.company:
                     can_edit = True
                     print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: same company campaign")
-                elif campaign.client_user_id:
+
+                # 2) 자신이 담당 스태프로 지정되었고 같은 회사인지 확인
+                if not can_edit and campaign.staff_id == user_id:
+                    staff_query = select(User).where(User.id == campaign.staff_id)
+                    staff_result = await db.execute(staff_query)
+                    staff_user = staff_result.scalar_one_or_none()
+
+                    if staff_user and staff_user.company == jwt_user.company:
+                        can_edit = True
+                        print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: assigned as staff with same company")
+
+                # 3) 클라이언트 사용자가 있고 같은 회사인지 확인
+                if not can_edit and campaign.client_user_id:
                     client_query = select(User).where(User.id == campaign.client_user_id)
                     client_result = await db.execute(client_query)
                     client = client_result.scalar_one_or_none()
                     if client and client.company == jwt_user.company:
                         can_edit = True
                         print(f"[CAMPAIGN-UPDATE] AGENCY_ADMIN can edit: client from same company")
-                
+
                 if not can_edit:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             else:
@@ -2170,13 +2195,29 @@ async def delete_campaign(
                 can_delete = True
                 print(f"[CAMPAIGN-DELETE-JWT] ✅ Super admin can delete any campaign")
             elif current_user.role == UserRole.AGENCY_ADMIN:
-                # 대행사 어드민은 같은 회사의 모든 캠페인 삭제 가능
+                # 대행사 어드민은 다음 캠페인 삭제 가능:
+                # 1) 같은 회사 직원이 생성한 캠페인
+                # 2) 자신이 담당 스태프로 지정된 캠페인 (같은 회사)
                 print(f"[CAMPAIGN-DELETE-JWT] Agency admin check - User company: '{current_user.company}', Campaign creator company: '{campaign.creator.company if campaign.creator else 'None'}'")
+
+                # 1) 캠페인 생성자가 같은 회사인지 확인
                 if campaign.creator and campaign.creator.company == current_user.company:
                     can_delete = True
-                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Agency admin can delete campaign from same company")
-                else:
-                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Agency admin cannot delete - different company")
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ Agency admin can delete: same company creator")
+
+                # 2) 자신이 담당 스태프로 지정되었고 같은 회사인지 확인
+                if not can_delete and campaign.staff_id == current_user.id:
+                    # staff 사용자 정보 조회
+                    staff_query = select(User).where(User.id == campaign.staff_id)
+                    staff_result = await db.execute(staff_query)
+                    staff_user = staff_result.scalar_one_or_none()
+
+                    if staff_user and staff_user.company == current_user.company:
+                        can_delete = True
+                        print(f"[CAMPAIGN-DELETE-JWT] ✅ Agency admin can delete: assigned as staff with same company")
+
+                if not can_delete:
+                    print(f"[CAMPAIGN-DELETE-JWT] ❌ Agency admin cannot delete - no permission")
             elif current_user.role == UserRole.STAFF:
                 # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 삭제 가능
                 print(f"[CAMPAIGN-DELETE-JWT] Staff check - User ID: {current_user.id}, Campaign creator ID: {campaign.creator_id}, Campaign staff ID: {campaign.staff_id}")
