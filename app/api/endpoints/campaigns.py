@@ -100,32 +100,30 @@ async def get_campaigns(
                     )
                 )
             else:
-                # campaigns.company 컬럼이 없는 경우 - 기존 User JOIN 방식 사용 (Fallback)
-                print(f"[CAMPAIGNS-LIST] Fallback 로직 사용 - User JOIN 방식")
-                creator_alias = User.__table__.alias('creator')
-                staff_alias = User.__table__.alias('staff')
+                # campaigns.company 컬럼이 없는 경우 - 서브쿼리 방식으로 안전하게 처리 (Fallback)
+                print(f"[CAMPAIGNS-LIST] Fallback 로직 사용 - 서브쿼리 방식")
 
+                # 1. 먼저 현재 사용자 company와 일치하는 creator_id 리스트 가져오기
+                creator_subquery = select(User.id).where(User.company == current_user.company)
+
+                # 2. 캠페인 필터링
                 query = select(Campaign).options(
                     joinedload(Campaign.creator),
                     joinedload(Campaign.client_user),
                     joinedload(Campaign.staff_user),
                     joinedload(Campaign.posts)
-                ).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
+                ).where(
                     or_(
-                        creator_alias.c.company == current_user.company,
-                        and_(
-                            Campaign.staff_id == user_id,
-                            staff_alias.c.company == current_user.company
-                        )
+                        # 조건 1: creator가 같은 company
+                        Campaign.creator_id.in_(creator_subquery),
+                        # 조건 2: staff가 현재 사용자
+                        Campaign.staff_id == user_id
                     )
                 )
-                count_query = select(func.count(Campaign.id)).outerjoin(creator_alias, Campaign.creator_id == creator_alias.c.id).outerjoin(staff_alias, Campaign.staff_id == staff_alias.c.id).where(
+                count_query = select(func.count(Campaign.id)).where(
                     or_(
-                        creator_alias.c.company == current_user.company,
-                        and_(
-                            Campaign.staff_id == user_id,
-                            staff_alias.c.company == current_user.company
-                        )
+                        Campaign.creator_id.in_(creator_subquery),
+                        Campaign.staff_id == user_id
                     )
                 )
     elif user_role == UserRole.CLIENT.value:
