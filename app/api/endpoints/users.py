@@ -228,7 +228,8 @@ async def create_user(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
 ):
     """새 사용자 생성 (권한 확인)"""
     # Node.js API 호환 모드인지 확인
