@@ -10,6 +10,6 @@ uploads = "/app/data"
 
 [env]
 PYTHONPATH = "."
-VERSION = "2.4.0"
+VERSION = "2.5.0"
 NIXPACKS_PYTHON_VERSION = "3.11.6"
 UPLOAD_DIR = "/app/data/uploads"
