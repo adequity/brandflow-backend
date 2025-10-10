@@ -162,11 +162,17 @@ app.add_middleware(SimplePerformanceMiddleware)
 @app.exception_handler(Exception)
 async def cors_exception_handler(request: Request, exc: Exception):
     """모든 예외에 대해 CORS 헤더를 추가하여 프론트엔드에서 에러를 확인할 수 있도록 함"""
+    import traceback
+    error_traceback = traceback.format_exc()
+    print(f"[ERROR] {type(exc).__name__}: {str(exc)}")
+    print(f"[ERROR-TRACEBACK] {error_traceback}")
+
     response = JSONResponse(
         status_code=500,
         content={
             "detail": f"Internal server error: {str(exc)}",
-            "error_type": type(exc).__name__
+            "error_type": type(exc).__name__,
+            "traceback": error_traceback if request.app.debug else None  # 개발 환경에서만 traceback 노출
         },
     )
     
