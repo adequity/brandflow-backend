@@ -76,6 +76,8 @@ async def get_campaigns(
             column_result = await db.execute(check_column_query)
             company_column_exists = column_result.fetchone() is not None
 
+            print(f"[CAMPAIGNS-LIST] campaigns.company 컬럼 존재 여부: {company_column_exists}")
+
             if company_column_exists:
                 # campaigns.company 컬럼이 있는 경우 - 직접 필터링 (성능 최적화)
                 query = select(Campaign).options(
@@ -99,6 +101,7 @@ async def get_campaigns(
                 )
             else:
                 # campaigns.company 컬럼이 없는 경우 - 기존 User JOIN 방식 사용 (Fallback)
+                print(f"[CAMPAIGNS-LIST] Fallback 로직 사용 - User JOIN 방식")
                 creator_alias = User.__table__.alias('creator')
                 staff_alias = User.__table__.alias('staff')
 
