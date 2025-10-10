@@ -1002,6 +1002,118 @@ async def debug_imports():
 
 # 테스트 엔드포인트 제거
 
+@app.get("/api/admin/add-all-company-columns")
+async def add_all_company_columns():
+    """모든 테이블에 company 컬럼 추가 (campaigns, posts, order_requests, purchase_requests)"""
+    try:
+        from sqlalchemy import text
+
+        results = {}
+
+        async for db in get_async_db():
+            try:
+                # 1. campaigns 테이블에 company 컬럼 추가
+                try:
+                    await db.execute(text("""
+                        ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS company VARCHAR(200)
+                    """))
+                    await db.execute(text("""
+                        CREATE INDEX IF NOT EXISTS ix_campaigns_company ON campaigns (company)
+                    """))
+                    # creator의 company로 설정
+                    await db.execute(text("""
+                        UPDATE campaigns
+                        SET company = users.company
+                        FROM users
+                        WHERE campaigns.creator_id = users.id
+                          AND campaigns.company IS NULL
+                          AND users.company IS NOT NULL
+                    """))
+                    results["campaigns"] = "success"
+                except Exception as e:
+                    results["campaigns"] = f"error: {str(e)}"
+
+                # 2. posts 테이블에 company 컬럼 추가
+                try:
+                    await db.execute(text("""
+                        ALTER TABLE posts ADD COLUMN IF NOT EXISTS company VARCHAR(200)
+                    """))
+                    await db.execute(text("""
+                        CREATE INDEX IF NOT EXISTS ix_posts_company ON posts (company)
+                    """))
+                    # campaign의 company로 설정
+                    await db.execute(text("""
+                        UPDATE posts
+                        SET company = campaigns.company
+                        FROM campaigns
+                        WHERE posts.campaign_id = campaigns.id
+                          AND posts.company IS NULL
+                          AND campaigns.company IS NOT NULL
+                    """))
+                    results["posts"] = "success"
+                except Exception as e:
+                    results["posts"] = f"error: {str(e)}"
+
+                # 3. order_requests 테이블에 company 컬럼 추가
+                try:
+                    await db.execute(text("""
+                        ALTER TABLE order_requests ADD COLUMN IF NOT EXISTS company VARCHAR(200)
+                    """))
+                    await db.execute(text("""
+                        CREATE INDEX IF NOT EXISTS ix_order_requests_company ON order_requests (company)
+                    """))
+                    # post의 company로 설정
+                    await db.execute(text("""
+                        UPDATE order_requests
+                        SET company = posts.company
+                        FROM posts
+                        WHERE order_requests.post_id = posts.id
+                          AND order_requests.company IS NULL
+                          AND posts.company IS NOT NULL
+                    """))
+                    results["order_requests"] = "success"
+                except Exception as e:
+                    results["order_requests"] = f"error: {str(e)}"
+
+                # 4. purchase_requests 테이블에 company 컬럼 추가
+                try:
+                    await db.execute(text("""
+                        ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS company VARCHAR(200)
+                    """))
+                    await db.execute(text("""
+                        CREATE INDEX IF NOT EXISTS ix_purchase_requests_company ON purchase_requests (company)
+                    """))
+                    # requester의 company로 설정
+                    await db.execute(text("""
+                        UPDATE purchase_requests
+                        SET company = users.company
+                        FROM users
+                        WHERE purchase_requests.requester_id = users.id
+                          AND purchase_requests.company IS NULL
+                          AND users.company IS NOT NULL
+                    """))
+                    results["purchase_requests"] = "success"
+                except Exception as e:
+                    results["purchase_requests"] = f"error: {str(e)}"
+
+                await db.commit()
+
+                return {
+                    "status": "success",
+                    "message": "모든 테이블에 company 컬럼 추가 완료",
+                    "results": results
+                }
+
+            except Exception as e:
+                await db.rollback()
+                return {"status": "error", "message": f"Migration failed: {str(e)}", "results": results}
+            finally:
+                await db.close()
+                break
+
+    except Exception as e:
+        return {"status": "error", "message": f"Database connection failed: {str(e)}"}
+
 
 if __name__ == "__main__":
     uvicorn.run(
