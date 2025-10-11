@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 from urllib.parse import unquote
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.db.database import get_async_db
 from app.api.deps import get_current_active_user
@@ -29,6 +29,14 @@ class ProductCreate(BaseModel):
     maxQuantity: Optional[int] = None
     tags: Optional[str] = ""
 
+    @field_validator('sellingPrice', 'maxQuantity', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        """빈 문자열을 None으로 변환"""
+        if v == "" or v is None:
+            return None
+        return v
+
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -42,6 +50,14 @@ class ProductUpdate(BaseModel):
     minQuantity: Optional[int] = None
     maxQuantity: Optional[int] = None
     tags: Optional[str] = None
+
+    @field_validator('costPrice', 'sellingPrice', 'minQuantity', 'maxQuantity', 'work_type_id', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        """빈 문자열을 None으로 변환"""
+        if v == "" or v is None:
+            return None
+        return v
 
 
 @router.get("/", response_model=List[dict])
