@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "brandflow-production-secret-key-2024-change-this-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8시간 (업무 시간 동안 끊김 없음)
     
     # Application settings
     DEBUG: bool = False  # Production mode
