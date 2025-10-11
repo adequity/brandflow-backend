@@ -27,14 +27,34 @@ class UserBase(BaseModel):
     @validator('role', pre=True)
     def validate_role(cls, v):
         if isinstance(v, str):
-            # 영어 역할명을 한글로 변환
+            # 한글/영어 역할명을 영문 UserRole enum으로 변환
             role_mapping = {
-                'super_admin': '슈퍼 어드민',
-                'agency_admin': '대행사 어드민', 
-                'staff': '직원',
-                'client': '클라이언트'
+                # 영문 → 영문 (정규화)
+                'super_admin': 'SUPER_ADMIN',
+                'agency_admin': 'AGENCY_ADMIN',
+                'staff': 'STAFF',
+                'client': 'CLIENT',
+                # 대소문자 무관
+                'SUPER_ADMIN': 'SUPER_ADMIN',
+                'AGENCY_ADMIN': 'AGENCY_ADMIN',
+                'STAFF': 'STAFF',
+                'CLIENT': 'CLIENT',
+                # 한글 → 영문 변환
+                '슈퍼 어드민': 'SUPER_ADMIN',
+                '슈퍼어드민': 'SUPER_ADMIN',
+                '대행사 어드민': 'AGENCY_ADMIN',
+                '대행사어드민': 'AGENCY_ADMIN',
+                '직원': 'STAFF',
+                '클라이언트': 'CLIENT'
             }
-            return role_mapping.get(v.lower(), v)
+            # 매핑된 값으로 변환
+            mapped_value = role_mapping.get(v, role_mapping.get(v.lower(), v))
+            # UserRole enum으로 반환
+            try:
+                return UserRole(mapped_value)
+            except ValueError:
+                # 변환할 수 없는 경우 기본값 반환
+                return UserRole.CLIENT
         return v
 
 
