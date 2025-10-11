@@ -109,16 +109,16 @@ async def get_products(
                 "name": product.name,
                 "description": product.description,
                 "price": product.price,
+                "costPrice": product.cost if hasattr(product, 'cost') else product.price,
+                "sellingPrice": None,  # DB에 없는 필드
+                "unit": "건",  # DB에 없는 필드 (기본값)
+                "minQuantity": 1,  # DB에 없는 필드 (기본값)
+                "maxQuantity": None,  # DB에 없는 필드
                 "category": product.category,
+                "sku": product.sku if hasattr(product, 'sku') else None,
                 "isActive": product.is_active
             }
-            
-            # selling_price나 cost_price가 있으면 추가
-            if hasattr(product, 'selling_price') and product.selling_price:
-                product_data["sellingPrice"] = product.selling_price
-            if hasattr(product, 'cost') and product.cost:
-                product_data["costPrice"] = product.cost
-                
+
             products_data.append(product_data)
         
         return products_data
@@ -160,16 +160,16 @@ async def get_products(
                     "description": product.description,
                     "category": product.category,
                     "price": product.price,
+                    "costPrice": product.cost if hasattr(product, 'cost') else product.price,  # 원가
+                    "sellingPrice": None,  # DB에 없는 필드
+                    "unit": "건",  # DB에 없는 필드 (기본값)
+                    "minQuantity": 1,  # DB에 없는 필드 (기본값)
+                    "maxQuantity": None,  # DB에 없는 필드
+                    "sku": product.sku if hasattr(product, 'sku') else None,
                     "isActive": product.is_active,
                     "createdAt": product.created_at.isoformat() if product.created_at else None
                 }
-                
-                # 추가 필드가 있다면 포함
-                if hasattr(product, 'selling_price') and product.selling_price:
-                    product_data["sellingPrice"] = product.selling_price
-                if hasattr(product, 'cost_price') and product.cost_price:
-                    product_data["costPrice"] = product.cost_price
-                    
+
                 products_data.append(product_data)
             
             print(f"[PRODUCTS-LIST-JWT] SUCCESS: Returning {len(products_data)} products")
