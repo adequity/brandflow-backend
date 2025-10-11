@@ -224,15 +224,18 @@ async def create_product(
         print(f"[PRODUCT-CREATE] JWT mode - user_id={current_user.id}, role={user_role}")
 
     try:
-        # work_type 처리 - category name으로 work_type_id 찾기
+        # work_type 처리 - category name으로 work_type_id 찾기 (회사별 필터링)
         work_type_id = product_data.work_type_id
+        user_company = current_user.company or 'default_company'
+
         if product_data.category and not work_type_id:
             work_type_query = select(WorkType).where(
                 WorkType.name == product_data.category,
-                WorkType.is_active == True
+                WorkType.is_active == True,
+                (WorkType.company == user_company) | (WorkType.company.is_(None))
             )
             result = await db.execute(work_type_query)
-            work_type = result.scalar_one_or_none()
+            work_type = result.scalars().first()  # scalar_one_or_none() 대신 first() 사용
             if work_type:
                 work_type_id = work_type.id
 
@@ -437,15 +440,17 @@ async def update_product(
             if existing_product:
                 raise HTTPException(status_code=400, detail="이미 존재하는 SKU입니다")
 
-        # work_type 처리 - category name으로 work_type_id 찾기
+        # work_type 처리 - category name으로 work_type_id 찾기 (회사별 필터링)
         work_type_id = product_data.work_type_id
         if product_data.category and not work_type_id:
+            user_company = current_user.company or 'default_company'
             work_type_query = select(WorkType).where(
                 WorkType.name == product_data.category,
-                WorkType.is_active == True
+                WorkType.is_active == True,
+                (WorkType.company == user_company) | (WorkType.company.is_(None))
             )
             result = await db.execute(work_type_query)
-            work_type = result.scalar_one_or_none()
+            work_type = result.scalars().first()  # scalar_one_or_none() 대신 first() 사용
             if work_type:
                 work_type_id = work_type.id
 
