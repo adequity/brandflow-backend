@@ -256,7 +256,7 @@ async def create_user(
         
         # 직원의 경우 클라이언트 계정만 생성 가능
         if is_staff and not is_admin:
-            if user_data.role not in ['클라이언트', 'client']:
+            if user_data.role != UserRole.CLIENT:
                 raise HTTPException(status_code=403, detail="직원은 클라이언트 계정만 생성할 수 있습니다.")
         
         # 현재 사용자 정보 조회 (회사 확인을 위해)
