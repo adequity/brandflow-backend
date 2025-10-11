@@ -186,8 +186,14 @@ async def create_work_type(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-        # 권한 확인 (관리자만 생성 가능)
-        if user_role not in ["슈퍼 어드민", "대행사 어드민"]:
+        # 권한 확인 (관리자만 생성 가능) - 한글/영문 모두 지원
+        is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민',
+                                   'SUPER_ADMIN', 'AGENCY_ADMIN', 'super_admin', 'agency_admin'] or
+                    '슈퍼' in user_role or 'super' in user_role.lower() or
+                    ('대행사' in user_role and '어드민' in user_role) or
+                    ('agency' in user_role.lower() and 'admin' in user_role.lower()))
+
+        if not is_admin:
             raise HTTPException(status_code=403, detail="작업 유형 생성 권한이 없습니다")
 
         print(f"[WORK-TYPE-CREATE] Node.js API mode - user_id={user_id}, role={user_role}")
@@ -315,8 +321,14 @@ async def update_work_type(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-        # 권한 확인 (관리자만 수정 가능)
-        if user_role not in ["슈퍼 어드민", "대행사 어드민"]:
+        # 권한 확인 (관리자만 수정 가능) - 한글/영문 모두 지원
+        is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민',
+                                   'SUPER_ADMIN', 'AGENCY_ADMIN', 'super_admin', 'agency_admin'] or
+                    '슈퍼' in user_role or 'super' in user_role.lower() or
+                    ('대행사' in user_role and '어드민' in user_role) or
+                    ('agency' in user_role.lower() and 'admin' in user_role.lower()))
+
+        if not is_admin:
             raise HTTPException(status_code=403, detail="작업 유형 수정 권한이 없습니다")
 
         print(f"[WORK-TYPE-UPDATE] Node.js API mode - user_id={user_id}, role={user_role}")
@@ -405,8 +417,14 @@ async def delete_work_type(
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
-        # 권한 확인 (관리자만 삭제 가능)
-        if user_role not in ["슈퍼 어드민", "대행사 어드민"]:
+        # 권한 확인 (관리자만 삭제 가능) - 한글/영문 모두 지원
+        is_admin = (user_role in ['슈퍼 어드민', '슈퍼어드민', '대행사 어드민', '대행사어드민',
+                                   'SUPER_ADMIN', 'AGENCY_ADMIN', 'super_admin', 'agency_admin'] or
+                    '슈퍼' in user_role or 'super' in user_role.lower() or
+                    ('대행사' in user_role and '어드민' in user_role) or
+                    ('agency' in user_role.lower() and 'admin' in user_role.lower()))
+
+        if not is_admin:
             raise HTTPException(status_code=403, detail="작업 유형 삭제 권한이 없습니다")
 
         print(f"[WORK-TYPE-DELETE] Node.js API mode - user_id={user_id}, role={user_role}")
