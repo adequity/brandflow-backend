@@ -1869,6 +1869,8 @@ async def create_campaign_post(
             product_cost=product_cost,  # 상품 원가 자동 연동
             product_name=product_name,  # 상품명 자동 연동
             quantity=post_data.quantity or 1,
+            cost=post_data.cost,  # 포스트별 작업 단가
+            assigned_user_id=post_data.assigned_user_id,  # 담당자 ID
             campaign_id=campaign_id
         )
 
@@ -1892,11 +1894,15 @@ async def create_campaign_post(
             "order_request_id": new_post.order_request_id,
             "start_date": new_post.start_date,
             "due_date": new_post.due_date,
+            "start_datetime": new_post.start_datetime,
+            "due_datetime": new_post.due_datetime,
             "product_id": new_post.product_id,
             "product_cost": new_post.product_cost,  # 상품 원가 포함
             "product_name": new_post.product_name,  # 상품명 포함
             "productName": new_post.product_name,  # 호환성을 위한 별칭
             "quantity": new_post.quantity,
+            "cost": getattr(new_post, 'cost', None),  # 포스트별 작업 단가
+            "assigned_user_id": getattr(new_post, 'assigned_user_id', None),  # 담당자
             "campaign_id": new_post.campaign_id,
             "created_at": new_post.created_at.isoformat() if new_post.created_at else None,
             "updated_at": new_post.updated_at.isoformat() if new_post.updated_at else None
