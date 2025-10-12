@@ -110,10 +110,10 @@ async def get_products(
                 "description": product.description,
                 "price": product.price,
                 "costPrice": product.cost if hasattr(product, 'cost') else product.price,
-                "sellingPrice": None,  # DB에 없는 필드
-                "unit": "건",  # DB에 없는 필드 (기본값)
-                "minQuantity": 1,  # DB에 없는 필드 (기본값)
-                "maxQuantity": None,  # DB에 없는 필드
+                "sellingPrice": product.selling_price if hasattr(product, 'selling_price') else None,
+                "unit": product.unit if hasattr(product, 'unit') else "건",
+                "minQuantity": product.min_quantity if hasattr(product, 'min_quantity') else 1,
+                "maxQuantity": product.max_quantity if hasattr(product, 'max_quantity') else None,
                 "category": product.category,
                 "sku": product.sku if hasattr(product, 'sku') else None,
                 "isActive": product.is_active
@@ -160,11 +160,11 @@ async def get_products(
                     "description": product.description,
                     "category": product.category,
                     "price": product.price,
-                    "costPrice": product.cost if hasattr(product, 'cost') else product.price,  # 원가
-                    "sellingPrice": None,  # DB에 없는 필드
-                    "unit": "건",  # DB에 없는 필드 (기본값)
-                    "minQuantity": 1,  # DB에 없는 필드 (기본값)
-                    "maxQuantity": None,  # DB에 없는 필드
+                    "costPrice": product.cost if hasattr(product, 'cost') else product.price,
+                    "sellingPrice": product.selling_price if hasattr(product, 'selling_price') else None,
+                    "unit": product.unit if hasattr(product, 'unit') else "건",
+                    "minQuantity": product.min_quantity if hasattr(product, 'min_quantity') else 1,
+                    "maxQuantity": product.max_quantity if hasattr(product, 'max_quantity') else None,
                     "sku": product.sku if hasattr(product, 'sku') else None,
                     "isActive": product.is_active,
                     "createdAt": product.created_at.isoformat() if product.created_at else None
@@ -251,7 +251,7 @@ async def create_product(
             if existing_product:
                 raise HTTPException(status_code=400, detail="이미 존재하는 SKU입니다")
 
-        # 새 상품 생성 (기존 DB 스키마와 호환)
+        # 새 상품 생성 (모든 필드 저장)
         user_company = current_user.company or 'default_company'
         new_product = Product(
             name=product_data.name,
@@ -260,6 +260,10 @@ async def create_product(
             cost=product_data.costPrice,   # 호환성을 위해 cost도 저장
             category=product_data.category,  # 기존 category 필드 사용
             sku=product_data.sku,
+            selling_price=product_data.sellingPrice,  # 권장판매가 저장
+            unit=product_data.unit,  # 단위 저장
+            min_quantity=product_data.minQuantity,  # 최소수량 저장
+            max_quantity=product_data.maxQuantity,  # 최대수량 저장
             is_active=True,
             company=user_company  # 회사별 데이터 분리
         )

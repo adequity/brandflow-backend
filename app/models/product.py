@@ -15,6 +15,12 @@ class Product(Base, TimestampMixin):
     sku = Column(String(50), unique=True, nullable=True)
     is_active = Column(Boolean, default=True)
     company = Column(String(200), nullable=True, index=True, default='default_company')  # 회사별 데이터 분리
+
+    # 추가 필드
+    selling_price = Column(Float, nullable=True)  # 권장판매가
+    unit = Column(String(50), default='건')  # 단위
+    min_quantity = Column(Integer, default=1)  # 최소수량
+    max_quantity = Column(Integer, nullable=True)  # 최대수량
     
     def __repr__(self):
         return f"<Product(id={self.id}, name={self.name}, price={self.price})>"
