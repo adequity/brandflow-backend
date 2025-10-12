@@ -2055,6 +2055,56 @@ async def update_campaign_post(
         raise HTTPException(status_code=500, detail=f"업무 수정 중 오류: {str(e)}")
 
 
+@router.delete("/{campaign_id}/posts/{post_id}", status_code=204)
+async def delete_campaign_post(
+    campaign_id: int,
+    post_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인의 업무(포스트) 삭제 (JWT 기반 - Soft Delete)"""
+    print(f"[DELETE-POST] JWT User: {current_user.name}, Campaign: {campaign_id}, Post: {post_id}")
+
+    try:
+        # 캠페인 존재 여부 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
+
+        # 포스트 존재 여부 확인
+        post_query = select(Post).where(Post.id == post_id, Post.campaign_id == campaign_id, Post.is_active == True)
+        post_result = await db.execute(post_query)
+        post = post_result.scalar_one_or_none()
+
+        if not post:
+            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다")
+
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
+        user_role = current_user.role.value
+        if (campaign.creator_id != current_user.id and
+            campaign.staff_id != current_user.id and
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            raise HTTPException(status_code=403, detail="이 업무를 삭제할 권한이 없습니다")
+
+        # Soft Delete: is_active를 False로 설정
+        post.is_active = False
+
+        await db.commit()
+
+        print(f"[DELETE-POST] SUCCESS: Soft deleted post {post_id} from campaign {campaign_id}")
+        return None  # 204 No Content
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[DELETE-POST] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"업무 삭제 중 오류: {str(e)}")
+
+
 @router.delete("/{campaign_id}", status_code=204)
 async def delete_campaign(
     campaign_id: int,
