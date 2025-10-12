@@ -21,6 +21,8 @@ class Post(Base, TimestampMixin):
     order_request_id = Column(Integer, nullable=True)
     start_date = Column(String(20), nullable=True)  # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
     due_date = Column(String(20), nullable=True)    # 날짜를 문자열로 저장 (YYYY-MM-DD 형식) - 기존 호환성
+    start_datetime = Column(DateTime, nullable=True)  # 시작 날짜/시간 (DateTime 타입)
+    due_datetime = Column(DateTime, nullable=True)    # 마감 날짜/시간 (DateTime 타입)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     quantity = Column(Integer, nullable=True, default=1)
     cost = Column(Float, nullable=True)  # 포스트별 작업 단가

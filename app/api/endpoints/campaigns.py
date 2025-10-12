@@ -1865,6 +1865,8 @@ async def create_campaign_post(
             order_request_id=post_data.order_request_id,
             start_date=post_data.start_date,
             due_date=post_data.due_date,
+            start_datetime=post_data.start_datetime,  # DateTime 필드
+            due_datetime=post_data.due_datetime,  # DateTime 필드
             product_id=post_data.product_id,
             product_cost=product_cost,  # 상품 원가 자동 연동
             product_name=product_name,  # 상품명 자동 연동
@@ -1894,8 +1896,8 @@ async def create_campaign_post(
             "order_request_id": new_post.order_request_id,
             "start_date": new_post.start_date,
             "due_date": new_post.due_date,
-            "start_datetime": None,  # Post 모델에 컬럼 없음, 스키마 호환성 위해 None 반환
-            "due_datetime": None,  # Post 모델에 컬럼 없음, 스키마 호환성 위해 None 반환
+            "start_datetime": new_post.start_datetime,
+            "due_datetime": new_post.due_datetime,
             "product_id": new_post.product_id,
             "product_cost": new_post.product_cost,  # 상품 원가 포함
             "product_name": new_post.product_name,  # 상품명 포함
