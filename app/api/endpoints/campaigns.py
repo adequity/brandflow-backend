@@ -80,27 +80,35 @@ async def get_campaigns(
 
             if company_column_exists:
                 # campaigns.company 컬럼이 있는 경우 - 직접 필터링 (성능 최적화)
-                # AGENCY_ADMIN은 같은 company의 모든 캠페인 조회 가능
+                # AGENCY_ADMIN은 다음 중 하나만 만족하면 조회 가능 (OR 조건):
+                # 1. 같은 company의 캠페인
+                # 2. 본인이 staff로 배정된 캠페인 (다른 company여도 가능)
                 query = select(Campaign).options(
                     joinedload(Campaign.creator),
                     joinedload(Campaign.client_user),
                     joinedload(Campaign.staff_user),
                     joinedload(Campaign.posts)
                 ).where(
-                    Campaign.company == current_user.company
+                    or_(
+                        Campaign.company == current_user.company,
+                        Campaign.staff_id == user_id
+                    )
                 )
                 count_query = select(func.count(Campaign.id)).where(
-                    Campaign.company == current_user.company
+                    or_(
+                        Campaign.company == current_user.company,
+                        Campaign.staff_id == user_id
+                    )
                 )
             else:
                 # campaigns.company 컬럼이 없는 경우 - 서브쿼리 방식으로 안전하게 처리 (Fallback)
                 print(f"[CAMPAIGNS-LIST] Fallback 로직 사용 - 서브쿼리 방식")
 
-                # AGENCY_ADMIN은 같은 company의 모든 사용자가 생성하거나 배정받은 캠페인 조회
-                # 1. 같은 company의 모든 사용자 ID 가져오기
-                company_users_subquery = select(User.id).where(User.company == current_user.company)
+                # AGENCY_ADMIN은 다음 중 하나만 만족하면 조회 가능 (OR 조건):
+                # 1. creator가 같은 company의 사용자
+                # 2. 본인이 staff로 배정된 캠페인
+                creator_subquery = select(User.id).where(User.company == current_user.company)
 
-                # 2. 캠페인 필터링: creator 또는 staff가 같은 company 사용자
                 query = select(Campaign).options(
                     joinedload(Campaign.creator),
                     joinedload(Campaign.client_user),
@@ -108,14 +116,14 @@ async def get_campaigns(
                     joinedload(Campaign.posts)
                 ).where(
                     or_(
-                        Campaign.creator_id.in_(company_users_subquery),
-                        Campaign.staff_id.in_(company_users_subquery)
+                        Campaign.creator_id.in_(creator_subquery),
+                        Campaign.staff_id == user_id
                     )
                 )
                 count_query = select(func.count(Campaign.id)).where(
                     or_(
-                        Campaign.creator_id.in_(company_users_subquery),
-                        Campaign.staff_id.in_(company_users_subquery)
+                        Campaign.creator_id.in_(creator_subquery),
+                        Campaign.staff_id == user_id
                     )
                 )
     elif user_role == UserRole.CLIENT.value:
