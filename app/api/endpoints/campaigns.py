@@ -82,7 +82,8 @@ async def get_campaigns(
                 # campaigns.company 컬럼이 있는 경우 - 직접 필터링 (성능 최적화)
                 # AGENCY_ADMIN은 다음 중 하나만 만족하면 조회 가능 (OR 조건):
                 # 1. 같은 company의 캠페인
-                # 2. 본인이 staff로 배정된 캠페인 (다른 company여도 가능)
+                # 2. 본인이 생성한 캠페인 (다른 company여도 가능)
+                # 3. 본인이 staff로 배정된 캠페인 (다른 company여도 가능)
                 query = select(Campaign).options(
                     joinedload(Campaign.creator),
                     joinedload(Campaign.client_user),
@@ -91,12 +92,14 @@ async def get_campaigns(
                 ).where(
                     or_(
                         Campaign.company == current_user.company,
+                        Campaign.creator_id == user_id,
                         Campaign.staff_id == user_id
                     )
                 )
                 count_query = select(func.count(Campaign.id)).where(
                     or_(
                         Campaign.company == current_user.company,
+                        Campaign.creator_id == user_id,
                         Campaign.staff_id == user_id
                     )
                 )
@@ -106,7 +109,8 @@ async def get_campaigns(
 
                 # AGENCY_ADMIN은 다음 중 하나만 만족하면 조회 가능 (OR 조건):
                 # 1. creator가 같은 company의 사용자
-                # 2. 본인이 staff로 배정된 캠페인
+                # 2. 본인이 생성한 캠페인
+                # 3. 본인이 staff로 배정된 캠페인
                 creator_subquery = select(User.id).where(User.company == current_user.company)
 
                 query = select(Campaign).options(
@@ -117,12 +121,14 @@ async def get_campaigns(
                 ).where(
                     or_(
                         Campaign.creator_id.in_(creator_subquery),
+                        Campaign.creator_id == user_id,
                         Campaign.staff_id == user_id
                     )
                 )
                 count_query = select(func.count(Campaign.id)).where(
                     or_(
                         Campaign.creator_id.in_(creator_subquery),
+                        Campaign.creator_id == user_id,
                         Campaign.staff_id == user_id
                     )
                 )
