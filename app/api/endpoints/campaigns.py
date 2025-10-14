@@ -2820,7 +2820,7 @@ async def get_campaign_chat_content(
         if not campaign:
             raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
 
-        # 권한 확인
+        # 권한 확인 - CLIENT는 카톡 관리 기능 접근 불가
         user_role = current_user.role.value
         can_access = False
 
@@ -2830,10 +2830,7 @@ async def get_campaign_chat_content(
             # 같은 회사 또는 캠페인 생성자
             if campaign.creator_id == current_user.id or current_user.company == campaign.company:
                 can_access = True
-        elif user_role == UserRole.CLIENT.value:
-            # 클라이언트 본인의 캠페인만
-            if campaign.client_user_id == current_user.id:
-                can_access = True
+        # CLIENT는 카톡 관리 조회 권한 없음
 
         if not can_access:
             raise HTTPException(status_code=403, detail="카톡 내용을 조회할 권한이 없습니다.")
