@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, extract
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from urllib.parse import unquote
 from datetime import datetime, timezone
+import json
 
 from app.db.database import get_async_db
 from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
@@ -2797,5 +2798,209 @@ async def reset_campaign_order_requests(
         print(f"[RESET-ORDER-REQUESTS] Error: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"발주 요청 상태 초기화 중 오류가 발생했습니다: {str(e)}")
+
+
+# ==================== 카톡 관리 API ====================
+
+@router.get("/{campaign_id}/chat-content")
+async def get_campaign_chat_content(
+    campaign_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    캠페인 카톡 내용 조회
+    """
+    try:
+        # 캠페인 조회
+        query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        campaign = result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인
+        user_role = current_user.role.value
+        can_access = False
+
+        if user_role == UserRole.SUPER_ADMIN.value:
+            can_access = True
+        elif user_role in [UserRole.AGENCY_ADMIN.value, UserRole.STAFF.value]:
+            # 같은 회사 또는 캠페인 생성자
+            if campaign.creator_id == current_user.id or current_user.company == campaign.company:
+                can_access = True
+        elif user_role == UserRole.CLIENT.value:
+            # 클라이언트 본인의 캠페인만
+            if campaign.client_user_id == current_user.id:
+                can_access = True
+
+        if not can_access:
+            raise HTTPException(status_code=403, detail="카톡 내용을 조회할 권한이 없습니다.")
+
+        return {
+            "chatContent": campaign.chat_content or "",
+            "chatSummary": campaign.chat_summary or "",
+            "chatAttachments": campaign.chat_attachments or "",
+            "chatImages": campaign.chat_images or ""
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CHAT-CONTENT-GET] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"카톡 내용 조회 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.put("/{campaign_id}/chat-content")
+async def update_campaign_chat_content(
+    campaign_id: int,
+    chat_data: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    캠페인 카톡 내용 저장
+    """
+    try:
+        # 캠페인 조회
+        query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        campaign = result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인
+        user_role = current_user.role.value
+        can_edit = False
+
+        if user_role == UserRole.SUPER_ADMIN.value:
+            can_edit = True
+        elif user_role in [UserRole.AGENCY_ADMIN.value, UserRole.STAFF.value]:
+            # 같은 회사 또는 캠페인 생성자
+            if campaign.creator_id == current_user.id or current_user.company == campaign.company:
+                can_edit = True
+
+        if not can_edit:
+            raise HTTPException(status_code=403, detail="카톡 내용을 수정할 권한이 없습니다.")
+
+        # 카톡 내용 업데이트
+        campaign.chat_content = chat_data.get("chatContent", "")
+        campaign.chat_summary = chat_data.get("chatSummary", "")
+        campaign.chat_attachments = chat_data.get("chatAttachments", "")
+
+        # chat_images는 기존 데이터에 추가 (이미지 업로드 API에서 추가됨)
+        if "chatImages" in chat_data:
+            campaign.chat_images = chat_data["chatImages"]
+
+        await db.commit()
+        await db.refresh(campaign)
+
+        print(f"[CHAT-CONTENT-UPDATE] Campaign {campaign_id} chat content updated by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "카톡 내용이 성공적으로 저장되었습니다.",
+            "chatContent": campaign.chat_content,
+            "chatSummary": campaign.chat_summary,
+            "chatAttachments": campaign.chat_attachments,
+            "chatImages": campaign.chat_images
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CHAT-CONTENT-UPDATE] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"카톡 내용 저장 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/{campaign_id}/chat-images")
+async def upload_chat_images(
+    campaign_id: int,
+    images: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    캠페인 카톡 이미지 업로드
+    """
+    try:
+        # 캠페인 조회 및 권한 확인
+        query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        campaign = result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인
+        user_role = current_user.role.value
+        can_upload = False
+
+        if user_role == UserRole.SUPER_ADMIN.value:
+            can_upload = True
+        elif user_role in [UserRole.AGENCY_ADMIN.value, UserRole.STAFF.value]:
+            if campaign.creator_id == current_user.id or current_user.company == campaign.company:
+                can_upload = True
+
+        if not can_upload:
+            raise HTTPException(status_code=403, detail="이미지 업로드 권한이 없습니다.")
+
+        # file_manager를 사용하여 이미지 저장
+        from app.core.file_upload import file_manager
+
+        uploaded_images = []
+        for image in images:
+            # 이미지 파일인지 확인
+            if not image.content_type or not image.content_type.startswith('image/'):
+                print(f"[CHAT-IMAGE-UPLOAD] Skipping non-image file: {image.filename}")
+                continue
+
+            try:
+                # 파일 저장
+                file_result = await file_manager.save_file(image)
+                uploaded_images.append({
+                    "url": file_result["url"],
+                    "originalName": file_result["original_filename"],
+                    "filename": file_result["filename"],
+                    "size": file_result["size"]
+                })
+                print(f"[CHAT-IMAGE-UPLOAD] Image saved: {file_result['filename']}")
+            except Exception as e:
+                print(f"[CHAT-IMAGE-UPLOAD] Failed to save image {image.filename}: {e}")
+                continue
+
+        if not uploaded_images:
+            raise HTTPException(status_code=400, detail="업로드된 이미지가 없습니다.")
+
+        # 기존 chat_images에 추가 (JSON 형식)
+        existing_images = []
+        if campaign.chat_images:
+            try:
+                existing_images = json.loads(campaign.chat_images)
+            except:
+                existing_images = []
+
+        existing_images.extend(uploaded_images)
+        campaign.chat_images = json.dumps(existing_images, ensure_ascii=False)
+
+        await db.commit()
+
+        print(f"[CHAT-IMAGE-UPLOAD] Campaign {campaign_id} uploaded {len(uploaded_images)} images")
+
+        return {
+            "success": True,
+            "message": f"{len(uploaded_images)}개 이미지가 성공적으로 업로드되었습니다.",
+            "images": uploaded_images
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CHAT-IMAGE-UPLOAD] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"이미지 업로드 중 오류가 발생했습니다: {str(e)}")
 
 

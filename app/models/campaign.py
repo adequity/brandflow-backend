@@ -31,6 +31,12 @@ class Campaign(Base, TimestampMixin):
     invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료
     payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료
 
+    # 카톡 관리 관련 필드
+    chat_content = Column(Text, nullable=True)  # 카톡 대화 내용
+    chat_summary = Column(Text, nullable=True)  # 카톡 요약 (주요 논의사항, 결정사항)
+    chat_attachments = Column(Text, nullable=True)  # 첨부파일/링크 정보
+    chat_images = Column(Text, nullable=True)  # 카톡 스크린샷 이미지 URL (JSON array 문자열)
+
     # 일정 관련 필드 (마이그레이션 후 활성화)
     # invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일
     # payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일
