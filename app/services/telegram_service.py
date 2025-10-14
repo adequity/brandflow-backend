@@ -125,39 +125,51 @@ class TelegramService:
         user_name: str,
         post_title: str,
         due_date: str,
-        days_left: int,
-        campaign_id: int,
-        post_id: int
+        days_before: int,
+        work_type: str = None,
+        product_name: str = None
     ) -> Dict[str, Any]:
         """캠페인 마감일 알림 메시지 전송"""
 
         # 마감일이 임박한 정도에 따른 이모지 선택
-        if days_left <= 1:
+        if days_before <= 1:
             urgency_emoji = "🚨"
             urgency_text = "긴급"
-        elif days_left <= 2:
+        elif days_before <= 2:
             urgency_emoji = "⚠️"
             urgency_text = "중요"
         else:
             urgency_emoji = "📅"
             urgency_text = "알림"
 
-        message = f"""
-{urgency_emoji} <b>{urgency_text} - 캠페인 마감일 알림</b>
+        # 메시지 기본 구조
+        message_parts = [
+            f"{urgency_emoji} <b>{urgency_text} - 캠페인 마감일 알림</b>",
+            "",
+            f"안녕하세요, <b>{user_name}</b>님!",
+            "",
+            f"📝 <b>작업명:</b> {post_title}"
+        ]
 
-안녕하세요, <b>{user_name}</b>님!
+        # work_type이 있으면 추가
+        if work_type:
+            message_parts.append(f"📋 <b>상품종류:</b> {work_type}")
 
-📝 <b>작업명:</b> {post_title}
-📅 <b>마감일:</b> {due_date}
-⏰ <b>남은 시간:</b> <b>{days_left}일</b>
+        # product_name이 있으면 추가
+        if product_name:
+            message_parts.append(f"🔗 <b>상품명:</b> {product_name}")
 
-🔗 <b>캠페인 ID:</b> {campaign_id}
-📋 <b>작업 ID:</b> {post_id}
+        # 마감일과 남은 시간
+        message_parts.extend([
+            f"📅 <b>마감일:</b> {due_date}",
+            f"⏰ <b>남은 시간:</b> <b>{days_before}일</b>",
+            "",
+            "마감일이 다가오고 있습니다. 작업 진행 상황을 확인해 주세요!",
+            "",
+            "<i>BrandFlow 알림 시스템</i>"
+        ])
 
-마감일이 다가오고 있습니다. 작업 진행 상황을 확인해 주세요!
-
-<i>BrandFlow 알림 시스템</i>
-        """.strip()
+        message = "\n".join(message_parts)
 
         return await self.send_message(chat_id, message)
 

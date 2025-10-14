@@ -193,15 +193,15 @@ class TelegramScheduler:
             due_datetime = parse_due_datetime(post.due_date, default_time="18:00")
             due_info = format_due_datetime_for_display(due_datetime) if due_datetime else f"{post.due_date} 18:00"
 
-            # 알림 메시지 전송
+            # 알림 메시지 전송 (사용자 설정값 사용)
             result = await telegram_service.send_campaign_deadline_reminder(
                 chat_id=telegram_setting.telegram_chat_id,
                 user_name=user.name,
                 post_title=post.title,
                 due_date=due_info,  # 시간까지 포함된 정보
-                days_left=days_left,
-                campaign_id=campaign.id,
-                post_id=post.id
+                days_before=telegram_setting.days_before_due,  # 사용자 설정값 사용
+                work_type=post.work_type,  # 상품종류
+                product_name=post.product_name  # 상품명
             )
 
             # 로그 저장
@@ -210,7 +210,7 @@ class TelegramScheduler:
                 post_id=post.id,
                 campaign_id=campaign.id,
                 notification_type="due_date_reminder",
-                message_content=f"마감일 {days_left:.1f}일 전 알림: {post.title} (마감: {due_info})",
+                message_content=f"마감일 {telegram_setting.days_before_due}일 전 알림: {post.title} (마감: {due_info})",
                 telegram_chat_id=telegram_setting.telegram_chat_id,
                 is_sent=result.get("success", False),
                 sent_at=datetime.utcnow() if result.get("success") else None,
