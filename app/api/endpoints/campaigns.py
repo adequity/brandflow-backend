@@ -347,6 +347,7 @@ async def create_campaign(
             "name": campaign_data.name.strip() if campaign_data.name else "새 캠페인",
             "description": campaign_data.description or '',
             "client_company": client_company,
+            "company": current_user.company or "default_company",  # 생성자의 회사 설정
             "budget": float(campaign_data.budget) if campaign_data.budget is not None else 1000000.0,
             "start_date": safe_datetime_parse(campaign_data.start_date),
             "end_date": safe_datetime_parse(campaign_data.end_date),
@@ -354,6 +355,8 @@ async def create_campaign(
             "staff_id": campaign_data.staff_id if campaign_data.staff_id else user_id,  # 담당자 설정
             "status": CampaignStatus.ACTIVE
         }
+
+        print(f"[CAMPAIGN-CREATE-JWT] Setting campaign company to: {current_user.company}")
         
         # client_user_id 필드가 존재하는지 확인 후 설정 (스키마 동기화 대응)
         try:
