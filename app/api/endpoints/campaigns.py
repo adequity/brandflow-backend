@@ -2824,15 +2824,29 @@ async def get_campaign_chat_content(
         user_role = current_user.role.value
         can_access = False
 
+        print(f"[CHAT-CONTENT-GET] Permission check:")
+        print(f"  - User ID: {current_user.id}, Role: {user_role}, Company: {current_user.company}")
+        print(f"  - Campaign ID: {campaign.id}, Creator ID: {campaign.creator_id}, Company: {campaign.company}")
+
         if user_role == UserRole.SUPER_ADMIN.value:
             can_access = True
+            print(f"  - SUPER_ADMIN: Access granted")
         elif user_role in [UserRole.AGENCY_ADMIN.value, UserRole.STAFF.value]:
             # 같은 회사 또는 캠페인 생성자
-            if campaign.creator_id == current_user.id or current_user.company == campaign.company:
+            is_creator = campaign.creator_id == current_user.id
+            is_same_company = current_user.company == campaign.company
+            print(f"  - Is Creator: {is_creator} ({campaign.creator_id} == {current_user.id})")
+            print(f"  - Same Company: {is_same_company} ('{current_user.company}' == '{campaign.company}')")
+
+            if is_creator or is_same_company:
                 can_access = True
+                print(f"  - AGENCY_ADMIN/STAFF: Access granted")
+            else:
+                print(f"  - AGENCY_ADMIN/STAFF: Access denied")
         # CLIENT는 카톡 관리 조회 권한 없음
 
         if not can_access:
+            print(f"[CHAT-CONTENT-GET] Permission denied for user {current_user.id}")
             raise HTTPException(status_code=403, detail="카톡 내용을 조회할 권한이 없습니다.")
 
         return {
