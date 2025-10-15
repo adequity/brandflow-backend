@@ -2268,17 +2268,20 @@ async def delete_campaign(
                 
             # 관련 posts 먼저 삭제
             from app.models.post import Post
-            posts_query = select(Post).where(Post.campaign_id == campaign_id)
-            posts_result = await db.execute(posts_query)
-            related_posts = posts_result.scalars().all()
+            from sqlalchemy import delete as sql_delete
 
-            if related_posts:
-                print(f"[CAMPAIGN-DELETE] Found {len(related_posts)} related posts, deleting them first")
-                for post in related_posts:
-                    await db.delete(post)
+            posts_count_query = select(func.count()).select_from(Post).where(Post.campaign_id == campaign_id)
+            posts_count_result = await db.execute(posts_count_query)
+            posts_count = posts_count_result.scalar()
+
+            if posts_count > 0:
+                print(f"[CAMPAIGN-DELETE] Found {posts_count} related posts, deleting them first")
+                delete_posts_stmt = sql_delete(Post).where(Post.campaign_id == campaign_id)
+                await db.execute(delete_posts_stmt)
 
             # 캠페인 삭제
-            await db.delete(campaign)
+            delete_campaign_stmt = sql_delete(Campaign).where(Campaign.id == campaign_id)
+            await db.execute(delete_campaign_stmt)
             await db.commit()
             
             print(f"[CAMPAIGN-DELETE] SUCCESS: Campaign {campaign_id} deleted by user {user_id}")
@@ -2402,17 +2405,20 @@ async def delete_campaign(
 
             # 관련 posts 먼저 삭제
             from app.models.post import Post
-            posts_query = select(Post).where(Post.campaign_id == campaign_id)
-            posts_result = await db.execute(posts_query)
-            related_posts = posts_result.scalars().all()
+            from sqlalchemy import delete as sql_delete
 
-            if related_posts:
-                print(f"[CAMPAIGN-DELETE] Found {len(related_posts)} related posts, deleting them first")
-                for post in related_posts:
-                    await db.delete(post)
+            posts_count_query = select(func.count()).select_from(Post).where(Post.campaign_id == campaign_id)
+            posts_count_result = await db.execute(posts_count_query)
+            posts_count = posts_count_result.scalar()
+
+            if posts_count > 0:
+                print(f"[CAMPAIGN-DELETE] Found {posts_count} related posts, deleting them first")
+                delete_posts_stmt = sql_delete(Post).where(Post.campaign_id == campaign_id)
+                await db.execute(delete_posts_stmt)
 
             # 캠페인 삭제
-            await db.delete(campaign)
+            delete_campaign_stmt = sql_delete(Campaign).where(Campaign.id == campaign_id)
+            await db.execute(delete_campaign_stmt)
             await db.commit()
 
             print(f"[CAMPAIGN-DELETE-JWT] SUCCESS: Campaign {campaign_id} deleted by user {current_user.id}")
