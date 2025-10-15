@@ -2256,20 +2256,22 @@ async def delete_campaign(
                 print(f"[CAMPAIGN-DELETE] Permission denied for user_role={user_role}, creator_id={campaign.creator_id}")
                 raise HTTPException(status_code=403, detail="이 캠페인을 삭제할 권한이 없습니다.")
             
-            # 관련 데이터 확인 (구매요청 등)
+            # 관련 데이터 먼저 삭제 (순서 중요: 외래키 제약조건)
             from app.models.purchase_request import PurchaseRequest
-            purchase_query = select(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
-            purchase_result = await db.execute(purchase_query)
-            purchase_requests = purchase_result.scalars().all()
-            
-            if purchase_requests:
-                print(f"[CAMPAIGN-DELETE] Found {len(purchase_requests)} related purchase requests")
-                # 구매요청이 있는 경우 경고하지만 삭제는 허용 (CASCADE)
-                
-            # 관련 posts 먼저 삭제
             from app.models.post import Post
             from sqlalchemy import delete as sql_delete
 
+            # 1. 구매요청 삭제
+            purchase_count_query = select(func.count()).select_from(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
+            purchase_count_result = await db.execute(purchase_count_query)
+            purchase_count = purchase_count_result.scalar()
+
+            if purchase_count > 0:
+                print(f"[CAMPAIGN-DELETE] Found {purchase_count} related purchase requests, deleting them first")
+                delete_purchase_stmt = sql_delete(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
+                await db.execute(delete_purchase_stmt)
+
+            # 2. Posts 삭제
             posts_count_query = select(func.count()).select_from(Post).where(Post.campaign_id == campaign_id)
             posts_count_result = await db.execute(posts_count_query)
             posts_count = posts_count_result.scalar()
@@ -2279,7 +2281,7 @@ async def delete_campaign(
                 delete_posts_stmt = sql_delete(Post).where(Post.campaign_id == campaign_id)
                 await db.execute(delete_posts_stmt)
 
-            # 캠페인 삭제
+            # 3. 캠페인 삭제
             delete_campaign_stmt = sql_delete(Campaign).where(Campaign.id == campaign_id)
             await db.execute(delete_campaign_stmt)
             await db.commit()
@@ -2393,30 +2395,32 @@ async def delete_campaign(
                 print(f"[CAMPAIGN-DELETE-JWT] Permission denied for user_role={current_user.role.value}, creator_id={campaign.creator_id}")
                 raise HTTPException(status_code=403, detail="이 캠페인을 삭제할 권한이 없습니다.")
 
-            # 관련 데이터 확인 (구매요청 등)
+            # 관련 데이터 먼저 삭제 (순서 중요: 외래키 제약조건)
             from app.models.purchase_request import PurchaseRequest
-            purchase_query = select(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
-            purchase_result = await db.execute(purchase_query)
-            purchase_requests = purchase_result.scalars().all()
-
-            if purchase_requests:
-                print(f"[CAMPAIGN-DELETE-JWT] Found {len(purchase_requests)} related purchase requests")
-                # 구매요청이 있는 경우 경고하지만 삭제는 허용 (CASCADE)
-
-            # 관련 posts 먼저 삭제
             from app.models.post import Post
             from sqlalchemy import delete as sql_delete
 
+            # 1. 구매요청 삭제
+            purchase_count_query = select(func.count()).select_from(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
+            purchase_count_result = await db.execute(purchase_count_query)
+            purchase_count = purchase_count_result.scalar()
+
+            if purchase_count > 0:
+                print(f"[CAMPAIGN-DELETE-JWT] Found {purchase_count} related purchase requests, deleting them first")
+                delete_purchase_stmt = sql_delete(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
+                await db.execute(delete_purchase_stmt)
+
+            # 2. Posts 삭제
             posts_count_query = select(func.count()).select_from(Post).where(Post.campaign_id == campaign_id)
             posts_count_result = await db.execute(posts_count_query)
             posts_count = posts_count_result.scalar()
 
             if posts_count > 0:
-                print(f"[CAMPAIGN-DELETE] Found {posts_count} related posts, deleting them first")
+                print(f"[CAMPAIGN-DELETE-JWT] Found {posts_count} related posts, deleting them first")
                 delete_posts_stmt = sql_delete(Post).where(Post.campaign_id == campaign_id)
                 await db.execute(delete_posts_stmt)
 
-            # 캠페인 삭제
+            # 3. 캠페인 삭제
             delete_campaign_stmt = sql_delete(Campaign).where(Campaign.id == campaign_id)
             await db.execute(delete_campaign_stmt)
             await db.commit()
