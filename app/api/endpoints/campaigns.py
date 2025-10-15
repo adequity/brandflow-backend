@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, extract
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from typing import List, Optional
 from urllib.parse import unquote
 from datetime import datetime, timezone
@@ -2111,6 +2111,52 @@ async def delete_campaign_post(
         raise
     except Exception as e:
         print(f"[DELETE-POST] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"업무 삭제 중 오류: {str(e)}")
+
+
+# 프론트엔드 호환: campaign_id 없이 post_id만으로 삭제
+@router.delete("/posts/{post_id}", status_code=204)
+async def delete_post_by_id(
+    post_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """업무(포스트) 삭제 - campaign_id 없이 post_id만으로 삭제 (Soft Delete)"""
+    print(f"[DELETE-POST-SIMPLE] JWT User: {current_user.name}, Post: {post_id}")
+
+    try:
+        # 포스트 존재 여부 확인 (campaign join)
+        post_query = select(Post).options(selectinload(Post.Campaign)).where(Post.id == post_id, Post.is_active == True)
+        post_result = await db.execute(post_query)
+        post = post_result.scalar_one_or_none()
+
+        if not post:
+            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다")
+
+        campaign = post.Campaign
+        if not campaign:
+            raise HTTPException(status_code=404, detail="연결된 캠페인을 찾을 수 없습니다")
+
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
+        user_role = current_user.role.value
+        if (campaign.creator_id != current_user.id and
+            campaign.staff_id != current_user.id and
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            raise HTTPException(status_code=403, detail="이 업무를 삭제할 권한이 없습니다")
+
+        # Soft Delete: is_active를 False로 설정
+        post.is_active = False
+
+        await db.commit()
+
+        print(f"[DELETE-POST-SIMPLE] SUCCESS: Soft deleted post {post_id}")
+        return None  # 204 No Content
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[DELETE-POST-SIMPLE] Unexpected error: {type(e).__name__}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"업무 삭제 중 오류: {str(e)}")
 
