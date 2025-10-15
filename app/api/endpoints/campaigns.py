@@ -2072,7 +2072,7 @@ async def delete_campaign_post(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """캠페인의 업무(포스트) 삭제 (JWT 기반 - Soft Delete)"""
+    """캠페인의 업무(포스트) 삭제 (JWT 기반 - Hard Delete)"""
     print(f"[DELETE-POST] JWT User: {current_user.name}, Campaign: {campaign_id}, Post: {post_id}")
 
     try:
@@ -2099,12 +2099,26 @@ async def delete_campaign_post(
             user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
             raise HTTPException(status_code=403, detail="이 업무를 삭제할 권한이 없습니다")
 
-        # Soft Delete: is_active를 False로 설정
-        post.is_active = False
+        # Hard Delete: 관련 데이터 먼저 삭제 후 post 삭제
+        from app.models.order_request import OrderRequest
+        from app.models.user_telegram_setting import TelegramNotificationLog
+        from sqlalchemy import delete as sql_delete
+
+        # 1. 텔레그램 알림 로그 삭제
+        telegram_log_stmt = sql_delete(TelegramNotificationLog).where(TelegramNotificationLog.post_id == post_id)
+        await db.execute(telegram_log_stmt)
+
+        # 2. 주문 요청 삭제
+        order_request_stmt = sql_delete(OrderRequest).where(OrderRequest.post_id == post_id)
+        await db.execute(order_request_stmt)
+
+        # 3. Post 삭제
+        delete_post_stmt = sql_delete(Post).where(Post.id == post_id)
+        await db.execute(delete_post_stmt)
 
         await db.commit()
 
-        print(f"[DELETE-POST] SUCCESS: Soft deleted post {post_id} from campaign {campaign_id}")
+        print(f"[DELETE-POST] SUCCESS: Hard deleted post {post_id} from campaign {campaign_id}")
         return None  # 204 No Content
 
     except HTTPException:
@@ -2122,7 +2136,7 @@ async def delete_post_by_id(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """업무(포스트) 삭제 - campaign_id 없이 post_id만으로 삭제 (Soft Delete)"""
+    """업무(포스트) 삭제 - campaign_id 없이 post_id만으로 삭제 (Hard Delete)"""
     print(f"[DELETE-POST-SIMPLE] JWT User: {current_user.name}, Post: {post_id}")
 
     try:
@@ -2145,12 +2159,26 @@ async def delete_post_by_id(
             user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
             raise HTTPException(status_code=403, detail="이 업무를 삭제할 권한이 없습니다")
 
-        # Soft Delete: is_active를 False로 설정
-        post.is_active = False
+        # Hard Delete: 관련 데이터 먼저 삭제 후 post 삭제
+        from app.models.order_request import OrderRequest
+        from app.models.user_telegram_setting import TelegramNotificationLog
+        from sqlalchemy import delete as sql_delete
+
+        # 1. 텔레그램 알림 로그 삭제
+        telegram_log_stmt = sql_delete(TelegramNotificationLog).where(TelegramNotificationLog.post_id == post_id)
+        await db.execute(telegram_log_stmt)
+
+        # 2. 주문 요청 삭제
+        order_request_stmt = sql_delete(OrderRequest).where(OrderRequest.post_id == post_id)
+        await db.execute(order_request_stmt)
+
+        # 3. Post 삭제
+        delete_post_stmt = sql_delete(Post).where(Post.id == post_id)
+        await db.execute(delete_post_stmt)
 
         await db.commit()
 
-        print(f"[DELETE-POST-SIMPLE] SUCCESS: Soft deleted post {post_id}")
+        print(f"[DELETE-POST-SIMPLE] SUCCESS: Hard deleted post {post_id}")
         return None  # 204 No Content
 
     except HTTPException:
