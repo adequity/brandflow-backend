@@ -2259,9 +2259,19 @@ async def delete_campaign(
             # 관련 데이터 먼저 삭제 (순서 중요: 외래키 제약조건)
             from app.models.purchase_request import PurchaseRequest
             from app.models.post import Post
+            from app.models.order_request import OrderRequest
+            from app.models.user_telegram_setting import TelegramNotificationLog
             from sqlalchemy import delete as sql_delete
 
-            # 1. 구매요청 삭제
+            # 1. 텔레그램 알림 로그 삭제
+            telegram_log_stmt = sql_delete(TelegramNotificationLog).where(TelegramNotificationLog.campaign_id == campaign_id)
+            await db.execute(telegram_log_stmt)
+
+            # 2. 주문 요청 삭제
+            order_request_stmt = sql_delete(OrderRequest).where(OrderRequest.campaign_id == campaign_id)
+            await db.execute(order_request_stmt)
+
+            # 3. 구매요청 삭제
             purchase_count_query = select(func.count()).select_from(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
             purchase_count_result = await db.execute(purchase_count_query)
             purchase_count = purchase_count_result.scalar()
@@ -2271,7 +2281,7 @@ async def delete_campaign(
                 delete_purchase_stmt = sql_delete(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
                 await db.execute(delete_purchase_stmt)
 
-            # 2. Posts 삭제
+            # 4. Posts 삭제
             posts_count_query = select(func.count()).select_from(Post).where(Post.campaign_id == campaign_id)
             posts_count_result = await db.execute(posts_count_query)
             posts_count = posts_count_result.scalar()
@@ -2281,7 +2291,7 @@ async def delete_campaign(
                 delete_posts_stmt = sql_delete(Post).where(Post.campaign_id == campaign_id)
                 await db.execute(delete_posts_stmt)
 
-            # 3. 캠페인 삭제
+            # 5. 캠페인 삭제
             delete_campaign_stmt = sql_delete(Campaign).where(Campaign.id == campaign_id)
             await db.execute(delete_campaign_stmt)
             await db.commit()
@@ -2398,9 +2408,19 @@ async def delete_campaign(
             # 관련 데이터 먼저 삭제 (순서 중요: 외래키 제약조건)
             from app.models.purchase_request import PurchaseRequest
             from app.models.post import Post
+            from app.models.order_request import OrderRequest
+            from app.models.user_telegram_setting import TelegramNotificationLog
             from sqlalchemy import delete as sql_delete
 
-            # 1. 구매요청 삭제
+            # 1. 텔레그램 알림 로그 삭제
+            telegram_log_stmt = sql_delete(TelegramNotificationLog).where(TelegramNotificationLog.campaign_id == campaign_id)
+            await db.execute(telegram_log_stmt)
+
+            # 2. 주문 요청 삭제
+            order_request_stmt = sql_delete(OrderRequest).where(OrderRequest.campaign_id == campaign_id)
+            await db.execute(order_request_stmt)
+
+            # 3. 구매요청 삭제
             purchase_count_query = select(func.count()).select_from(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
             purchase_count_result = await db.execute(purchase_count_query)
             purchase_count = purchase_count_result.scalar()
@@ -2410,7 +2430,7 @@ async def delete_campaign(
                 delete_purchase_stmt = sql_delete(PurchaseRequest).where(PurchaseRequest.campaign_id == campaign_id)
                 await db.execute(delete_purchase_stmt)
 
-            # 2. Posts 삭제
+            # 4. Posts 삭제
             posts_count_query = select(func.count()).select_from(Post).where(Post.campaign_id == campaign_id)
             posts_count_result = await db.execute(posts_count_query)
             posts_count = posts_count_result.scalar()
@@ -2420,7 +2440,7 @@ async def delete_campaign(
                 delete_posts_stmt = sql_delete(Post).where(Post.campaign_id == campaign_id)
                 await db.execute(delete_posts_stmt)
 
-            # 3. 캠페인 삭제
+            # 5. 캠페인 삭제
             delete_campaign_stmt = sql_delete(Campaign).where(Campaign.id == campaign_id)
             await db.execute(delete_campaign_stmt)
             await db.commit()
