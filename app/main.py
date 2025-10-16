@@ -928,14 +928,26 @@ except Exception as e:
 
 @app.get("/debug/uploads")
 async def debug_uploads():
-    """업로드 디렉토리 상태 확인"""
+    """업로드 디렉토리 상태 확인 및 테스트"""
     from pathlib import Path
     import os
+    import aiofiles
 
     upload_dir = Path(settings.UPLOAD_DIR)
 
     # 디렉토리 존재 여부
     dir_exists = upload_dir.exists()
+
+    # 서브디렉토리 확인
+    subdirs = {}
+    if dir_exists:
+        for category in ['images', 'documents', 'archives', 'videos', 'audio', 'temp']:
+            category_path = upload_dir / category
+            subdirs[category] = {
+                "exists": category_path.exists(),
+                "is_dir": category_path.is_dir() if category_path.exists() else False,
+                "permissions": oct(category_path.stat().st_mode)[-3:] if category_path.exists() else None
+            }
 
     # 파일 목록
     files = []
@@ -953,11 +965,32 @@ async def debug_uploads():
         except Exception as e:
             files = [{"error": str(e)}]
 
+    # 파일 쓰기 테스트
+    write_test = {}
+    if dir_exists:
+        try:
+            test_file = upload_dir / "images" / "test_write.txt"
+            async with aiofiles.open(test_file, 'w') as f:
+                await f.write("test content")
+            write_test["success"] = True
+            write_test["test_file"] = str(test_file)
+            # 테스트 파일 즉시 삭제
+            try:
+                await aiofiles.os.remove(test_file)
+                write_test["cleanup"] = "success"
+            except:
+                write_test["cleanup"] = "failed"
+        except Exception as e:
+            write_test["success"] = False
+            write_test["error"] = str(e)
+
     return {
         "upload_dir": str(upload_dir),
         "exists": dir_exists,
         "is_directory": upload_dir.is_dir() if dir_exists else False,
         "permissions": oct(upload_dir.stat().st_mode)[-3:] if dir_exists else None,
+        "subdirectories": subdirs,
+        "write_test": write_test,
         "files": files,
         "total_files": len([f for f in files if "error" not in f]),
         "environment": "railway" if os.getenv("PORT") else "local"
