@@ -136,33 +136,39 @@ class FileUploadManager:
     
     async def save_file(self, file: UploadFile, custom_filename: Optional[str] = None) -> Dict[str, Any]:
         """단일 파일 저장"""
+        logger.info(f"[FILE-UPLOAD] Starting file upload: {file.filename}")
         await self.ensure_upload_dir()
-        
+
         # 파일 유효성 검사
         file_info = self.validate_file(file)
-        
+        logger.info(f"[FILE-UPLOAD] File validated: {file_info}")
+
         # 파일명 생성
         filename = custom_filename or self.generate_unique_filename(file.filename)
         category = file_info['category']
-        
+        logger.info(f"[FILE-UPLOAD] Generated filename: {filename}, category: {category}")
+
         # 저장 경로 결정
         file_path = self.upload_dir / category / filename
+        logger.info(f"[FILE-UPLOAD] Target path: {file_path}")
         
         try:
             # 파일 저장
             async with aiofiles.open(file_path, 'wb') as f:
                 content = await file.read()
                 await f.write(content)
-            
+            logger.info(f"[FILE-UPLOAD] File saved successfully: {file_path}, size: {len(content)} bytes")
+
             # 파일 해시 계산 (중복 검사용)
             file_hash = hashlib.md5(content).hexdigest()
-            
+
             # 이미지인 경우 썸네일 생성
             thumbnail_path = None
             if category == 'images' and file_info['extension'] in {'jpg', 'jpeg', 'png', 'webp'}:
                 thumbnail_path = await self.create_thumbnail(file_path)
-            
-            return {
+                logger.info(f"[FILE-UPLOAD] Thumbnail created: {thumbnail_path}")
+
+            result = {
                 'filename': filename,
                 'original_filename': file.filename,
                 'file_path': str(file_path),
@@ -175,6 +181,8 @@ class FileUploadManager:
                 'thumbnail_path': thumbnail_path,
                 'uploaded_at': datetime.utcnow()
             }
+            logger.info(f"[FILE-UPLOAD] Upload complete. Result: {result}")
+            return result
             
         except Exception as e:
             # 오류 시 파일 삭제

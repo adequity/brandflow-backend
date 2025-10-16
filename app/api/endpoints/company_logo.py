@@ -203,8 +203,11 @@ async def upload_company_logo(
             company_name = current_user.company or 'default'
 
             # 파일 업로드
+            print(f"[COMPANY-LOGO-UPLOAD-JWT] Uploading file: {logo.filename}, size: {logo.size if hasattr(logo, 'size') else 'unknown'}")
             file_result = await file_manager.save_file(logo)
+            print(f"[COMPANY-LOGO-UPLOAD-JWT] File upload result: {file_result}")
             logo_url = file_result["url"]
+            print(f"[COMPANY-LOGO-UPLOAD-JWT] Logo URL: {logo_url}")
 
             # 기존 로고 확인
             existing_logo_query = select(CompanyLogo).where(CompanyLogo.company_id == company_name)
