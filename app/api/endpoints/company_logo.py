@@ -65,7 +65,7 @@ async def get_company_logo(
         return {
             "id": logo_data.id,
             "logoUrl": logo_data.logo_url,
-            "uploadedAt": logo_data.uploaded_at.isoformat() if logo_data.uploaded_at else None,
+            "uploadedAt": logo_data.updated_at.isoformat() if logo_data.updated_at else None,
             "companyId": logo_data.company_id,
             "updatedBy": logo_data.updated_by
         }
@@ -73,15 +73,15 @@ async def get_company_logo(
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = jwt_user
         print(f"[COMPANY-LOGO-GET-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
-        
+
         try:
             company_name = current_user.company or 'default'
-            
+
             # 해당 회사의 로고 데이터 조회
             logo_query = select(CompanyLogo).where(CompanyLogo.company_id == company_name)
             logo_result = await db.execute(logo_query)
             logo_data = logo_result.scalar_one_or_none()
-            
+
             if not logo_data:
                 # 로고가 없으면 기본 데이터 반환
                 return {
@@ -91,12 +91,12 @@ async def get_company_logo(
                     "companyId": company_name,
                     "updatedBy": current_user.id
                 }
-            
+
             print(f"[COMPANY-LOGO-GET-JWT] SUCCESS: Found logo for company {company_name}")
             return {
                 "id": logo_data.id,
                 "logoUrl": logo_data.logo_url,
-                "uploadedAt": logo_data.uploaded_at.isoformat() if logo_data.uploaded_at else None,
+                "uploadedAt": logo_data.updated_at.isoformat() if logo_data.updated_at else None,
                 "companyId": logo_data.company_id,
                 "updatedBy": logo_data.updated_by
             }
@@ -160,7 +160,6 @@ async def upload_company_logo(
         if existing_logo:
             # 기존 로고 업데이트
             existing_logo.logo_url = logo_url
-            existing_logo.uploaded_at = datetime.utcnow()
             existing_logo.updated_by = user_id
             await db.commit()
             await db.refresh(existing_logo)
@@ -168,7 +167,7 @@ async def upload_company_logo(
             return {
                 "id": existing_logo.id,
                 "logoUrl": existing_logo.logo_url,
-                "uploadedAt": existing_logo.uploaded_at.isoformat(),
+                "uploadedAt": existing_logo.updated_at.isoformat() if existing_logo.updated_at else None,
                 "companyId": existing_logo.company_id,
                 "updatedBy": existing_logo.updated_by
             }
@@ -176,7 +175,6 @@ async def upload_company_logo(
             # 새 로고 생성
             new_logo = CompanyLogo(
                 logo_url=logo_url,
-                uploaded_at=datetime.utcnow(),
                 company_id=company_name,
                 updated_by=user_id
             )
@@ -188,7 +186,7 @@ async def upload_company_logo(
             return {
                 "id": new_logo.id,
                 "logoUrl": new_logo.logo_url,
-                "uploadedAt": new_logo.uploaded_at.isoformat(),
+                "uploadedAt": new_logo.created_at.isoformat() if new_logo.created_at else None,
                 "companyId": new_logo.company_id,
                 "updatedBy": new_logo.updated_by
             }
@@ -216,7 +214,6 @@ async def upload_company_logo(
             if existing_logo:
                 # 기존 로고 업데이트
                 existing_logo.logo_url = logo_url
-                existing_logo.uploaded_at = datetime.utcnow()
                 existing_logo.updated_by = current_user.id
                 await db.commit()
                 await db.refresh(existing_logo)
@@ -226,7 +223,7 @@ async def upload_company_logo(
                 return {
                     "id": existing_logo.id,
                     "logoUrl": existing_logo.logo_url,
-                    "uploadedAt": existing_logo.uploaded_at.isoformat(),
+                    "uploadedAt": existing_logo.updated_at.isoformat() if existing_logo.updated_at else None,
                     "companyId": existing_logo.company_id,
                     "updatedBy": existing_logo.updated_by
                 }
@@ -234,7 +231,6 @@ async def upload_company_logo(
                 # 새 로고 생성
                 new_logo = CompanyLogo(
                     logo_url=logo_url,
-                    uploaded_at=datetime.utcnow(),
                     company_id=company_name,
                     updated_by=current_user.id
                 )
@@ -248,7 +244,7 @@ async def upload_company_logo(
                 return {
                     "id": new_logo.id,
                     "logoUrl": new_logo.logo_url,
-                    "uploadedAt": new_logo.uploaded_at.isoformat(),
+                    "uploadedAt": new_logo.created_at.isoformat() if new_logo.created_at else None,
                     "companyId": new_logo.company_id,
                     "updatedBy": new_logo.updated_by
                 }
