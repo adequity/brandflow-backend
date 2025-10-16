@@ -913,19 +913,6 @@ app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
 app.include_router(migration.router, prefix="/api/migration", tags=["마이그레이션"])
 # app.include_router(simple_migration.router, prefix="/api/migrate", tags=["간단마이그레이션"])
 
-# 정적 파일 서빙 (업로드된 파일 제공)
-try:
-    from pathlib import Path
-    upload_dir = Path(settings.UPLOAD_DIR)
-    if upload_dir.exists():
-        app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
-        print(f"✅ Static files mounted: /uploads -> {upload_dir}")
-    else:
-        print(f"⚠️ Upload directory not found: {upload_dir}")
-except Exception as e:
-    print(f"❌ Static files mount error: {str(e)}")
-
-
 @app.get("/debug/uploads")
 async def debug_uploads():
     """업로드 디렉토리 상태 확인 및 테스트"""
@@ -1197,6 +1184,19 @@ async def add_all_company_columns():
 
     except Exception as e:
         return {"status": "error", "message": f"Database connection failed: {str(e)}"}
+
+
+# 정적 파일 서빙 (업로드된 파일 제공) - 모든 라우트 등록 후 마운트
+try:
+    from pathlib import Path
+    upload_dir = Path(settings.UPLOAD_DIR)
+    if upload_dir.exists():
+        app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
+        print(f"✅ Static files mounted: /uploads -> {upload_dir}")
+    else:
+        print(f"⚠️ Upload directory not found: {upload_dir}")
+except Exception as e:
+    print(f"❌ Static files mount error: {str(e)}")
 
 
 if __name__ == "__main__":
