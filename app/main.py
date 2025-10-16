@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -911,6 +912,18 @@ app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
 # from app.api.endpoints import migration, simple_migration
 app.include_router(migration.router, prefix="/api/migration", tags=["마이그레이션"])
 # app.include_router(simple_migration.router, prefix="/api/migrate", tags=["간단마이그레이션"])
+
+# 정적 파일 서빙 (업로드된 파일 제공)
+try:
+    from pathlib import Path
+    upload_dir = Path(settings.UPLOAD_DIR)
+    if upload_dir.exists():
+        app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
+        print(f"✅ Static files mounted: /uploads -> {upload_dir}")
+    else:
+        print(f"⚠️ Upload directory not found: {upload_dir}")
+except Exception as e:
+    print(f"❌ Static files mount error: {str(e)}")
 
 
 @app.get("/")
