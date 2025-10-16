@@ -926,6 +926,44 @@ except Exception as e:
     print(f"❌ Static files mount error: {str(e)}")
 
 
+@app.get("/debug/uploads")
+async def debug_uploads():
+    """업로드 디렉토리 상태 확인"""
+    from pathlib import Path
+    import os
+
+    upload_dir = Path(settings.UPLOAD_DIR)
+
+    # 디렉토리 존재 여부
+    dir_exists = upload_dir.exists()
+
+    # 파일 목록
+    files = []
+    if dir_exists:
+        try:
+            for category_dir in upload_dir.iterdir():
+                if category_dir.is_dir():
+                    for file in category_dir.iterdir():
+                        if file.is_file():
+                            files.append({
+                                "path": str(file.relative_to(upload_dir)),
+                                "size": file.stat().st_size,
+                                "url": f"/uploads/{file.relative_to(upload_dir)}"
+                            })
+        except Exception as e:
+            files = [{"error": str(e)}]
+
+    return {
+        "upload_dir": str(upload_dir),
+        "exists": dir_exists,
+        "is_directory": upload_dir.is_dir() if dir_exists else False,
+        "permissions": oct(upload_dir.stat().st_mode)[-3:] if dir_exists else None,
+        "files": files,
+        "total_files": len([f for f in files if "error" not in f]),
+        "environment": "railway" if os.getenv("PORT") else "local"
+    }
+
+
 @app.get("/")
 async def root():
     import os
@@ -938,7 +976,7 @@ async def root():
         "environment": "railway" if os.getenv("PORT") else "local",
         "total_routes": len(app.router.routes),
         "api_endpoints": len([r for r in app.router.routes if hasattr(r, 'path') and '/api/' in r.path]),
-        "debug_endpoints": ["/debug/routes", "/debug/imports"],
+        "debug_endpoints": ["/debug/routes", "/debug/imports", "/debug/uploads"],
         "docs": "/docs"
     }
 
