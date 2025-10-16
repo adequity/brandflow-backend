@@ -913,6 +913,28 @@ app.include_router(websocket.router, prefix="/api/ws", tags=["웹소켓"])
 app.include_router(migration.router, prefix="/api/migration", tags=["마이그레이션"])
 # app.include_router(simple_migration.router, prefix="/api/migrate", tags=["간단마이그레이션"])
 
+@app.get("/uploads/{category}/{filename}")
+async def serve_uploaded_file(category: str, filename: str):
+    """업로드된 파일 직접 서빙 (StaticFiles 백업용)"""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    upload_dir = Path(settings.UPLOAD_DIR)
+    file_path = upload_dir / category / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {category}/{filename}")
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    # 보안: 경로 탐색 방지
+    if not str(file_path.resolve()).startswith(str(upload_dir.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return FileResponse(file_path)
+
+
 @app.get("/debug/uploads")
 async def debug_uploads():
     """업로드 디렉토리 상태 확인 및 테스트"""
@@ -1186,17 +1208,8 @@ async def add_all_company_columns():
         return {"status": "error", "message": f"Database connection failed: {str(e)}"}
 
 
-# 정적 파일 서빙 (업로드된 파일 제공) - 모든 라우트 등록 후 마운트
-try:
-    from pathlib import Path
-    upload_dir = Path(settings.UPLOAD_DIR)
-    if upload_dir.exists():
-        app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
-        print(f"✅ Static files mounted: /uploads -> {upload_dir}")
-    else:
-        print(f"⚠️ Upload directory not found: {upload_dir}")
-except Exception as e:
-    print(f"❌ Static files mount error: {str(e)}")
+# 정적 파일 서빙은 /uploads/{category}/{filename} 커스텀 엔드포인트 사용
+# StaticFiles 대신 FileResponse로 직접 서빙 (Railway Volume 호환성 향상)
 
 
 if __name__ == "__main__":
