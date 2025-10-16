@@ -199,7 +199,7 @@ async def upload_company_logo(
 
         try:
             # 권한 확인: 대행사 어드민만 로고 업로드 가능
-            if current_user.role.value not in ['agency_admin', 'super_admin']:
+            if current_user.role.value not in ['AGENCY_ADMIN', 'SUPER_ADMIN']:
                 raise HTTPException(status_code=403, detail="권한이 없습니다. 대행사 어드민만 로고를 업로드할 수 있습니다.")
 
             company_name = current_user.company or 'default'
@@ -319,7 +319,7 @@ async def delete_company_logo(
         
         try:
             # 권한 확인: 대행사 어드민만 로고 제거 가능
-            if current_user.role.value not in ['agency_admin', 'super_admin']:
+            if current_user.role.value not in ['AGENCY_ADMIN', 'SUPER_ADMIN']:
                 raise HTTPException(status_code=403, detail="권한이 없습니다. 대행사 어드민만 로고를 제거할 수 있습니다.")
             
             company_name = current_user.company or 'default'
