@@ -167,6 +167,7 @@ class FileUploadManager:
                 'original_filename': file.filename,
                 'file_path': str(file_path),
                 'relative_path': f"{category}/{filename}",
+                'url': f"/uploads/{category}/{filename}",
                 'category': category,
                 'size': len(content),
                 'content_type': file.content_type,
