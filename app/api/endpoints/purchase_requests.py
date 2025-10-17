@@ -345,10 +345,12 @@ async def get_purchase_request_stats(
     adminId: Optional[int] = Query(None, alias="adminId"),
     viewerRole: Optional[str] = Query(None, alias="viewerRole"),
     adminRole: Optional[str] = Query(None, alias="adminRole"),
+    # 월간 필터 (YYYY-MM 형식)
+    month: Optional[str] = Query(None, description="월간 필터 (YYYY-MM)"),
     db: AsyncSession = Depends(get_async_db),
     jwt_user: User = Depends(get_current_active_user)
 ):
-    """구매요청 통계 데이터 조회"""
+    """구매요청 통계 데이터 조회 (월간 필터 지원)"""
     
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
@@ -416,12 +418,30 @@ async def get_purchase_request_stats(
     else:
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = jwt_user
-        print(f"[PURCHASE-REQUEST-STATS-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
-        
+        print(f"[PURCHASE-REQUEST-STATS-JWT] Request from user_id={current_user.id}, user_role={current_user.role}, month={month}")
+
         try:
+            # 월간 필터 파싱
+            month_filter = None
+            if month:
+                try:
+                    year, month_num = month.split('-')
+                    year = int(year)
+                    month_num = int(month_num)
+                    # 해당 월의 시작일과 종료일 계산
+                    from calendar import monthrange
+                    _, last_day = monthrange(year, month_num)
+                    start_date = datetime(year, month_num, 1)
+                    end_date = datetime(year, month_num, last_day, 23, 59, 59)
+                    month_filter = (start_date, end_date)
+                    print(f"[PURCHASE-REQUEST-STATS-JWT] Month filter: {start_date.isoformat()} to {end_date.isoformat()}")
+                except (ValueError, AttributeError) as e:
+                    print(f"[PURCHASE-REQUEST-STATS-JWT] Invalid month format: {month}, error: {e}")
+                    raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM format.")
+
             # 권한에 따라 데이터 필터링
             query = select(PurchaseRequest)
-            
+
             if current_user.role.value == 'staff':
                 # 직원은 자신의 요청만
                 query = query.where(PurchaseRequest.requester_id == current_user.id)
@@ -429,20 +449,20 @@ async def get_purchase_request_stats(
                 # 클라이언트는 자신의 요청만
                 query = query.where(PurchaseRequest.requester_id == current_user.id)
             # agency_admin, super_admin은 모든 데이터
-            
+
             # 상태별 통계
             total_query = select(func.count(PurchaseRequest.id))
             pending_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.PENDING)
             approved_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.APPROVED)
             rejected_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.REJECTED)
             completed_query = select(func.count(PurchaseRequest.id)).where(PurchaseRequest.status == RequestStatus.COMPLETED)
-            
+
             # 총액 통계
             total_amount_query = select(func.coalesce(func.sum(PurchaseRequest.amount), 0))
             approved_amount_query = select(func.coalesce(func.sum(PurchaseRequest.amount), 0)).where(
                 PurchaseRequest.status == RequestStatus.APPROVED
             )
-            
+
             # 권한별 필터링 적용
             if current_user.role.value in ['staff', 'client']:
                 user_filter = PurchaseRequest.requester_id == current_user.id
@@ -453,6 +473,18 @@ async def get_purchase_request_stats(
                 completed_query = completed_query.where(user_filter)
                 total_amount_query = total_amount_query.where(user_filter)
                 approved_amount_query = approved_amount_query.where(user_filter)
+
+            # 월간 필터 적용
+            if month_filter:
+                start_date, end_date = month_filter
+                date_filter = (PurchaseRequest.created_at >= start_date) & (PurchaseRequest.created_at <= end_date)
+                total_query = total_query.where(date_filter)
+                pending_query = pending_query.where(date_filter)
+                approved_query = approved_query.where(date_filter)
+                rejected_query = rejected_query.where(date_filter)
+                completed_query = completed_query.where(date_filter)
+                total_amount_query = total_amount_query.where(date_filter)
+                approved_amount_query = approved_amount_query.where(date_filter)
             
             # 쿼리 실행
             total_count = await db.scalar(total_query)
