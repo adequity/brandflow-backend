@@ -36,8 +36,8 @@ async def health_check():
         health_data = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
-            "version": "2.2.2",
-            "message": "BrandFlow FastAPI v2.2.2 Health Check",
+            "version": "2.3.0",
+            "message": "BrandFlow FastAPI v2.3.0 with Volume Support",
             "database": {
                 "status": "connected",
                 "type": "PostgreSQL"
@@ -61,6 +61,6 @@ async def health_check():
         return {
             "status": "error",
             "timestamp": datetime.now().isoformat(),
-            "version": "2.2.2",
+            "version": "2.3.0",
             "error": str(e)
         }
