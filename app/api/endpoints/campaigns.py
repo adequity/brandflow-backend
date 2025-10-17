@@ -577,15 +577,16 @@ async def check_order_requests_table(
 
 @router.get("/order-requests")
 async def get_all_order_requests(
+    month: Optional[str] = Query(None, description="월간 필터 (YYYY-MM)"),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """JWT 기반 전체 발주요청 목록 조회"""
+    """JWT 기반 전체 발주요청 목록 조회 (월간 필터 지원)"""
 
     user_role = current_user.role.value
     user_company = current_user.company
 
-    print(f"[ORDER-REQUESTS-LIST] Getting order requests for user_id={current_user.id}, role={user_role}, company={user_company}")
+    print(f"[ORDER-REQUESTS-LIST] Getting order requests for user_id={current_user.id}, role={user_role}, company={user_company}, month={month}")
 
     try:
         # 발주요청 조회 (회사별 필터링 적용)
@@ -624,6 +625,22 @@ async def get_all_order_requests(
             # 일반 어드민은 본인 회사의 발주요청만 조회 가능
             print(f"[ORDER-REQUESTS-LIST] Company admin: filtering by company '{user_company}'")
             query = base_query.where(RequesterUser.company == user_company)
+
+        # 월간 필터 적용
+        if month:
+            try:
+                from calendar import monthrange
+                year, month_num = month.split('-')
+                year = int(year)
+                month_num = int(month_num)
+                _, last_day = monthrange(year, month_num)
+                start_date = datetime(year, month_num, 1)
+                end_date = datetime(year, month_num, last_day, 23, 59, 59)
+                query = query.where((OrderRequest.created_at >= start_date) & (OrderRequest.created_at <= end_date))
+                print(f"[ORDER-REQUESTS-LIST] Month filter applied: {start_date.isoformat()} to {end_date.isoformat()}")
+            except (ValueError, AttributeError) as e:
+                print(f"[ORDER-REQUESTS-LIST] Invalid month format: {month}, error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM format.")
 
         query = query.order_by(OrderRequest.created_at.desc())
 
