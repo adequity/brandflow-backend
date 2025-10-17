@@ -1056,6 +1056,105 @@ async def get_monthly_campaign_stats(
         raise HTTPException(status_code=500, detail=f"월간 통계 조회 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.get("/receivables-status")
+async def get_receivables_status(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """미수금 현황 조회 (미발행 계산서 + 미입금 캠페인)"""
+
+    user_role = current_user.role.value
+    user_company = current_user.company
+
+    print(f"[RECEIVABLES-STATUS] Getting receivables status for user_id={current_user.id}, role={user_role}, company={user_company}")
+
+    try:
+        # 기본 쿼리
+        query = select(Campaign).options(
+            joinedload(Campaign.creator),
+            joinedload(Campaign.client_user),
+            joinedload(Campaign.staff_user)
+        )
+
+        # 역할별 필터링
+        if user_role == "SUPER_ADMIN":
+            pass
+        elif user_role == "AGENCY_ADMIN":
+            query = query.where(Campaign.company == user_company)
+        elif user_role == "STAFF":
+            query = query.where(
+                or_(
+                    Campaign.creator_id == current_user.id,
+                    Campaign.staff_id == current_user.id
+                )
+            )
+        elif user_role == "CLIENT":
+            query = query.where(Campaign.client == user_company)
+
+        # 캠페인 조회
+        result = await db.execute(query)
+        campaigns = result.scalars().all()
+
+        # 미발행 계산서 캠페인
+        pending_invoices = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "client": c.client_company or c.company,
+                "budget": c.budget or 0,
+                "start_date": c.start_date.isoformat() if c.start_date else None,
+                "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
+                "staff_name": c.staff_user.name if c.staff_user else (c.creator.name if c.creator else None),
+                "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0
+            }
+            for c in campaigns if not c.invoice_issued
+        ]
+
+        # 미입금 캠페인
+        pending_payments = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "client": c.client_company or c.company,
+                "budget": c.budget or 0,
+                "start_date": c.start_date.isoformat() if c.start_date else None,
+                "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
+                "staff_name": c.staff_user.name if c.staff_user else (c.creator.name if c.creator else None),
+                "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0
+            }
+            for c in campaigns if not c.payment_completed
+        ]
+
+        # 금액 합계
+        total_pending_invoice_amount = sum(c["budget"] for c in pending_invoices)
+        total_pending_payment_amount = sum(c["budget"] for c in pending_payments)
+
+        # 긴급도 순으로 정렬 (오래된 것부터)
+        pending_invoices.sort(key=lambda x: x["days_overdue"], reverse=True)
+        pending_payments.sort(key=lambda x: x["days_overdue"], reverse=True)
+
+        result = {
+            "pending_invoices": {
+                "count": len(pending_invoices),
+                "total_amount": total_pending_invoice_amount,
+                "campaigns": pending_invoices[:10]  # 최대 10개만 반환
+            },
+            "pending_payments": {
+                "count": len(pending_payments),
+                "total_amount": total_pending_payment_amount,
+                "campaigns": pending_payments[:10]  # 최대 10개만 반환
+            }
+        }
+
+        print(f"[RECEIVABLES-STATUS] Result: {len(pending_invoices)} invoices, {len(pending_payments)} payments")
+
+        return result
+
+    except Exception as e:
+        print(f"[RECEIVABLES-STATUS] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"미수금 현황 조회 중 오류가 발생했습니다: {str(e)}")
+
+
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign_detail(
     request: Request,
