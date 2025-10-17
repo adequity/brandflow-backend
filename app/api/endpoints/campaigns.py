@@ -1029,7 +1029,8 @@ async def get_monthly_campaign_stats(
 
         # 통계 계산
         total_revenue = sum(campaign.budget or 0 for campaign in campaigns)
-        total_cost = sum(campaign.cost or 0 for campaign in campaigns)
+        # Campaign 모델에 cost 필드가 없으므로 0으로 처리 (실제 비용은 발주/구매요청에서 계산)
+        total_cost = 0
         total_campaigns = len(campaigns)
         completed_campaigns = sum(1 for campaign in campaigns if campaign.status in ['완료', 'COMPLETED'])
         pending_invoices = sum(1 for campaign in campaigns if not campaign.invoice_issued)
