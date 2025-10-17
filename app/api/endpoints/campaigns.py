@@ -3153,3 +3153,87 @@ async def upload_chat_images(
         raise HTTPException(status_code=500, detail=f"이미지 업로드 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.get("/monthly-stats")
+async def get_monthly_campaign_stats(
+    month: Optional[str] = Query(None, description="월간 필터 (YYYY-MM)"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """월간 캠페인 통계 조회 (JWT 기반)"""
+
+    user_role = current_user.role.value
+    user_company = current_user.company
+
+    print(f"[MONTHLY-STATS] Getting monthly stats for user_id={current_user.id}, role={user_role}, company={user_company}, month={month}")
+
+    try:
+        # 기본 쿼리
+        query = select(Campaign)
+
+        # 역할별 필터링
+        if user_role == "SUPER_ADMIN":
+            # 슈퍼 어드민: 모든 캠페인
+            pass
+        elif user_role == "AGENCY_ADMIN":
+            # 에이전시 어드민: 해당 회사 캠페인만
+            query = query.where(Campaign.company == user_company)
+        elif user_role == "STAFF":
+            # 직원: 본인이 담당하는 캠페인만
+            query = query.where(
+                or_(
+                    Campaign.creator_id == current_user.id,
+                    Campaign.staff_id == current_user.id
+                )
+            )
+        elif user_role == "CLIENT":
+            # 클라이언트: 본인 회사 캠페인만
+            query = query.where(Campaign.client == user_company)
+
+        # 월간 필터 적용
+        if month:
+            try:
+                from calendar import monthrange
+                year, month_num = month.split('-')
+                year = int(year)
+                month_num = int(month_num)
+                _, last_day = monthrange(year, month_num)
+                start_date = datetime(year, month_num, 1)
+                end_date = datetime(year, month_num, last_day, 23, 59, 59)
+                query = query.where((Campaign.created_at >= start_date) & (Campaign.created_at <= end_date))
+                print(f"[MONTHLY-STATS] Month filter applied: {start_date.isoformat()} to {end_date.isoformat()}")
+            except (ValueError, AttributeError) as e:
+                print(f"[MONTHLY-STATS] Invalid month format: {month}, error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM format.")
+
+        # 캠페인 조회
+        result = await db.execute(query)
+        campaigns = result.scalars().all()
+
+        # 통계 계산
+        total_revenue = sum(campaign.budget or 0 for campaign in campaigns)
+        total_cost = sum(campaign.cost or 0 for campaign in campaigns)
+        total_campaigns = len(campaigns)
+        completed_campaigns = sum(1 for campaign in campaigns if campaign.status in ['완료', 'COMPLETED'])
+        pending_invoices = sum(1 for campaign in campaigns if not campaign.invoice_issued)
+        pending_payments = sum(1 for campaign in campaigns if not campaign.payment_completed)
+
+        stats = {
+            "totalRevenue": total_revenue,
+            "totalCost": total_cost,
+            "totalCampaigns": total_campaigns,
+            "completedCampaigns": completed_campaigns,
+            "pendingInvoices": pending_invoices,
+            "pendingPayments": pending_payments
+        }
+
+        print(f"[MONTHLY-STATS] Stats calculated: {stats}")
+
+        return stats
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[MONTHLY-STATS] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"월간 통계 조회 중 오류가 발생했습니다: {str(e)}")
+
+
