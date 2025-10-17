@@ -3189,7 +3189,7 @@ async def get_monthly_campaign_stats(
             # 클라이언트: 본인 회사 캠페인만
             query = query.where(Campaign.client == user_company)
 
-        # 월간 필터 적용
+        # 월간 필터 적용 (start_date 기준)
         if month:
             try:
                 from calendar import monthrange
@@ -3199,8 +3199,8 @@ async def get_monthly_campaign_stats(
                 _, last_day = monthrange(year, month_num)
                 start_date = datetime(year, month_num, 1)
                 end_date = datetime(year, month_num, last_day, 23, 59, 59)
-                query = query.where((Campaign.created_at >= start_date) & (Campaign.created_at <= end_date))
-                print(f"[MONTHLY-STATS] Month filter applied: {start_date.isoformat()} to {end_date.isoformat()}")
+                query = query.where((Campaign.start_date >= start_date) & (Campaign.start_date <= end_date))
+                print(f"[MONTHLY-STATS] Month filter applied (start_date): {start_date.isoformat()} to {end_date.isoformat()}")
             except (ValueError, AttributeError) as e:
                 print(f"[MONTHLY-STATS] Invalid month format: {month}, error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM format.")
