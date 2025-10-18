@@ -2284,7 +2284,7 @@ async def update_campaign_post(
                 raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
 
             # CLIENT는 승인 상태 필드만 수정 가능
-            allowed_fields = {'topicStatus', 'outlineStatus'}
+            allowed_fields = {'topicStatus', 'outlineStatus', 'rejectReason'}
             received_fields = set(post_data.keys())
 
             if not received_fields.issubset(allowed_fields):
@@ -2307,6 +2307,8 @@ async def update_campaign_post(
             post.outline = post_data['outline']
         if 'outlineStatus' in post_data:
             post.outline_status = post_data['outlineStatus']
+        if 'rejectReason' in post_data:
+            post.reject_reason = post_data['rejectReason']
         if 'images' in post_data:
             post.images = post_data['images']
         if 'productId' in post_data:

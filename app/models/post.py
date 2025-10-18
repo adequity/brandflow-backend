@@ -15,6 +15,7 @@ class Post(Base, TimestampMixin):
     company = Column(String(200), nullable=True, index=True, default='default_company')  # 회사별 포스트 분리
     outline = Column(Text, nullable=True)
     outline_status = Column(String(50), nullable=True)
+    reject_reason = Column(Text, nullable=True)  # 반려 사유
     images = Column(JSON, nullable=True, default=list)
     published_url = Column(Text, nullable=True)
     order_request_status = Column(String(50), nullable=True)
