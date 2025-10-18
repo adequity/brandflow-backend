@@ -2282,6 +2282,17 @@ async def update_campaign_post(
         elif user_role == UserRole.CLIENT.value:
             if campaign.client_user_id != current_user.id:
                 raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
+
+            # CLIENT는 승인 상태 필드만 수정 가능
+            allowed_fields = {'topicStatus', 'outlineStatus'}
+            received_fields = set(post_data.keys())
+
+            if not received_fields.issubset(allowed_fields):
+                forbidden_fields = received_fields - allowed_fields
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"CLIENT는 승인 상태만 변경할 수 있습니다. 허용되지 않은 필드: {', '.join(forbidden_fields)}"
+                )
         else:
             raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
 
