@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import json
 
 from app.db.database import get_async_db
-from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse
+from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse, CampaignDuplicateRequest, CampaignDuplicateResponse
 from app.schemas.post import PostCreate, PostResponse
 from app.schemas.order_request import OrderRequestCreate, OrderRequestResponse
 from app.api.deps import get_current_active_user
@@ -1153,6 +1153,114 @@ async def get_receivables_status(
     except Exception as e:
         print(f"[RECEIVABLES-STATUS] Error: {e}")
         raise HTTPException(status_code=500, detail=f"미수금 현황 조회 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/{campaign_id}/duplicate", response_model=CampaignDuplicateResponse)
+async def duplicate_campaign(
+    campaign_id: int,
+    duplicate_data: CampaignDuplicateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 기본 정보 복사 (콘텐츠/카톡 정보 제외)"""
+
+    user_role = current_user.role.value
+    user_company = current_user.company
+
+    print(f"[CAMPAIGN-DUPLICATE] User {current_user.id} attempting to duplicate campaign {campaign_id}")
+
+    try:
+        # 1. 원본 캠페인 조회
+        query = select(Campaign).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        original = result.scalar_one_or_none()
+
+        if not original:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 2. 권한 확인
+        if user_role == "SUPER_ADMIN":
+            pass  # 모든 캠페인 복사 가능
+        elif user_role == "AGENCY_ADMIN":
+            if original.company != user_company:
+                raise HTTPException(status_code=403, detail="다른 회사의 캠페인은 복사할 수 없습니다.")
+        elif user_role == "STAFF":
+            if original.creator_id != current_user.id and original.staff_id != current_user.id:
+                raise HTTPException(status_code=403, detail="본인이 담당하지 않은 캠페인은 복사할 수 없습니다.")
+        else:
+            raise HTTPException(status_code=403, detail="캠페인을 복사할 권한이 없습니다.")
+
+        # 3. 날짜 유효성 검사
+        if duplicate_data.end_date <= duplicate_data.start_date:
+            raise HTTPException(status_code=400, detail="종료일은 시작일 이후여야 합니다.")
+
+        # 4. 새 캠페인 생성 (기본 정보만)
+        new_campaign = Campaign(
+            # 기본 정보 복사
+            name=duplicate_data.new_name,
+            description=original.description,
+            budget=duplicate_data.budget,
+            start_date=duplicate_data.start_date,
+            end_date=duplicate_data.end_date,
+
+            # 클라이언트 정보 복사
+            company=original.company,
+            client_company=original.client_company,
+
+            # 새로 설정
+            status=CampaignStatus.ACTIVE,  # ACTIVE로 생성
+            creator_id=current_user.id,
+            staff_id=duplicate_data.staff_id or current_user.id,
+            client_user_id=original.client_user_id,
+
+            # 재무 상태 초기화
+            invoice_issued=False,
+            payment_completed=False,
+
+            # 카톡 정보 제외 (None)
+            chat_content=None,
+            chat_summary=None,
+            chat_attachments=None,
+            chat_images=None
+        )
+
+        db.add(new_campaign)
+        await db.commit()
+        await db.refresh(new_campaign)
+
+        print(f"[CAMPAIGN-DUPLICATE] Campaign {original.id} '{original.name}' duplicated to {new_campaign.id} '{new_campaign.name}' by user {current_user.id}")
+
+        # 5. 응답 데이터 구성
+        campaign_response = CampaignResponse(
+            id=new_campaign.id,
+            name=new_campaign.name,
+            description=new_campaign.description,
+            client_company=new_campaign.client_company,
+            budget=new_campaign.budget,
+            start_date=new_campaign.start_date,
+            end_date=new_campaign.end_date,
+            status=new_campaign.status,
+            creator_id=new_campaign.creator_id,
+            client_user_id=new_campaign.client_user_id,
+            staff_id=new_campaign.staff_id,
+            invoice_issued=new_campaign.invoice_issued,
+            payment_completed=new_campaign.payment_completed,
+            created_at=new_campaign.created_at,
+            updated_at=new_campaign.updated_at
+        )
+
+        return CampaignDuplicateResponse(
+            success=True,
+            message="캠페인이 성공적으로 복사되었습니다.",
+            campaign=campaign_response
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CAMPAIGN-DUPLICATE] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"캠페인 복사 중 오류가 발생했습니다: {str(e)}")
 
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)

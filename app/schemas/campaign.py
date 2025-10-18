@@ -58,3 +58,19 @@ class CampaignResponse(CampaignBase):
 
     class Config:
         from_attributes = True
+
+
+class CampaignDuplicateRequest(BaseModel):
+    """캠페인 복사 요청"""
+    new_name: str = Field(..., min_length=2, max_length=200, description="새 캠페인명")
+    start_date: datetime = Field(..., description="시작일")
+    end_date: datetime = Field(..., description="종료일")
+    staff_id: Optional[int] = Field(None, description="담당자 ID (미지정 시 현재 사용자)")
+    budget: float = Field(..., ge=0, description="예산")
+
+
+class CampaignDuplicateResponse(BaseModel):
+    """캠페인 복사 응답"""
+    success: bool
+    message: str
+    campaign: CampaignResponse
