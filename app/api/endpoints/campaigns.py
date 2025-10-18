@@ -1194,14 +1194,18 @@ async def duplicate_campaign(
         if duplicate_data.end_date <= duplicate_data.start_date:
             raise HTTPException(status_code=400, detail="종료일은 시작일 이후여야 합니다.")
 
-        # 4. 새 캠페인 생성 (기본 정보만)
+        # 4. 날짜 타임존 제거 (DB는 timezone-naive datetime 사용)
+        start_date_naive = duplicate_data.start_date.replace(tzinfo=None) if duplicate_data.start_date.tzinfo else duplicate_data.start_date
+        end_date_naive = duplicate_data.end_date.replace(tzinfo=None) if duplicate_data.end_date.tzinfo else duplicate_data.end_date
+
+        # 5. 새 캠페인 생성 (기본 정보만)
         new_campaign = Campaign(
             # 기본 정보 복사
             name=duplicate_data.new_name,
             description=original.description,
             budget=duplicate_data.budget,
-            start_date=duplicate_data.start_date,
-            end_date=duplicate_data.end_date,
+            start_date=start_date_naive,
+            end_date=end_date_naive,
 
             # 클라이언트 정보 복사
             company=original.company,
