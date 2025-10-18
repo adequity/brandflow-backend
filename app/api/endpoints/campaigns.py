@@ -2268,11 +2268,21 @@ async def update_campaign_post(
         if not post:
             raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다")
 
-        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
+        # 권한 확인
         user_role = current_user.role.value
-        if (campaign.creator_id != current_user.id and
-            campaign.staff_id != current_user.id and
-            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+
+        # SUPER_ADMIN, AGENCY_ADMIN: 모든 권한
+        if user_role in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]:
+            pass
+        # STAFF: 자신이 생성했거나 담당하는 캠페인의 업무만 수정 가능
+        elif user_role == UserRole.STAFF.value:
+            if campaign.creator_id != current_user.id and campaign.staff_id != current_user.id:
+                raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
+        # CLIENT: 자신의 캠페인 업무만 승인/반려 가능
+        elif user_role == UserRole.CLIENT.value:
+            if campaign.client_user_id != current_user.id:
+                raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
+        else:
             raise HTTPException(status_code=403, detail="이 업무를 수정할 권한이 없습니다")
 
         # 업데이트할 필드들 처리
