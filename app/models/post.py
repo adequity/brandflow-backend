@@ -11,7 +11,7 @@ class Post(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(Text, nullable=False)
     work_type = Column(String(100), nullable=False, default="블로그")
-    topic_status = Column(String(50), nullable=False, default="대기")
+    topic_status = Column(String(50), nullable=False, default="주제 승인 대기")
     company = Column(String(200), nullable=True, index=True, default='default_company')  # 회사별 포스트 분리
     outline = Column(Text, nullable=True)
     outline_status = Column(String(50), nullable=True)

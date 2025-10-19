@@ -6,7 +6,7 @@ from datetime import datetime
 class PostCreate(BaseModel):
     title: str
     work_type: str = "블로그"
-    topic_status: str = "대기"
+    topic_status: str = "주제 승인 대기"
     outline: Optional[str] = None
     outline_status: Optional[str] = None
     images: Optional[List[str]] = []
