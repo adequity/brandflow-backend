@@ -3472,3 +3472,30 @@ async def upload_chat_images(
         raise HTTPException(status_code=500, detail=f"이미지 업로드 중 오류가 발생했습니다: {str(e)}")
 
 
+@router.get("/debug/status-values", tags=["debug"])
+async def get_status_values(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """DB에 저장된 실제 상태값 분포 조회 (디버그용)"""
+    try:
+        # topicStatus 값 분포
+        topic_query = select(Post.topic_status, func.count(Post.id)).group_by(Post.topic_status)
+        topic_result = await db.execute(topic_query)
+        topic_distribution = {row[0]: row[1] for row in topic_result.all() if row[0]}
+
+        # outlineStatus 값 분포
+        outline_query = select(Post.outline_status, func.count(Post.id)).group_by(Post.outline_status)
+        outline_result = await db.execute(outline_query)
+        outline_distribution = {row[0]: row[1] for row in outline_result.all() if row[0]}
+
+        return {
+            "topicStatus": topic_distribution,
+            "outlineStatus": outline_distribution,
+            "total_posts": sum(topic_distribution.values())
+        }
+    except Exception as e:
+        print(f"[DEBUG-STATUS-VALUES] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
