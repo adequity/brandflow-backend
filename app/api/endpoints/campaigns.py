@@ -2368,29 +2368,27 @@ async def update_campaign_post(
 
         print(f"[UPDATE-POST] SUCCESS: Updated post {post.id} for campaign {campaign_id} with product_cost: {post.product_cost}")
 
-        # 수정된 포스트 반환
+        # 수정된 포스트 반환 (camelCase로 통일)
         return {
             "id": post.id,
             "title": post.title,
-            "work_type": post.work_type,
-            "topic_status": post.topic_status,
+            "workType": post.work_type,
+            "topicStatus": post.topic_status,
             "outline": post.outline,
-            "outline_status": post.outline_status,
+            "outlineStatus": post.outline_status,
             "images": post.images or [],
-            "published_url": post.published_url,
-            "publishedUrl": post.published_url,  # 프론트엔드 호환성
-            "order_request_status": post.order_request_status,
-            "order_request_id": post.order_request_id,
-            "start_date": post.start_date,
-            "due_date": post.due_date,
-            "product_id": post.product_id,
-            "product_cost": post.product_cost,  # 상품 원가 포함
-            "product_name": post.product_name,  # 상품명 포함
-            "productName": post.product_name,   # 호환성을 위한 별칭
+            "publishedUrl": post.published_url,
+            "orderRequestStatus": post.order_request_status,
+            "orderRequestId": post.order_request_id,
+            "startDate": post.start_date,
+            "dueDate": post.due_date,
+            "productId": post.product_id,
+            "productCost": post.product_cost,
+            "productName": post.product_name,
             "quantity": post.quantity,
-            "campaign_id": post.campaign_id,
-            "created_at": post.created_at.isoformat() if post.created_at else None,
-            "updated_at": post.updated_at.isoformat() if post.updated_at else None
+            "campaignId": post.campaign_id,
+            "createdAt": post.created_at.isoformat() if post.created_at else None,
+            "updatedAt": post.updated_at.isoformat() if post.updated_at else None
         }
 
     except HTTPException:
