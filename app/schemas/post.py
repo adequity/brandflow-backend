@@ -56,6 +56,7 @@ class PostResponse(BaseModel):
     topic_status: str = Field(alias="topicStatus")
     outline: Optional[str] = None
     outline_status: Optional[str] = Field(None, alias="outlineStatus")
+    reject_reason: Optional[str] = Field(None, alias="rejectReason")  # 반려 사유
     images: Optional[List[str]] = None
     published_url: Optional[str] = Field(None, alias="publishedUrl")
     order_request_status: Optional[str] = Field(None, alias="orderRequestStatus")
