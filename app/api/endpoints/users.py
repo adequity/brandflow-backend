@@ -61,8 +61,11 @@ async def get_users(
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == user_id)
         elif user_role == UserRole.STAFF.value:
-            # 직원은 같은 회사 사용자만 조회 가능
-            query = select(User).where(User.company == current_user.company)
+            # 직원은 자신이 생성한 CLIENT만 조회 가능
+            query = select(User).where(
+                User.role == UserRole.CLIENT,
+                User.created_by == user_id
+            )
         else:
             # 기본값: 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == current_user.company)
@@ -86,8 +89,11 @@ async def get_users(
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == jwt_user.id)
         elif user_role == UserRole.STAFF:
-            # 직원은 같은 회사 사용자만 조회 가능
-            query = select(User).where(User.company == jwt_user.company)
+            # 직원은 자신이 생성한 CLIENT만 조회 가능
+            query = select(User).where(
+                User.role == UserRole.CLIENT,
+                User.created_by == jwt_user.id
+            )
         else:
             # 기본값: 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == jwt_user.company)
@@ -150,8 +156,8 @@ async def get_clients(
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
         elif user_role == UserRole.STAFF.value:
-            # 직원은 같은 회사 클라이언트 조회 가능
-            query = query.where(User.company == current_user.company)
+            # 직원은 자신이 생성한 클라이언트만 조회 가능
+            query = query.where(User.created_by == user_id)
         # 슈퍼 어드민은 모든 클라이언트 조회 가능 (추가 필터링 없음)
         
         result = await db.execute(query)
@@ -180,8 +186,8 @@ async def get_clients(
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
         elif user_role == UserRole.STAFF.value:
-            # 직원은 같은 회사 클라이언트 조회 가능
-            query = query.where(User.company == current_user.company)
+            # 직원은 자신이 생성한 클라이언트만 조회 가능
+            query = query.where(User.created_by == user_id)
         else:
             # 기타 역할은 클라이언트 조회 불가
             return []
@@ -297,7 +303,9 @@ async def create_user(
             client_ceo_name=user_data.client_ceo_name,
             client_company_address=user_data.client_company_address,
             client_business_type=user_data.client_business_type,
-            client_business_item=user_data.client_business_item
+            client_business_item=user_data.client_business_item,
+            # STAFF가 CLIENT를 생성한 경우 created_by 기록
+            created_by=current_user.id if user_data.role == UserRole.CLIENT else None
         )
         
         db.add(new_user)
@@ -318,8 +326,9 @@ async def create_user(
         existing_user = await service.get_user_by_email(user_data.email)
         if existing_user:
             raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다.")
-        
-        return await service.create_user(user_data)
+
+        # STAFF가 CLIENT를 생성하는 경우 created_by 기록
+        return await service.create_user(user_data, creator_id=current_user.id)
 
 
 @router.put("/{user_id}", response_model=UserResponse)

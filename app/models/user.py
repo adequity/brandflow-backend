@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Enum as SQLEnum, Boolean
+from sqlalchemy import Column, Integer, String, Float, Enum as SQLEnum, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 import enum
 
@@ -39,6 +39,9 @@ class User(Base, TimestampMixin):
     incentive_rate = Column(Float, default=0.0)
     status = Column(SQLEnum(UserStatus), default=UserStatus.INACTIVE)
     is_active = Column(Boolean, default=True)
+
+    # STAFF가 CLIENT를 생성한 경우, 해당 STAFF의 ID를 기록
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     # 관계 설정
     campaigns = relationship("Campaign", back_populates="creator", foreign_keys="Campaign.creator_id")

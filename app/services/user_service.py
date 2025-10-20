@@ -54,7 +54,7 @@ class UserService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def create_user(self, user_data: UserCreate) -> User:
+    async def create_user(self, user_data: UserCreate, creator_id: Optional[int] = None) -> User:
         """새 사용자 생성"""
         hashed_password = get_password_hash(user_data.password)
 
@@ -77,7 +77,9 @@ class UserService:
             client_ceo_name=user_data.client_ceo_name,
             client_company_address=user_data.client_company_address,
             client_business_type=user_data.client_business_type,
-            client_business_item=user_data.client_business_item
+            client_business_item=user_data.client_business_item,
+            # STAFF가 CLIENT를 생성한 경우 created_by 기록
+            created_by=creator_id if user_data.role == UserRole.CLIENT else None
         )
         
         self.db.add(db_user)
