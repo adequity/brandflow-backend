@@ -145,11 +145,15 @@ class UserService:
         """사용자 생성 권한 확인"""
         if creator.role == UserRole.SUPER_ADMIN:
             return True
-        
+
         if creator.role == UserRole.AGENCY_ADMIN:
             # 대행사 어드민은 슈퍼 어드민을 제외한 모든 역할 생성 가능
             return target_role != UserRole.SUPER_ADMIN
-        
+
+        if creator.role == UserRole.STAFF:
+            # STAFF는 CLIENT만 생성 가능
+            return target_role == UserRole.CLIENT
+
         return False
 
     def can_update_user(self, updater: User, target: User) -> bool:
