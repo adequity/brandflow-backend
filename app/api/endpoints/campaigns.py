@@ -2302,12 +2302,16 @@ async def update_campaign_post(
         if 'workType' in post_data:
             post.work_type = post_data['workType']
         if 'topicStatus' in post_data:
+            print(f"[UPDATE-POST] Updating topic_status: {post.topic_status} -> {post_data['topicStatus']}")
             post.topic_status = post_data['topicStatus']
         if 'outline' in post_data:
+            print(f"[UPDATE-POST] Updating outline: {len(post.outline or '')} chars -> {len(post_data['outline'] or '')} chars")
             post.outline = post_data['outline']
         if 'outlineStatus' in post_data:
+            print(f"[UPDATE-POST] Updating outline_status: {post.outline_status} -> {post_data['outlineStatus']}")
             post.outline_status = post_data['outlineStatus']
         if 'rejectReason' in post_data:
+            print(f"[UPDATE-POST] Updating reject_reason: {post_data['rejectReason']}")
             post.reject_reason = post_data['rejectReason']
         if 'images' in post_data:
             post.images = post_data['images']
