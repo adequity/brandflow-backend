@@ -255,6 +255,8 @@ async def get_campaigns(
                     "workType": post.work_type,  # 프론트엔드 호환성
                     "topicStatus": post.topic_status,
                     "outline": post.outline,
+                    "outlineStatus": post.outline_status,  # 세부사항 승인 상태 추가
+                    "images": post.images or [],
                     "published_url": post.published_url,
                     "publishedUrl": post.published_url,  # 프론트엔드 호환성
                     "startDate": post.start_date,      # 기존 호환성
@@ -262,7 +264,9 @@ async def get_campaigns(
                     # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,
                     # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,
                     "quantity": post.quantity,
-                    "is_active": post.is_active
+                    "is_active": post.is_active,
+                    "createdAt": post.created_at.isoformat() if post.created_at else None,
+                    "updatedAt": post.updated_at.isoformat() if post.updated_at else None
                 } for post in (campaign.posts or []) if post.is_active
             ],
             # 캠페인 일정 정보 추가 (마이그레이션 후 활성화)
