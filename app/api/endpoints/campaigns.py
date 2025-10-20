@@ -2123,6 +2123,7 @@ async def get_campaign_posts_jwt(
             "topicStatus": post.topic_status,
             "outline": post.outline,
             "outlineStatus": post.outline_status,
+            "rejectReason": post.reject_reason,  # 반려 사유
             "images": post.images or [],
             "publishedUrl": post.published_url,
             "orderRequestStatus": post.order_request_status,
@@ -2384,6 +2385,7 @@ async def update_campaign_post(
             "topicStatus": post.topic_status,
             "outline": post.outline,
             "outlineStatus": post.outline_status,
+            "rejectReason": post.reject_reason,  # 반려 사유
             "images": post.images or [],
             "publishedUrl": post.published_url,
             "orderRequestStatus": post.order_request_status,
