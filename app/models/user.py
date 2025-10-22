@@ -45,7 +45,7 @@ class User(Base, TimestampMixin):
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     # 팀 관련 필드 (TEAM_LEADER 시스템)
-    team_id = Column(Integer, nullable=True)  # 팀 식별자
+    # team_id 제거: team_leader_id가 이미 팀 식별자로 사용되므로 중복
     team_name = Column(String(100), nullable=True)  # 팀 이름
     team_leader_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # 소속 팀장 ID
 
