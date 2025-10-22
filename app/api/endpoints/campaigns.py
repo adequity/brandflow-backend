@@ -2237,11 +2237,11 @@ async def create_campaign_post(
         if not campaign:
             raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다")
 
-        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자/팀 리더 권한 필요
         user_role = current_user.role.value
         if (campaign.creator_id != current_user.id and
             campaign.staff_id != current_user.id and
-            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.TEAM_LEADER.value]):
             raise HTTPException(status_code=403, detail="이 캠페인에 업무를 생성할 권한이 없습니다")
 
         # 상품 정보 조회 (원가 자동 연동을 위해)
@@ -2354,8 +2354,8 @@ async def update_campaign_post(
         # 권한 확인
         user_role = current_user.role.value
 
-        # SUPER_ADMIN, AGENCY_ADMIN: 모든 권한
-        if user_role in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]:
+        # SUPER_ADMIN, AGENCY_ADMIN, TEAM_LEADER: 모든 권한
+        if user_role in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.TEAM_LEADER.value]:
             pass
         # STAFF: 자신이 생성했거나 담당하는 캠페인의 업무만 수정 가능
         elif user_role == UserRole.STAFF.value:
@@ -2523,11 +2523,11 @@ async def delete_campaign_post(
         if not post:
             raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다")
 
-        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자/팀 리더 권한 필요
         user_role = current_user.role.value
         if (campaign.creator_id != current_user.id and
             campaign.staff_id != current_user.id and
-            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.TEAM_LEADER.value]):
             raise HTTPException(status_code=403, detail="이 업무를 삭제할 권한이 없습니다")
 
         # Hard Delete: 관련 데이터 먼저 삭제 후 post 삭제
@@ -2583,11 +2583,11 @@ async def delete_post_by_id(
         if not campaign:
             raise HTTPException(status_code=404, detail="연결된 캠페인을 찾을 수 없습니다")
 
-        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자 권한 필요
+        # 권한 확인: 캠페인 생성자이거나 담당자이거나 관리자/팀 리더 권한 필요
         user_role = current_user.role.value
         if (campaign.creator_id != current_user.id and
             campaign.staff_id != current_user.id and
-            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value]):
+            user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.TEAM_LEADER.value]):
             raise HTTPException(status_code=403, detail="이 업무를 삭제할 권한이 없습니다")
 
         # Hard Delete: 관련 데이터 먼저 삭제 후 post 삭제
