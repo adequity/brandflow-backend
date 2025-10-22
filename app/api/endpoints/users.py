@@ -61,10 +61,10 @@ async def get_users(
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == user_id)
         elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 CLIENT만 조회 가능
+            # 직원은 자신이 담당하는 CLIENT만 조회 가능 (assigned_staff_id 기준)
             query = select(User).where(
                 User.role == UserRole.CLIENT,
-                User.created_by == user_id
+                User.assigned_staff_id == user_id
             )
         else:
             # 기본값: 같은 회사 사용자만 조회 가능
@@ -115,10 +115,10 @@ async def get_users(
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == jwt_user.id)
         elif user_role == UserRole.STAFF:
-            # 직원은 자신이 생성한 CLIENT만 조회 가능
+            # 직원은 자신이 담당하는 CLIENT만 조회 가능 (assigned_staff_id 기준)
             query = select(User).where(
                 User.role == UserRole.CLIENT,
-                User.created_by == jwt_user.id
+                User.assigned_staff_id == jwt_user.id
             )
         else:
             # 기본값: 같은 회사 사용자만 조회 가능
@@ -191,8 +191,8 @@ async def get_clients(
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
         elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 클라이언트만 조회 가능
-            query = query.where(User.created_by == user_id)
+            # 직원은 자신이 담당하는 클라이언트만 조회 가능 (assigned_staff_id 기준)
+            query = query.where(User.assigned_staff_id == user_id)
         # 슈퍼 어드민은 모든 클라이언트 조회 가능 (추가 필터링 없음)
         
         result = await db.execute(query)
@@ -228,8 +228,8 @@ async def get_clients(
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
         elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 생성한 클라이언트만 조회 가능
-            query = query.where(User.created_by == user_id)
+            # 직원은 자신이 담당하는 클라이언트만 조회 가능 (assigned_staff_id 기준)
+            query = query.where(User.assigned_staff_id == user_id)
         else:
             # 기타 역할은 클라이언트 조회 불가
             return []
