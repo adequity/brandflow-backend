@@ -30,6 +30,13 @@ class Post(Base, TimestampMixin):
     product_cost = Column(Float, nullable=True)  # 제품 단가 (원가)
     product_name = Column(String(200), nullable=True)  # 제품명
     budget = Column(Float, nullable=True, default=0.0)  # 포스트별 매출 예산
+
+    # 재무 관련 필드
+    invoice_issued = Column(Boolean, default=False, nullable=True)  # 포스트별 계산서 발행 완료
+    payment_completed = Column(Boolean, default=False, nullable=True)  # 포스트별 입금 완료
+    invoice_due_date = Column(DateTime, nullable=True)  # 포스트별 계산서 발행 마감일
+    payment_due_date = Column(DateTime, nullable=True)  # 포스트별 결제 마감일
+
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
     assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 포스트 담당자
     is_active = Column(Boolean, default=True)

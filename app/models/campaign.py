@@ -28,9 +28,9 @@ class Campaign(Base, TimestampMixin):
     status = Column(SQLEnum(CampaignStatus), default=CampaignStatus.DRAFT)
     # executionStatus = Column(String(50), default="대기", nullable=True)  # 집행 상태 필드 - 임시 비활성화
 
-    # 재무 관련 필드
-    invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료
-    payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료
+    # 재무 관련 필드 - Post 레벨로 이동 (주석 처리)
+    # invoice_issued = Column(Boolean, default=False, nullable=True)  # 계산서 발행 완료 -> Post로 이동
+    # payment_completed = Column(Boolean, default=False, nullable=True)  # 입금 완료 -> Post로 이동
 
     # 카톡 관리 관련 필드
     chat_content = Column(Text, nullable=True)  # 카톡 대화 내용

@@ -2321,6 +2321,11 @@ async def create_campaign_post(
             cost=post_data.cost,  # 포스트별 작업 단가
             budget=post_data.budget or 0.0,  # 포스트별 매출 예산
             assigned_user_id=post_data.assigned_user_id,  # 담당자 ID
+            # 재무 관련 필드
+            invoice_issued=post_data.invoice_issued if hasattr(post_data, 'invoice_issued') else False,
+            payment_completed=post_data.payment_completed if hasattr(post_data, 'payment_completed') else False,
+            invoice_due_date=post_data.invoice_due_date if hasattr(post_data, 'invoice_due_date') else None,
+            payment_due_date=post_data.payment_due_date if hasattr(post_data, 'payment_due_date') else None,
             campaign_id=campaign_id
         )
 
@@ -2355,6 +2360,11 @@ async def create_campaign_post(
             "quantity": new_post.quantity,
             "cost": new_post.cost,  # 포스트별 작업 단가
             "budget": new_post.budget or 0.0,  # 포스트별 매출 예산
+            # 재무 관련 필드
+            "invoice_issued": new_post.invoice_issued or False,
+            "payment_completed": new_post.payment_completed or False,
+            "invoice_due_date": new_post.invoice_due_date.isoformat() if new_post.invoice_due_date else None,
+            "payment_due_date": new_post.payment_due_date.isoformat() if new_post.payment_due_date else None,
             "assigned_user_id": new_post.assigned_user_id,  # 담당자
             "campaign_id": new_post.campaign_id,
             "created_at": new_post.created_at.isoformat() if new_post.created_at else None,
@@ -2494,6 +2504,42 @@ async def update_campaign_post(
             post.published_url = post_data['published_url']
             print(f"[UPDATE-POST] Updated published_url: {post_data['published_url']}")
 
+        # 재무 관련 필드 업데이트
+        if 'invoice_issued' in post_data:
+            post.invoice_issued = bool(post_data['invoice_issued'])
+            print(f"[UPDATE-POST] Updated invoice_issued: {post.invoice_issued}")
+        if 'payment_completed' in post_data:
+            post.payment_completed = bool(post_data['payment_completed'])
+            print(f"[UPDATE-POST] Updated payment_completed: {post.payment_completed}")
+        if 'invoice_due_date' in post_data:
+            from datetime import datetime
+            if post_data['invoice_due_date']:
+                try:
+                    # ISO 형식 날짜 문자열을 datetime 객체로 변환
+                    if isinstance(post_data['invoice_due_date'], str):
+                        post.invoice_due_date = datetime.fromisoformat(post_data['invoice_due_date'].replace('Z', '+00:00'))
+                    else:
+                        post.invoice_due_date = post_data['invoice_due_date']
+                    print(f"[UPDATE-POST] Updated invoice_due_date: {post.invoice_due_date}")
+                except (ValueError, TypeError) as e:
+                    print(f"[UPDATE-POST] Invalid invoice_due_date: {post_data['invoice_due_date']}, error: {e}")
+            else:
+                post.invoice_due_date = None
+        if 'payment_due_date' in post_data:
+            from datetime import datetime
+            if post_data['payment_due_date']:
+                try:
+                    # ISO 형식 날짜 문자열을 datetime 객체로 변환
+                    if isinstance(post_data['payment_due_date'], str):
+                        post.payment_due_date = datetime.fromisoformat(post_data['payment_due_date'].replace('Z', '+00:00'))
+                    else:
+                        post.payment_due_date = post_data['payment_due_date']
+                    print(f"[UPDATE-POST] Updated payment_due_date: {post.payment_due_date}")
+                except (ValueError, TypeError) as e:
+                    print(f"[UPDATE-POST] Invalid payment_due_date: {post_data['payment_due_date']}, error: {e}")
+            else:
+                post.payment_due_date = None
+
         # 업무 수정 시 발주 요청 상태 초기화
         print(f"[UPDATE-POST] 업무 수정으로 인한 발주 요청 상태 초기화: Post {post.id}")
         print(f"[UPDATE-POST] 이전 발주 상태: orderRequestStatus={post.order_request_status}, orderRequestId={post.order_request_id}")
@@ -2531,6 +2577,11 @@ async def update_campaign_post(
             "productName": post.product_name,
             "quantity": post.quantity,
             "budget": post.budget or 0.0,  # 포스트별 매출 예산
+            # 재무 관련 필드
+            "invoiceIssued": post.invoice_issued or False,
+            "paymentCompleted": post.payment_completed or False,
+            "invoiceDueDate": post.invoice_due_date.isoformat() if post.invoice_due_date else None,
+            "paymentDueDate": post.payment_due_date.isoformat() if post.payment_due_date else None,
             "campaignId": post.campaign_id,
             "createdAt": post.created_at.isoformat() if post.created_at else None,
             "updatedAt": post.updated_at.isoformat() if post.updated_at else None
