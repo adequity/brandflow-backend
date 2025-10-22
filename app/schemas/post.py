@@ -22,6 +22,7 @@ class PostCreate(BaseModel):
     cost: Optional[float] = None  # 포스트별 작업 단가
     product_cost: Optional[float] = None  # 제품 단가 (원가)
     product_name: Optional[str] = None  # 제품명
+    budget: Optional[float] = 0.0  # 포스트별 매출 예산
     assigned_user_id: Optional[int] = None  # 포스트 담당자
 
 
@@ -44,6 +45,7 @@ class PostUpdate(BaseModel):
     cost: Optional[float] = None  # 포스트별 작업 단가
     product_cost: Optional[float] = None  # 제품 단가 (원가)
     product_name: Optional[str] = None  # 제품명
+    budget: Optional[float] = None  # 포스트별 매출 예산
     assigned_user_id: Optional[int] = None  # 포스트 담당자
 
 
@@ -70,6 +72,7 @@ class PostResponse(BaseModel):
     cost: Optional[float] = None  # 포스트별 작업 단가
     product_cost: Optional[float] = Field(None, alias="productCost")  # 제품 단가 (원가)
     product_name: Optional[str] = Field(None, alias="productName")  # 제품명
+    budget: Optional[float] = 0.0  # 포스트별 매출 예산
     assigned_user_id: Optional[int] = Field(None, alias="assignedUserId")  # 포스트 담당자
     campaign_id: int = Field(alias="campaignId")
     created_at: datetime = Field(alias="createdAt")
