@@ -18,6 +18,11 @@ class CampaignBase(BaseModel):
     invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
     payment_due_date: Optional[datetime] = None  # 결제 마감일
     project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
+    # 원가 및 이익 관련 필드
+    cost: Optional[float] = None  # 실제 원가
+    margin: Optional[float] = None  # 이익
+    margin_rate: Optional[float] = None  # 이익률
+    estimated_cost: Optional[float] = None  # 예상 원가
 
 
 class CampaignCreate(CampaignBase):
