@@ -97,7 +97,7 @@ async def get_users(
         elif user_role == UserRole.TEAM_LEADER:
             # 팀 리더는 자기 팀의 STAFF와 CLIENT만 조회 가능
             # - STAFF: team_leader_id가 본인인 경우
-            # - CLIENT: assigned_staff_id가 자기 팀 STAFF인 경우
+            # - CLIENT: assigned_staff_id가 본인 또는 자기 팀 STAFF인 경우
             from sqlalchemy.orm import aliased
 
             # 자기 팀 STAFF의 ID 서브쿼리
@@ -108,6 +108,7 @@ async def get_users(
             query = select(User).where(
                 or_(
                     User.team_leader_id == jwt_user.id,  # 자기 팀 STAFF
+                    User.assigned_staff_id == jwt_user.id,  # 본인이 담당하는 CLIENT
                     User.assigned_staff_id.in_(team_staff_subquery)  # 팀 STAFF가 담당하는 CLIENT
                 )
             )
@@ -218,12 +219,17 @@ async def get_clients(
             # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
             query = query.where(User.company == current_user.company)
         elif user_role == UserRole.TEAM_LEADER.value:
-            # 팀 리더는 자기 팀 STAFF가 담당하는 클라이언트만 조회 가능
+            # 팀 리더는 본인 또는 자기 팀 STAFF가 담당하는 클라이언트만 조회 가능
             # assigned_staff_id를 통해 현재 담당 STAFF와 연결
             team_staff_subquery = select(User.id).where(
                 User.team_leader_id == user_id
             )
-            query = query.where(User.assigned_staff_id.in_(team_staff_subquery))
+            query = query.where(
+                or_(
+                    User.assigned_staff_id == user_id,  # 본인이 담당하는 CLIENT
+                    User.assigned_staff_id.in_(team_staff_subquery)  # 팀 STAFF가 담당하는 CLIENT
+                )
+            )
         elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
