@@ -342,10 +342,10 @@ async def create_campaign(
     print(f"[CAMPAIGN-CREATE-JWT] Campaign creation request - User ID: {user_id}, Role: {user_role}")
     print(f"[CAMPAIGN-CREATE-JWT] Campaign data: {campaign_data}")
     
-    # 권한 확인 - 관리자와 직원은 캠페인 생성 가능
-    if user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.STAFF.value]:
+    # 권한 확인 - 관리자, 팀 리더, 직원은 캠페인 생성 가능
+    if user_role not in [UserRole.SUPER_ADMIN.value, UserRole.AGENCY_ADMIN.value, UserRole.TEAM_LEADER.value, UserRole.STAFF.value]:
         print(f"[CAMPAIGN-CREATE-JWT] ERROR: Insufficient permissions - user_role={user_role}")
-        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자와 직원만 캠페인을 생성할 수 있습니다.")
+        raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자, 팀 리더, 직원만 캠페인을 생성할 수 있습니다.")
     
     # 새 캠페인 생성 - 안전한 기본값 처리
     try:
@@ -465,16 +465,16 @@ async def get_staff_members(
         
         # 직원들 조회 (권한별 필터링)
         if user_role == UserRole.SUPER_ADMIN.value:
-            # 슈퍼 어드민은 모든 직원과 대행사 어드민 조회 가능
+            # 슈퍼 어드민은 모든 직원, 팀 리더, 대행사 어드민 조회 가능
             staff_query = select(User).where(
-                User.role.in_([UserRole.STAFF, UserRole.AGENCY_ADMIN]),
+                User.role.in_([UserRole.STAFF, UserRole.TEAM_LEADER, UserRole.AGENCY_ADMIN]),
                 User.is_active == True
             )
         else:
-            # 대행사 어드민은 같은 회사의 직원들만 조회
+            # 대행사 어드민은 같은 회사의 직원들과 팀 리더만 조회
             staff_query = select(User).where(
                 User.company == current_user.company,
-                User.role == UserRole.STAFF,
+                User.role.in_([UserRole.STAFF, UserRole.TEAM_LEADER]),
                 User.is_active == True
             )
         result = await db.execute(staff_query)
