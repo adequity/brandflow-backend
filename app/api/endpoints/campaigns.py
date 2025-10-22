@@ -1038,6 +1038,9 @@ async def get_monthly_campaign_stats(
         elif user_role == "AGENCY_ADMIN":
             # 에이전시 어드민: 해당 회사 캠페인만
             query = query.where(Campaign.company == user_company)
+        elif user_role == "TEAM_LEADER":
+            # 팀 리더: 본인 팀(회사)의 모든 캠페인
+            query = query.where(Campaign.company == user_company)
         elif user_role == "STAFF":
             # 직원: 본인이 담당하는 캠페인만
             query = query.where(
@@ -1071,7 +1074,17 @@ async def get_monthly_campaign_stats(
         campaigns = result.scalars().all()
 
         # 통계 계산
+        # 총 매출 = 모든 캠페인의 budget 합계 (campaigns.budget은 posts.budget의 자동 합계)
         total_revenue = sum(campaign.budget or 0 for campaign in campaigns)
+
+        # 실제 수금액 = 입금 완료된 posts의 budget 합계
+        collected_revenue = sum(
+            post.budget or 0
+            for campaign in campaigns
+            for post in campaign.posts
+            if post.is_active and post.payment_completed
+        )
+
         # Campaign 모델에 cost 필드가 없으므로 0으로 처리 (실제 비용은 발주/구매요청에서 계산)
         total_cost = 0
         total_campaigns = len(campaigns)
@@ -1091,6 +1104,7 @@ async def get_monthly_campaign_stats(
 
         stats = {
             "totalRevenue": total_revenue,
+            "collectedRevenue": collected_revenue,  # 실제 수금액 추가
             "totalCost": total_cost,
             "totalCampaigns": total_campaigns,
             "completedCampaigns": completed_campaigns,
