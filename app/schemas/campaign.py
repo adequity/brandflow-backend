@@ -13,8 +13,9 @@ class CampaignBase(BaseModel):
     staff_id: Optional[int] = None  # 캠페인 담당 직원 ID
     start_date: Optional[datetime] = None  # 선택적
     end_date: Optional[datetime] = None    # 선택적
-    invoice_issued: Optional[bool] = None  # 계산서 발행 완료
-    payment_completed: Optional[bool] = None  # 입금 완료
+    # 재무 필드는 Post 레벨로 이동
+    # invoice_issued: Optional[bool] = None  # 계산서 발행 완료 -> Post로 이동
+    # payment_completed: Optional[bool] = None  # 입금 완료 -> Post로 이동
     invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
     payment_due_date: Optional[datetime] = None  # 결제 마감일
     project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
@@ -37,8 +38,9 @@ class CampaignUpdate(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: Optional[CampaignStatus] = None
-    invoice_issued: Optional[bool] = None  # 계산서 발행 완료
-    payment_completed: Optional[bool] = None  # 입금 완료
+    # 재무 필드는 Post 레벨로 이동
+    # invoice_issued: Optional[bool] = None  # 계산서 발행 완료 -> Post로 이동
+    # payment_completed: Optional[bool] = None  # 입금 완료 -> Post로 이동
     invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
     payment_due_date: Optional[datetime] = None  # 결제 마감일
     project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
