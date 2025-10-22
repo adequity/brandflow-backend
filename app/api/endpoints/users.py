@@ -88,7 +88,7 @@ async def get_users(
         elif user_role == UserRole.TEAM_LEADER:
             # 팀 리더는 자기 팀의 STAFF와 CLIENT만 조회 가능
             # - STAFF: team_leader_id가 본인인 경우
-            # - CLIENT: created_by가 자기 팀 STAFF인 경우 (JOIN 필요)
+            # - CLIENT: assigned_staff_id가 자기 팀 STAFF인 경우
             from sqlalchemy.orm import aliased
 
             # 자기 팀 STAFF의 ID 서브쿼리
@@ -99,7 +99,7 @@ async def get_users(
             query = select(User).where(
                 or_(
                     User.team_leader_id == jwt_user.id,  # 자기 팀 STAFF
-                    User.created_by.in_(team_staff_subquery)  # 팀 STAFF가 생성한 CLIENT
+                    User.assigned_staff_id.in_(team_staff_subquery)  # 팀 STAFF가 담당하는 CLIENT
                 )
             )
         elif user_role == UserRole.CLIENT:
@@ -200,12 +200,12 @@ async def get_clients(
             # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
             query = query.where(User.company == current_user.company)
         elif user_role == UserRole.TEAM_LEADER.value:
-            # 팀 리더는 자기 팀 STAFF가 생성한 클라이언트만 조회 가능
-            # created_by를 통해 STAFF와 연결되므로, 자기 팀 STAFF의 ID 서브쿼리 사용
+            # 팀 리더는 자기 팀 STAFF가 담당하는 클라이언트만 조회 가능
+            # assigned_staff_id를 통해 현재 담당 STAFF와 연결
             team_staff_subquery = select(User.id).where(
                 User.team_leader_id == user_id
             )
-            query = query.where(User.created_by.in_(team_staff_subquery))
+            query = query.where(User.assigned_staff_id.in_(team_staff_subquery))
         elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
@@ -300,7 +300,9 @@ async def create_user(
         # 직원의 경우 같은 회사의 클라이언트만 생성 가능
         if is_staff and not is_admin:
             user_data.company = current_user.company
-            # CLIENT는 created_by를 통해 STAFF와 연결되고, STAFF의 team_leader_id를 통해 팀 정보 조회 가능
+            # STAFF가 CLIENT를 생성하는 경우 담당 STAFF 자동 할당
+            if user_data.role == UserRole.CLIENT:
+                user_data.assigned_staff_id = user_id
 
         # 이메일 중복 확인
         existing_user_query = select(User).where(User.email == user_data.email)
@@ -332,8 +334,9 @@ async def create_user(
             # 팀 관련 필드 (TEAM_LEADER 시스템)
             team_name=user_data.team_name,
             team_leader_id=user_data.team_leader_id,
-            # STAFF가 CLIENT를 생성한 경우 created_by 기록
-            created_by=current_user.id if user_data.role == UserRole.CLIENT else None
+            # STAFF가 CLIENT를 생성한 경우 created_by 및 assigned_staff_id 기록
+            created_by=current_user.id if user_data.role == UserRole.CLIENT else None,
+            assigned_staff_id=user_data.assigned_staff_id
         )
         
         db.add(new_user)
@@ -350,10 +353,10 @@ async def create_user(
         if not service.can_create_user(current_user, user_data.role):
             raise HTTPException(status_code=403, detail="사용자 생성 권한이 없습니다.")
 
-        # STAFF가 CLIENT를 생성하는 경우 회사 정보 상속
+        # STAFF가 CLIENT를 생성하는 경우 회사 정보 및 담당 STAFF 상속
         if current_user.role == UserRole.STAFF and user_data.role == UserRole.CLIENT:
             user_data.company = current_user.company
-            # CLIENT는 created_by를 통해 STAFF와 연결되고, STAFF의 team_leader_id를 통해 팀 정보 조회 가능
+            user_data.assigned_staff_id = current_user.id
 
         # 이메일 중복 확인
         existing_user = await service.get_user_by_email(user_data.email)

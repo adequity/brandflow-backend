@@ -28,6 +28,9 @@ class UserBase(BaseModel):
     team_name: Optional[str] = Field(None, max_length=100)
     team_leader_id: Optional[int] = None
 
+    # CLIENT의 담당 STAFF (변경 가능)
+    assigned_staff_id: Optional[int] = None
+
     @validator('role', pre=True)
     def validate_role(cls, v):
         if isinstance(v, str):
@@ -91,6 +94,9 @@ class UserUpdate(BaseModel):
     team_name: Optional[str] = Field(None, max_length=100)
     team_leader_id: Optional[int] = None
 
+    # CLIENT의 담당 STAFF (변경 가능)
+    assigned_staff_id: Optional[int] = None
+
     @validator('role', pre=True)
     def validate_role(cls, v):
         if isinstance(v, str):
@@ -152,6 +158,9 @@ class UserResponse(BaseModel):
     # 팀 관련 필드 (TEAM_LEADER 시스템)
     team_name: Optional[str] = None
     team_leader_id: Optional[int] = None
+
+    # CLIENT의 담당 STAFF (변경 가능)
+    assigned_staff_id: Optional[int] = None
 
     @validator('business_number', pre=False, always=True)
     def sync_business_number(cls, v, values):

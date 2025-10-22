@@ -44,6 +44,9 @@ class User(Base, TimestampMixin):
     # STAFF가 CLIENT를 생성한 경우, 해당 STAFF의 ID를 기록
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
 
+    # CLIENT의 현재 담당 STAFF (변경 가능)
+    assigned_staff_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
     # 팀 관련 필드 (TEAM_LEADER 시스템)
     # team_id 제거: team_leader_id가 이미 팀 식별자로 사용되므로 중복
     team_name = Column(String(100), nullable=True)  # 팀 이름
