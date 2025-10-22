@@ -45,9 +45,9 @@ class Campaign(Base, TimestampMixin):
     estimated_cost = Column(Numeric(12, 2), default=0, nullable=True)  # 예상 원가
 
     # 일정 관련 필드
-    invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일
-    payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일
-    project_due_date = Column(DateTime, nullable=True)  # 프로젝트 완료 마감일
+    # invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일 -> Post로 이동
+    # payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일 -> Post로 이동
+    project_due_date = Column(DateTime, nullable=True)  # 프로젝트 완료 마감일 (Campaign 레벨 유지)
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)

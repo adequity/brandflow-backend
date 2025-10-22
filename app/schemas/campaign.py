@@ -16,9 +16,9 @@ class CampaignBase(BaseModel):
     # 재무 필드는 Post 레벨로 이동
     # invoice_issued: Optional[bool] = None  # 계산서 발행 완료 -> Post로 이동
     # payment_completed: Optional[bool] = None  # 입금 완료 -> Post로 이동
-    invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
-    payment_due_date: Optional[datetime] = None  # 결제 마감일
-    project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
+    # invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일 -> Post로 이동
+    # payment_due_date: Optional[datetime] = None  # 결제 마감일 -> Post로 이동
+    project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일 (Campaign 레벨 유지)
     # 원가 및 이익 관련 필드
     cost: Optional[float] = None  # 실제 원가
     margin: Optional[float] = None  # 이익
@@ -41,9 +41,9 @@ class CampaignUpdate(BaseModel):
     # 재무 필드는 Post 레벨로 이동
     # invoice_issued: Optional[bool] = None  # 계산서 발행 완료 -> Post로 이동
     # payment_completed: Optional[bool] = None  # 입금 완료 -> Post로 이동
-    invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일
-    payment_due_date: Optional[datetime] = None  # 결제 마감일
-    project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일
+    # invoice_due_date: Optional[datetime] = None  # 계산서 발행 마감일 -> Post로 이동
+    # payment_due_date: Optional[datetime] = None  # 결제 마감일 -> Post로 이동
+    project_due_date: Optional[datetime] = None  # 프로젝트 완료 마감일 (Campaign 레벨 유지)
     # creator_id는 기존 필드이므로 여기서 수정 가능하게 추가
     creator_id: Optional[int] = None
     staff_id: Optional[int] = None  # 캠페인 담당 직원 ID
