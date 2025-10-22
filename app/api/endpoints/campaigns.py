@@ -2210,6 +2210,7 @@ async def get_campaign_posts_jwt(
             "productId": post.product_id,
             "productName": product.name if product else None,  # 제품명 추가
             "quantity": post.quantity,
+            "budget": post.budget or 0.0,  # 포스트별 매출 예산
             "campaignId": post.campaign_id,
             "createdAt": post.created_at.isoformat() if post.created_at else None
         })
