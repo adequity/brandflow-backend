@@ -85,6 +85,11 @@ async def get_users(
         elif user_role == UserRole.AGENCY_ADMIN:
             # 대행사 어드민은 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == jwt_user.company)
+        elif user_role == UserRole.TEAM_LEADER:
+            # 팀 리더는 자기 팀의 STAFF와 CLIENT만 조회 가능
+            query = select(User).where(
+                User.team_leader_id == jwt_user.id
+            )
         elif user_role == UserRole.CLIENT:
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == jwt_user.id)
@@ -182,6 +187,9 @@ async def get_clients(
         elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 클라이언트만 조회 가능
             query = query.where(User.company == current_user.company)
+        elif user_role == UserRole.TEAM_LEADER.value:
+            # 팀 리더는 자기 팀의 클라이언트만 조회 가능
+            query = query.where(User.team_leader_id == user_id)
         elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = query.where(User.id == user_id)
@@ -276,7 +284,10 @@ async def create_user(
         # 직원의 경우 같은 회사의 클라이언트만 생성 가능
         if is_staff and not is_admin:
             user_data.company = current_user.company
-        
+            # STAFF가 CLIENT를 생성하는 경우 STAFF의 팀 정보를 CLIENT에게 상속
+            if user_data.role == UserRole.CLIENT and current_user.team_leader_id:
+                user_data.team_leader_id = current_user.team_leader_id
+
         # 이메일 중복 확인
         existing_user_query = select(User).where(User.email == user_data.email)
         result = await db.execute(existing_user_query)
@@ -320,11 +331,18 @@ async def create_user(
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = jwt_user
         service = UserService(db)
-        
+
         # 권한 확인
         if not service.can_create_user(current_user, user_data.role):
             raise HTTPException(status_code=403, detail="사용자 생성 권한이 없습니다.")
-        
+
+        # STAFF가 CLIENT를 생성하는 경우 팀 정보 자동 상속
+        if current_user.role == UserRole.STAFF and user_data.role == UserRole.CLIENT:
+            user_data.company = current_user.company
+            # STAFF의 팀 정보를 CLIENT에게 상속
+            if current_user.team_leader_id:
+                user_data.team_leader_id = current_user.team_leader_id
+
         # 이메일 중복 확인
         existing_user = await service.get_user_by_email(user_data.email)
         if existing_user:
