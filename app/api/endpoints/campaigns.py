@@ -1076,8 +1076,18 @@ async def get_monthly_campaign_stats(
         total_cost = 0
         total_campaigns = len(campaigns)
         completed_campaigns = sum(1 for campaign in campaigns if campaign.status in ['완료', 'COMPLETED'])
-        pending_invoices = sum(1 for campaign in campaigns if not campaign.invoice_issued)
-        pending_payments = sum(1 for campaign in campaigns if not campaign.payment_completed)
+
+        # 재무 상태는 이제 Post 레벨에서 계산
+        pending_invoices = sum(
+            1 for campaign in campaigns
+            for post in campaign.posts
+            if post.is_active and not post.invoice_issued
+        )
+        pending_payments = sum(
+            1 for campaign in campaigns
+            for post in campaign.posts
+            if post.is_active and not post.payment_completed
+        )
 
         stats = {
             "totalRevenue": total_revenue,
@@ -1138,7 +1148,7 @@ async def get_receivables_status(
         result = await db.execute(query)
         campaigns = result.scalars().all()
 
-        # 미발행 계산서 캠페인
+        # 미발행 계산서 캠페인 (Post 기반으로 계산)
         pending_invoices = [
             {
                 "id": c.id,
@@ -1148,12 +1158,13 @@ async def get_receivables_status(
                 "start_date": c.start_date.isoformat() if c.start_date else None,
                 "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
                 "staff_name": c.staff_user.name if c.staff_user else (c.creator.name if c.creator else None),
-                "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0
+                "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0,
+                "pending_posts": sum(1 for post in c.posts if post.is_active and not post.invoice_issued)
             }
-            for c in campaigns if not c.invoice_issued
+            for c in campaigns if any(post.is_active and not post.invoice_issued for post in c.posts)
         ]
 
-        # 미입금 캠페인
+        # 미입금 캠페인 (Post 기반으로 계산)
         pending_payments = [
             {
                 "id": c.id,
@@ -1163,9 +1174,10 @@ async def get_receivables_status(
                 "start_date": c.start_date.isoformat() if c.start_date else None,
                 "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
                 "staff_name": c.staff_user.name if c.staff_user else (c.creator.name if c.creator else None),
-                "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0
+                "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0,
+                "pending_posts": sum(1 for post in c.posts if post.is_active and not post.payment_completed)
             }
-            for c in campaigns if not c.payment_completed
+            for c in campaigns if any(post.is_active and not post.payment_completed for post in c.posts)
         ]
 
         # 금액 합계
@@ -1260,9 +1272,9 @@ async def duplicate_campaign(
             staff_id=duplicate_data.staff_id or current_user.id,
             client_user_id=original.client_user_id,
 
-            # 재무 상태 초기화
-            invoice_issued=False,
-            payment_completed=False,
+            # 재무 상태는 Post 레벨로 이동 (더 이상 Campaign에 없음)
+            # invoice_issued=False,
+            # payment_completed=False,
 
             # 카톡 정보 제외 (None)
             chat_content=None,
@@ -1290,8 +1302,9 @@ async def duplicate_campaign(
             creator_id=new_campaign.creator_id,
             client_user_id=new_campaign.client_user_id,
             staff_id=new_campaign.staff_id,
-            invoice_issued=new_campaign.invoice_issued,
-            payment_completed=new_campaign.payment_completed,
+            # 재무 필드는 Post 레벨로 이동
+            # invoice_issued=new_campaign.invoice_issued,
+            # payment_completed=new_campaign.payment_completed,
             created_at=new_campaign.created_at,
             updated_at=new_campaign.updated_at
         )
