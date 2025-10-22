@@ -30,7 +30,8 @@ class CampaignCost(Base, TimestampMixin):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # 생성자 ID
 
     # 관계 설정
-    campaign = relationship("Campaign", back_populates="costs")
+    # Campaign 모델에서 costs relationship이 주석 처리되어 있으므로 back_populates 제거
+    campaign = relationship("Campaign", foreign_keys=[campaign_id])
     approver = relationship("User", foreign_keys=[approved_by])
     creator = relationship("User", foreign_keys=[created_by])
 
