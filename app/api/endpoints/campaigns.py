@@ -1546,6 +1546,42 @@ async def update_campaign(
 
                 if not can_edit:
                     raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
+            elif user_role == UserRole.TEAM_LEADER.value:
+                # 팀 리더는 다음 캠페인을 수정 가능:
+                # 1) 본인이 생성한 캠페인
+                # 2) 본인이 담당하는 캠페인 (staff_id)
+                # 3) 자기 팀 STAFF가 생성한 캠페인
+                # 4) 자기 팀 STAFF가 담당하는 캠페인
+                can_edit = False
+
+                # 1) 본인이 생성
+                if campaign.creator_id == user_id:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] TEAM_LEADER can edit: own created campaign")
+                # 2) 본인이 담당
+                elif campaign.staff_id == user_id:
+                    can_edit = True
+                    print(f"[CAMPAIGN-UPDATE] TEAM_LEADER can edit: own assigned campaign")
+                else:
+                    # 3,4) 팀원이 생성하거나 담당하는 캠페인인지 확인
+                    team_members_subquery = select(User.id).where(
+                        and_(
+                            User.company == viewer.company,
+                            User.team_leader_id == user_id
+                        )
+                    )
+                    team_members_result = await db.execute(team_members_subquery)
+                    team_member_ids = [row[0] for row in team_members_result.fetchall()]
+
+                    if campaign.creator_id in team_member_ids:
+                        can_edit = True
+                        print(f"[CAMPAIGN-UPDATE] TEAM_LEADER can edit: team member created campaign")
+                    elif campaign.staff_id in team_member_ids:
+                        can_edit = True
+                        print(f"[CAMPAIGN-UPDATE] TEAM_LEADER can edit: team member assigned campaign")
+
+                if not can_edit:
+                    raise HTTPException(status_code=403, detail="이 캠페인을 수정할 권한이 없습니다.")
             elif user_role == UserRole.STAFF.value:
                 # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 수정 가능
                 if campaign.creator_id != user_id and campaign.staff_id != user_id:
@@ -2645,6 +2681,40 @@ async def delete_campaign(
                     print(f"[CAMPAIGN-DELETE] Agency admin can delete campaign from same company")
                 else:
                     print(f"[CAMPAIGN-DELETE] Agency admin cannot delete - different company")
+            elif user_role == UserRole.TEAM_LEADER.value:
+                # 팀 리더는 다음 캠페인을 삭제 가능:
+                # 1) 본인이 생성한 캠페인
+                # 2) 본인이 담당하는 캠페인 (staff_id)
+                # 3) 자기 팀 STAFF가 생성한 캠페인
+                # 4) 자기 팀 STAFF가 담당하는 캠페인
+
+                # 1) 본인이 생성
+                if campaign.creator_id == user_id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE] TEAM_LEADER can delete: own created campaign")
+                # 2) 본인이 담당
+                elif campaign.staff_id == user_id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE] TEAM_LEADER can delete: own assigned campaign")
+                else:
+                    # 3,4) 팀원이 생성하거나 담당하는 캠페인인지 확인
+                    team_members_subquery = select(User.id).where(
+                        and_(
+                            User.company == viewer.company,
+                            User.team_leader_id == user_id
+                        )
+                    )
+                    team_members_result = await db.execute(team_members_subquery)
+                    team_member_ids = [row[0] for row in team_members_result.fetchall()]
+
+                    if campaign.creator_id in team_member_ids:
+                        can_delete = True
+                        print(f"[CAMPAIGN-DELETE] TEAM_LEADER can delete: team member created campaign")
+                    elif campaign.staff_id in team_member_ids:
+                        can_delete = True
+                        print(f"[CAMPAIGN-DELETE] TEAM_LEADER can delete: team member assigned campaign")
+                    else:
+                        print(f"[CAMPAIGN-DELETE] TEAM_LEADER cannot delete - not own or team campaign")
             elif user_role == UserRole.STAFF.value:
                 # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 삭제 가능
                 if campaign.creator_id == user_id:
