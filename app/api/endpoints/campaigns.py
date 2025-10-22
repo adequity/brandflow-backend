@@ -2858,6 +2858,42 @@ async def delete_campaign(
 
                 if not can_delete:
                     print(f"[CAMPAIGN-DELETE-JWT] ❌ Agency admin cannot delete - no permission")
+            elif current_user.role == UserRole.TEAM_LEADER:
+                # 팀 리더는 다음 캠페인을 삭제 가능:
+                # 1) 본인이 생성한 캠페인
+                # 2) 본인이 담당하는 캠페인 (staff_id)
+                # 3) 자기 팀 STAFF가 생성한 캠페인
+                # 4) 자기 팀 STAFF가 담당하는 캠페인
+                print(f"[CAMPAIGN-DELETE-JWT] TEAM_LEADER check - User ID: {current_user.id}, Campaign creator ID: {campaign.creator_id}, Campaign staff ID: {campaign.staff_id}")
+
+                # 1) 본인이 생성
+                if campaign.creator_id == current_user.id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ TEAM_LEADER can delete: own created campaign")
+                # 2) 본인이 담당
+                elif campaign.staff_id == current_user.id:
+                    can_delete = True
+                    print(f"[CAMPAIGN-DELETE-JWT] ✅ TEAM_LEADER can delete: own assigned campaign")
+                else:
+                    # 3,4) 팀원이 생성하거나 담당하는 캠페인인지 확인
+                    team_members_subquery = select(User.id).where(
+                        and_(
+                            User.company == current_user.company,
+                            User.team_leader_id == current_user.id
+                        )
+                    )
+                    team_members_result = await db.execute(team_members_subquery)
+                    team_member_ids = [row[0] for row in team_members_result.fetchall()]
+                    print(f"[CAMPAIGN-DELETE-JWT] Team member IDs: {team_member_ids}")
+
+                    if campaign.creator_id in team_member_ids:
+                        can_delete = True
+                        print(f"[CAMPAIGN-DELETE-JWT] ✅ TEAM_LEADER can delete: team member created campaign")
+                    elif campaign.staff_id in team_member_ids:
+                        can_delete = True
+                        print(f"[CAMPAIGN-DELETE-JWT] ✅ TEAM_LEADER can delete: team member assigned campaign")
+                    else:
+                        print(f"[CAMPAIGN-DELETE-JWT] ❌ TEAM_LEADER cannot delete - not own or team campaign")
             elif current_user.role == UserRole.STAFF:
                 # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 삭제 가능
                 print(f"[CAMPAIGN-DELETE-JWT] Staff check - User ID: {current_user.id}, Campaign creator ID: {campaign.creator_id}, Campaign staff ID: {campaign.staff_id}")
