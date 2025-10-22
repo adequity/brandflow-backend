@@ -166,14 +166,16 @@ async def get_campaigns(
             or_(
                 Campaign.creator_id == user_id,  # 본인이 생성
                 Campaign.staff_id == user_id,  # 본인이 담당
-                Campaign.creator_id.in_(team_members_subquery)  # 팀원이 생성
+                Campaign.creator_id.in_(team_members_subquery),  # 팀원이 생성
+                Campaign.staff_id.in_(team_members_subquery)  # 팀원이 담당
             )
         )
         count_query = select(func.count(Campaign.id)).where(
             or_(
                 Campaign.creator_id == user_id,
                 Campaign.staff_id == user_id,
-                Campaign.creator_id.in_(team_members_subquery)
+                Campaign.creator_id.in_(team_members_subquery),
+                Campaign.staff_id.in_(team_members_subquery)
             )
         )
     elif user_role == UserRole.STAFF.value:
