@@ -78,6 +78,9 @@ class UserService:
             client_company_address=user_data.client_company_address,
             client_business_type=user_data.client_business_type,
             client_business_item=user_data.client_business_item,
+            # 팀 관련 필드 (TEAM_LEADER 시스템)
+            team_name=user_data.team_name,
+            team_leader_id=user_data.team_leader_id,
             # STAFF가 CLIENT를 생성한 경우 created_by 기록
             created_by=creator_id if user_data.role == UserRole.CLIENT else None
         )

@@ -23,7 +23,11 @@ class UserBase(BaseModel):
     client_company_address: Optional[str] = Field(None, max_length=500)
     client_business_type: Optional[str] = Field(None, max_length=100)
     client_business_item: Optional[str] = Field(None, max_length=100)
-    
+
+    # 팀 관련 필드 (TEAM_LEADER 시스템)
+    team_name: Optional[str] = Field(None, max_length=100)
+    team_leader_id: Optional[int] = None
+
     @validator('role', pre=True)
     def validate_role(cls, v):
         if isinstance(v, str):
@@ -83,6 +87,10 @@ class UserUpdate(BaseModel):
     client_business_type: Optional[str] = Field(None, max_length=100)
     client_business_item: Optional[str] = Field(None, max_length=100)
 
+    # 팀 관련 필드 (TEAM_LEADER 시스템)
+    team_name: Optional[str] = Field(None, max_length=100)
+    team_leader_id: Optional[int] = None
+
     @validator('role', pre=True)
     def validate_role(cls, v):
         if isinstance(v, str):
@@ -140,6 +148,10 @@ class UserResponse(BaseModel):
     client_company_address: Optional[str] = Field(None, max_length=500)
     client_business_type: Optional[str] = Field(None, max_length=100)
     client_business_item: Optional[str] = Field(None, max_length=100)
+
+    # 팀 관련 필드 (TEAM_LEADER 시스템)
+    team_name: Optional[str] = None
+    team_leader_id: Optional[int] = None
 
     @validator('business_number', pre=False, always=True)
     def sync_business_number(cls, v, values):
