@@ -467,10 +467,17 @@ async def update_user(
             )
         except Exception as e:
             # 기타 예외 처리
-            print(f"사용자 업데이트 오류: {str(e)}")
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"=== 사용자 업데이트 오류 상세 ===")
+            print(f"에러 타입: {type(e).__name__}")
+            print(f"에러 메시지: {str(e)}")
+            print(f"스택 트레이스:\n{error_details}")
+            print(f"업데이트 데이터: {user_data.model_dump(exclude_unset=True)}")
+            print(f"===============================")
             raise HTTPException(
                 status_code=500,
-                detail="사용자 정보 수정 중 오류가 발생했습니다."
+                detail=f"사용자 정보 수정 중 오류가 발생했습니다: {str(e)}"
             )
 
 
