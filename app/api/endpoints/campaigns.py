@@ -2275,6 +2275,7 @@ async def create_campaign_post(
             product_name=product_name,  # 상품명 자동 연동
             quantity=post_data.quantity or 1,
             cost=post_data.cost,  # 포스트별 작업 단가
+            budget=post_data.budget or 0.0,  # 포스트별 매출 예산
             assigned_user_id=post_data.assigned_user_id,  # 담당자 ID
             campaign_id=campaign_id
         )
@@ -2307,6 +2308,7 @@ async def create_campaign_post(
             "productName": new_post.product_name,  # 호환성을 위한 별칭
             "quantity": new_post.quantity,
             "cost": new_post.cost,  # 포스트별 작업 단가
+            "budget": new_post.budget or 0.0,  # 포스트별 매출 예산
             "assigned_user_id": new_post.assigned_user_id,  # 담당자
             "campaign_id": new_post.campaign_id,
             "created_at": new_post.created_at.isoformat() if new_post.created_at else None,
@@ -2430,6 +2432,14 @@ async def update_campaign_post(
             except (ValueError, TypeError) as e:
                 print(f"[UPDATE-POST] Invalid quantity: {post_data['quantity']}, error: {e}")
                 raise HTTPException(status_code=400, detail=f"잘못된 수량 형식: {post_data['quantity']}")
+        if 'budget' in post_data:
+            # budget을 float로 변환
+            try:
+                post.budget = float(post_data['budget']) if post_data['budget'] else 0.0
+                print(f"[UPDATE-POST] Updated budget: {post.budget}")
+            except (ValueError, TypeError) as e:
+                print(f"[UPDATE-POST] Invalid budget: {post_data['budget']}, error: {e}")
+                raise HTTPException(status_code=400, detail=f"잘못된 매출 형식: {post_data['budget']}")
         if 'startDate' in post_data:
             post.start_date = post_data['startDate']
         if 'dueDate' in post_data:
@@ -2471,6 +2481,7 @@ async def update_campaign_post(
             "productCost": post.product_cost,
             "productName": post.product_name,
             "quantity": post.quantity,
+            "budget": post.budget or 0.0,  # 포스트별 매출 예산
             "campaignId": post.campaign_id,
             "createdAt": post.created_at.isoformat() if post.created_at else None,
             "updatedAt": post.updated_at.isoformat() if post.updated_at else None
