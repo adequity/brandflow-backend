@@ -69,10 +69,19 @@ async def get_users(
         else:
             # 기본값: 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == current_user.company)
-        
+
         result = await db.execute(query)
         users = result.scalars().all()
-        
+
+        # STAFF의 팀 정보 보강 (team_leader_id로부터 team_name 가져오기)
+        for user in users:
+            if user.role == UserRole.STAFF and user.team_leader_id and not user.team_name:
+                leader_query = select(User).where(User.id == user.team_leader_id)
+                leader_result = await db.execute(leader_query)
+                leader = leader_result.scalar_one_or_none()
+                if leader and leader.team_name:
+                    user.team_name = leader.team_name
+
         return users
     else:
         # JWT 기반 권한별 필터링
@@ -123,10 +132,19 @@ async def get_users(
             query = query.where(User.role == role)
         if company:
             query = query.where(User.company == company)
-        
+
         result = await db.execute(query)
         users = result.scalars().all()
-        
+
+        # STAFF의 팀 정보 보강 (team_leader_id로부터 team_name 가져오기)
+        for user in users:
+            if user.role == UserRole.STAFF and user.team_leader_id and not user.team_name:
+                leader_query = select(User).where(User.id == user.team_leader_id)
+                leader_result = await db.execute(leader_query)
+                leader = leader_result.scalar_one_or_none()
+                if leader and leader.team_name:
+                    user.team_name = leader.team_name
+
         return users
 
 
