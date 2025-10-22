@@ -1382,6 +1382,15 @@ async def get_campaign_detail(
                 print(f"[CAMPAIGN-DETAIL-JWT] STAFF permission denied: campaign.creator_id={campaign.creator_id}, campaign.staff_id={campaign.staff_id}, user_id={user_id}")
                 raise HTTPException(status_code=403, detail="자신이 생성하거나 담당하는 캠페인만 접근할 수 있습니다.")
         
+        
+        # 총 매출 계산 (모든 posts의 budget 합계)
+        from sqlalchemy import func
+        posts_budget_query = select(func.sum(Post.budget)).where(
+            Post.campaign_id == campaign_id,
+            Post.is_active == True
+        )
+        posts_budget_result = await db.execute(posts_budget_query)
+        total_revenue = float(posts_budget_result.scalar() or 0.0)
         print(f"[CAMPAIGN-DETAIL-JWT] SUCCESS: Returning campaign {campaign.id} to user {user_id}")
         # 직렬화된 응답 반환 (executionStatus 매핑 포함)
         response_data = {
@@ -1391,6 +1400,7 @@ async def get_campaign_detail(
             "status": campaign.status.value if campaign.status else None,
             "client_company": campaign.client_company,
             "budget": campaign.budget,
+            "total_revenue": total_revenue,  # 모든 posts의 budget 합계
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
             "invoiceIssued": getattr(campaign, 'invoice_issued', False) if hasattr(campaign, 'invoice_issued') else False,  # 계산서 발행 완료
@@ -2042,10 +2052,19 @@ async def get_campaign_financial_summary(
         if not viewer:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
         
-        # 재무 요약 데이터 (캠페인 budget 기반 자동 계산)
+        # 재무 요약 데이터 (posts.budget 합계 기반 계산)
         budget_amount = float(campaign.budget) if campaign.budget else 0.0
+        
+        # 총 매출 = 모든 posts의 budget 합계
+        from sqlalchemy import func
+        posts_budget_query = select(func.sum(Post.budget)).where(
+            Post.campaign_id == campaign_id,
+            Post.is_active == True
+        )
+        posts_budget_result = await db.execute(posts_budget_query)
+        total_revenue = float(posts_budget_result.scalar() or 0.0)
+        
         total_cost = budget_amount * 0.45  # 지출 금액
-        total_revenue = budget_amount  # 매출은 예산과 동일하게 설정
         total_profit = total_revenue - total_cost  # 순이익 계산
         
         return {
