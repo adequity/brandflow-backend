@@ -2243,6 +2243,11 @@ async def get_campaign_posts_jwt(
             "productName": product.name if product else None,  # 제품명 추가
             "quantity": post.quantity,
             "budget": post.budget or 0.0,  # 포스트별 매출 예산
+            # 재무 관련 필드
+            "invoiceIssued": post.invoice_issued or False,
+            "paymentCompleted": post.payment_completed or False,
+            "invoiceDueDate": post.invoice_due_date.isoformat() if post.invoice_due_date else None,
+            "paymentDueDate": post.payment_due_date.isoformat() if post.payment_due_date else None,
             "campaignId": post.campaign_id,
             "createdAt": post.created_at.isoformat() if post.created_at else None
         })
