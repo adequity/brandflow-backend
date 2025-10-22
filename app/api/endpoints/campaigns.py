@@ -2237,6 +2237,30 @@ async def get_campaign_posts_jwt(
     return posts_data
 
 
+# Campaign budget 자동 업데이트 헬퍼 함수
+async def update_campaign_budget(campaign_id: int, db: AsyncSession):
+    """캠페인의 모든 활성 posts의 budget 합계로 campaign.budget 업데이트"""
+    from sqlalchemy import func
+    
+    # 모든 활성 posts의 budget 합계 계산
+    posts_budget_query = select(func.sum(Post.budget)).where(
+        Post.campaign_id == campaign_id,
+        Post.is_active == True
+    )
+    result = await db.execute(posts_budget_query)
+    total_budget = float(result.scalar() or 0.0)
+    
+    # Campaign budget 업데이트
+    campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+    campaign_result = await db.execute(campaign_query)
+    campaign = campaign_result.scalar_one_or_none()
+    
+    if campaign:
+        campaign.budget = total_budget
+        print(f"[UPDATE-CAMPAIGN-BUDGET] Campaign {campaign_id} budget updated: {total_budget}")
+    
+    return total_budget
+
 @router.post("/{campaign_id}/posts/", response_model=PostResponse)
 async def create_campaign_post(
     campaign_id: int,
@@ -2303,6 +2327,8 @@ async def create_campaign_post(
         db.add(new_post)
         await db.commit()
         await db.refresh(new_post)
+        # Campaign budget 자동 업데이트
+        await update_campaign_budget(campaign_id, db)
 
         print(f"[CREATE-POST] SUCCESS: Created post {new_post.id} for campaign {campaign_id} with product_cost: {product_cost}")
 
@@ -2479,6 +2505,9 @@ async def update_campaign_post(
 
         await db.commit()
         await db.refresh(post)
+        # Campaign budget 자동 업데이트
+        await update_campaign_budget(campaign_id, db)
+        await db.commit()
 
         print(f"[UPDATE-POST] SUCCESS: Updated post {post.id} for campaign {campaign_id} with product_cost: {post.product_cost}")
 
@@ -2566,6 +2595,8 @@ async def delete_campaign_post(
         delete_post_stmt = sql_delete(Post).where(Post.id == post_id)
         await db.execute(delete_post_stmt)
 
+        # Campaign budget 자동 업데이트
+        await update_campaign_budget(campaign_id, db)
         await db.commit()
 
         print(f"[DELETE-POST] SUCCESS: Hard deleted post {post_id} from campaign {campaign_id}")
@@ -2627,6 +2658,8 @@ async def delete_post_by_id(
         await db.execute(delete_post_stmt)
 
         await db.commit()
+        # Campaign budget 자동 업데이트
+        await update_campaign_budget(post.campaign_id, db)
 
         print(f"[DELETE-POST-SIMPLE] SUCCESS: Hard deleted post {post_id}")
         return None  # 204 No Content
