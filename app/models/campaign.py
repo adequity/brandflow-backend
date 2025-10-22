@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum as SQLEnum, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum as SQLEnum, Boolean, Numeric
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional
+from decimal import Decimal
 
 from .base import Base, TimestampMixin
 
@@ -37,10 +38,16 @@ class Campaign(Base, TimestampMixin):
     chat_attachments = Column(Text, nullable=True)  # 첨부파일/링크 정보
     chat_images = Column(Text, nullable=True)  # 카톡 스크린샷 이미지 URL (JSON array 문자열)
 
-    # 일정 관련 필드 (마이그레이션 후 활성화)
-    # invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일
-    # payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일
-    # project_due_date = Column(DateTime, nullable=True)  # 프로젝트 완료 마감일
+    # 원가 및 이익 관련 필드
+    cost = Column(Numeric(12, 2), default=0, nullable=True)  # 실제 원가
+    margin = Column(Numeric(12, 2), default=0, nullable=True)  # 이익 (budget - cost)
+    margin_rate = Column(Numeric(5, 2), default=0, nullable=True)  # 이익률 (%)
+    estimated_cost = Column(Numeric(12, 2), default=0, nullable=True)  # 예상 원가
+
+    # 일정 관련 필드
+    invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일
+    payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일
+    project_due_date = Column(DateTime, nullable=True)  # 프로젝트 완료 마감일
     
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -53,6 +60,7 @@ class Campaign(Base, TimestampMixin):
     staff_user = relationship("User", foreign_keys=[staff_id], lazy="selectin")  # 담당 직원 관계 (eager loading)
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     posts = relationship("Post", back_populates="campaign", cascade="all, delete-orphan")
+    costs = relationship("CampaignCost", back_populates="campaign", cascade="all, delete-orphan")
     
     @property
     def creator_name(self) -> Optional[str]:

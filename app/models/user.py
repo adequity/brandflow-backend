@@ -8,6 +8,7 @@ from .base import Base, TimestampMixin
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "SUPER_ADMIN"
     AGENCY_ADMIN = "AGENCY_ADMIN"
+    TEAM_LEADER = "TEAM_LEADER"
     STAFF = "STAFF"
     CLIENT = "CLIENT"
 
@@ -43,12 +44,20 @@ class User(Base, TimestampMixin):
     # STAFF가 CLIENT를 생성한 경우, 해당 STAFF의 ID를 기록
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True)
 
+    # 팀 관련 필드 (TEAM_LEADER 시스템)
+    team_id = Column(Integer, nullable=True)  # 팀 식별자
+    team_name = Column(String(100), nullable=True)  # 팀 이름
+    team_leader_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # 소속 팀장 ID
+
     # 관계 설정
     campaigns = relationship("Campaign", back_populates="creator", foreign_keys="Campaign.creator_id")
     purchase_requests = relationship("PurchaseRequest", back_populates="requester")
     sales_records = relationship("Sales", back_populates="employee")
     telegram_setting = relationship("UserTelegramSetting", back_populates="user", uselist=False)
     monthly_incentives = relationship("MonthlyIncentive", foreign_keys="MonthlyIncentive.user_id", back_populates="user")
+
+    # 팀 관계 설정
+    team_leader = relationship("User", remote_side=[id], foreign_keys=[team_leader_id], backref="team_members")
     
     def __repr__(self):
         return f"<User(id={self.id}, name={self.name}, role={self.role})>"

@@ -12,7 +12,7 @@ from app.db.init_data import init_database_data
 from alembic.config import Config
 from alembic import command
 import subprocess
-from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, migration, monthly_incentives
+from app.api.endpoints import auth, users, campaigns, purchase_requests, company_logo, products, work_types, notifications, file_upload, performance, monitoring, dashboard, search, export, admin, websocket, security_dashboard, performance_dashboard, cache, health, dashboard_simple, migration, monthly_incentives, incentives, campaign_costs
 
 
 @asynccontextmanager
@@ -866,6 +866,8 @@ app.include_router(work_types.router, prefix="/api/work-types", tags=["작업유
 app.include_router(notifications.router, prefix="/api/notifications", tags=["알림"])
 app.include_router(file_upload.router, prefix="/api/files", tags=["파일"])
 app.include_router(monthly_incentives.router, prefix="/api/monthly-incentives", tags=["월간인센티브"])
+app.include_router(incentives.router, prefix="/api/incentives", tags=["인센티브"])
+app.include_router(campaign_costs.router, prefix="/api/campaign-costs", tags=["캠페인원가"])
 
 # API 라우터 등록 - 대시보드 & 분석
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["대시보드"])

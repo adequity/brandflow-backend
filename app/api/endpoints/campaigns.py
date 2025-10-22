@@ -142,6 +142,40 @@ async def get_campaigns(
             joinedload(Campaign.posts)
         ).where(Campaign.client_user_id == user_id)
         count_query = select(func.count(Campaign.id)).where(Campaign.client_user_id == user_id)
+    elif user_role == UserRole.TEAM_LEADER.value:
+        # TEAM_LEADER는 다음 조건의 캠페인 조회 가능:
+        # 1. 본인이 생성한 캠페인 (creator_id == user_id)
+        # 2. 본인이 담당하는 캠페인 (staff_id == user_id)
+        # 3. 본인 팀원이 생성한 캠페인 (같은 company AND team_leader_id == user_id)
+        # 보안: company AND team_leader_id 조건을 모두 확인 (다른 회사의 staff가 악의적으로 team_leader_id를 설정하는 것 방지)
+
+        # 팀원 서브쿼리 (같은 회사 + 자신을 팀장으로 둔 직원)
+        team_members_subquery = select(User.id).where(
+            and_(
+                User.company == current_user.company,
+                User.team_leader_id == user_id
+            )
+        )
+
+        query = select(Campaign).options(
+            joinedload(Campaign.creator),
+            joinedload(Campaign.client_user),
+            joinedload(Campaign.staff_user),
+            joinedload(Campaign.posts)
+        ).where(
+            or_(
+                Campaign.creator_id == user_id,  # 본인이 생성
+                Campaign.staff_id == user_id,  # 본인이 담당
+                Campaign.creator_id.in_(team_members_subquery)  # 팀원이 생성
+            )
+        )
+        count_query = select(func.count(Campaign.id)).where(
+            or_(
+                Campaign.creator_id == user_id,
+                Campaign.staff_id == user_id,
+                Campaign.creator_id.in_(team_members_subquery)
+            )
+        )
     elif user_role == UserRole.STAFF.value:
         # 직원은 자신이 생성한 캠페인 또는 자신이 담당하는 캠페인 조회 가능 (creator_id 또는 staff_id 기준)
         query = select(Campaign).options(joinedload(Campaign.creator), joinedload(Campaign.client_user), joinedload(Campaign.staff_user), joinedload(Campaign.posts)).where(
@@ -175,6 +209,9 @@ async def get_campaigns(
             query = query.where(date_filter)
             count_query = count_query.where(date_filter)
         elif user_role == UserRole.CLIENT.value:
+            query = query.where(date_filter)
+            count_query = count_query.where(date_filter)
+        elif user_role == UserRole.TEAM_LEADER.value:
             query = query.where(date_filter)
             count_query = count_query.where(date_filter)
         elif user_role == UserRole.STAFF.value:
