@@ -1081,7 +1081,13 @@ async def get_monthly_campaign_stats(
             # 클라이언트: 본인 회사 캠페인만
             query = query.where(Campaign.client == user_company)
 
-        # 월간 필터 적용 (start_date 기준)
+        # 캠페인 조회 (월간 필터는 나중에 Post 레벨에서 적용)
+        result = await db.execute(query)
+        campaigns = result.scalars().all()
+
+        # 월간 필터 적용을 위한 날짜 범위 설정
+        filter_start_date = None
+        filter_end_date = None
         if month:
             try:
                 from calendar import monthrange
@@ -1089,33 +1095,50 @@ async def get_monthly_campaign_stats(
                 year = int(year)
                 month_num = int(month_num)
                 _, last_day = monthrange(year, month_num)
-                start_date = datetime(year, month_num, 1)
-                end_date = datetime(year, month_num, last_day, 23, 59, 59)
-                query = query.where((Campaign.start_date >= start_date) & (Campaign.start_date <= end_date))
-                print(f"[MONTHLY-STATS] Month filter applied (start_date): {start_date.isoformat()} to {end_date.isoformat()}")
+                filter_start_date = datetime(year, month_num, 1)
+                filter_end_date = datetime(year, month_num, last_day, 23, 59, 59)
+                print(f"[MONTHLY-STATS] Month filter will be applied to posts: {filter_start_date.isoformat()} to {filter_end_date.isoformat()}")
             except (ValueError, AttributeError) as e:
                 print(f"[MONTHLY-STATS] Invalid month format: {month}, error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM format.")
 
-        # 캠페인 조회
-        result = await db.execute(query)
-        campaigns = result.scalars().all()
+        # Post 필터링 함수 (월간 필터 적용)
+        def is_post_in_month(post):
+            """Post가 선택된 월에 해당하는지 확인"""
+            if not filter_start_date:
+                return True  # 월 필터 없으면 모든 Post 포함
 
-        # 통계 계산
-        # 총 매출 = 모든 캠페인의 posts.budget 합계 (활성 posts만)
+            # start_datetime이 있으면 우선 사용, 없으면 start_date 사용
+            post_date = None
+            if post.start_datetime:
+                post_date = post.start_datetime
+            elif post.start_date:
+                try:
+                    # start_date가 문자열 형태일 경우 (YYYY-MM-DD)
+                    post_date = datetime.strptime(post.start_date, '%Y-%m-%d')
+                except (ValueError, TypeError):
+                    return False
+
+            if not post_date:
+                return False
+
+            return filter_start_date <= post_date <= filter_end_date
+
+        # 통계 계산 (월간 필터가 적용된 Post만 계산)
+        # 총 매출 = 선택된 월의 활성 posts.budget 합계
         total_revenue = sum(
             post.budget or 0
             for campaign in campaigns
             for post in campaign.posts
-            if post.is_active
+            if post.is_active and is_post_in_month(post)
         )
 
-        # 실제 수금액 = 입금 완료된 posts의 budget 합계
+        # 실제 수금액 = 선택된 월의 입금 완료된 posts의 budget 합계
         collected_revenue = sum(
             post.budget or 0
             for campaign in campaigns
             for post in campaign.posts
-            if post.is_active and post.payment_completed
+            if post.is_active and post.payment_completed and is_post_in_month(post)
         )
 
         # Campaign 모델에 cost 필드가 없으므로 0으로 처리 (실제 비용은 발주/구매요청에서 계산)
@@ -1123,16 +1146,16 @@ async def get_monthly_campaign_stats(
         total_campaigns = len(campaigns)
         completed_campaigns = sum(1 for campaign in campaigns if campaign.status in ['완료', 'COMPLETED'])
 
-        # 재무 상태는 이제 Post 레벨에서 계산
+        # 재무 상태는 이제 Post 레벨에서 계산 (월간 필터 적용)
         pending_invoices = sum(
             1 for campaign in campaigns
             for post in campaign.posts
-            if post.is_active and not post.invoice_issued
+            if post.is_active and not post.invoice_issued and is_post_in_month(post)
         )
         pending_payments = sum(
             1 for campaign in campaigns
             for post in campaign.posts
-            if post.is_active and not post.payment_completed
+            if post.is_active and not post.payment_completed and is_post_in_month(post)
         )
 
         stats = {
