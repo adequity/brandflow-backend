@@ -645,7 +645,7 @@ async def get_all_order_requests(
         # 발주요청 조회 (회사별 필터링 적용)
         from app.models.product import Product
 
-        # User alias 생성 (테이블 충돌 방지)
+        # User alias 생성 (requester_name 조회용)
         from sqlalchemy.orm import aliased
         RequesterUser = aliased(User)
 
@@ -669,7 +669,7 @@ async def get_all_order_requests(
             OrderRequest.is_active == True
         )
 
-        # 권한별 필터링 (계층적 구조)
+        # 권한별 필터링 (계층적 구조) - denormalized 필드 사용으로 성능 최적화
         if user_role == UserRole.SUPER_ADMIN:
             # 슈퍼 어드민: 모든 발주요청 조회 가능
             print("[ORDER-REQUESTS-LIST] SUPER_ADMIN: showing all order requests")
@@ -677,21 +677,21 @@ async def get_all_order_requests(
         elif user_role == UserRole.AGENCY_ADMIN:
             # 에이전시 어드민: 본인 회사의 모든 발주요청 조회 가능
             print(f"[ORDER-REQUESTS-LIST] AGENCY_ADMIN: filtering by company '{user_company}'")
-            query = base_query.where(RequesterUser.company == user_company)
+            query = base_query.where(OrderRequest.company == user_company)
         elif user_role == UserRole.TEAM_LEADER:
             # 팀 리더: 본인 회사의 STAFF + 본인의 발주요청만 조회 가능
             print(f"[ORDER-REQUESTS-LIST] TEAM_LEADER: filtering by company '{user_company}' and staff only")
             query = base_query.where(
-                RequesterUser.company == user_company,
+                OrderRequest.company == user_company,
                 or_(
-                    RequesterUser.role == UserRole.STAFF,
-                    RequesterUser.id == current_user.id
+                    OrderRequest.requester_role == 'STAFF',
+                    OrderRequest.user_id == current_user.id
                 )
             )
         elif user_role == UserRole.STAFF:
             # 직원: 본인이 작성한 발주요청만 조회 가능
             print(f"[ORDER-REQUESTS-LIST] STAFF: filtering by user_id={current_user.id}")
-            query = base_query.where(RequesterUser.id == current_user.id)
+            query = base_query.where(OrderRequest.user_id == current_user.id)
         else:
             # CLIENT나 기타 역할은 발주요청 조회 불가
             print(f"[ORDER-REQUESTS-LIST] Unauthorized role: {user_role}")
@@ -3218,7 +3218,11 @@ async def create_order_request(
             post_id=post_id,
             user_id=current_user.id,
             campaign_id=campaign_id,
-            status="대기"
+            status="대기",
+            # 성능 최적화를 위한 denormalized 필드 (user 정보 복사)
+            company=current_user.company or 'default_company',
+            requester_role=current_user.role.value,
+            team_leader_id=current_user.team_leader_id
         )
 
         db.add(new_order_request)
