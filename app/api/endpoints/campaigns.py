@@ -1084,8 +1084,13 @@ async def get_monthly_campaign_stats(
         campaigns = result.scalars().all()
 
         # 통계 계산
-        # 총 매출 = 모든 캠페인의 budget 합계 (campaigns.budget은 posts.budget의 자동 합계)
-        total_revenue = sum(campaign.budget or 0 for campaign in campaigns)
+        # 총 매출 = 모든 캠페인의 posts.budget 합계 (활성 posts만)
+        total_revenue = sum(
+            post.budget or 0
+            for campaign in campaigns
+            for post in campaign.posts
+            if post.is_active
+        )
 
         # 실제 수금액 = 입금 완료된 posts의 budget 합계
         collected_revenue = sum(
