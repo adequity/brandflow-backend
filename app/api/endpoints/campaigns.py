@@ -303,6 +303,12 @@ async def get_campaigns(
                     # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,
                     # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,
                     "quantity": post.quantity,
+                    "budget": post.budget or 0.0,  # 견적 금액
+                    # 재무 관련 필드
+                    "invoiceIssued": post.invoice_issued or False,
+                    "paymentCompleted": post.payment_completed or False,
+                    "invoiceDueDate": post.invoice_due_date.isoformat() if post.invoice_due_date else None,
+                    "paymentDueDate": post.payment_due_date.isoformat() if post.payment_due_date else None,
                     "is_active": post.is_active,
                     "createdAt": post.created_at.isoformat() if post.created_at else None,
                     "updatedAt": post.updated_at.isoformat() if post.updated_at else None
