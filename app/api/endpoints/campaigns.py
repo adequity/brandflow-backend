@@ -295,13 +295,17 @@ async def get_campaigns(
                     "topicStatus": post.topic_status,
                     "outline": post.outline,
                     "outlineStatus": post.outline_status,  # 세부사항 승인 상태 추가
+                    "rejectReason": post.reject_reason,  # 반려 사유
                     "images": post.images or [],
                     "published_url": post.published_url,
                     "publishedUrl": post.published_url,  # 프론트엔드 호환성
+                    "orderRequestStatus": post.order_request_status,
+                    "orderRequestId": post.order_request_id,
                     "startDate": post.start_date,      # 기존 호환성
                     "dueDate": post.due_date,          # 기존 호환성
                     # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,
                     # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,
+                    "productId": post.product_id,
                     "quantity": post.quantity,
                     "budget": post.budget or 0.0,  # 견적 금액
                     # 재무 관련 필드
