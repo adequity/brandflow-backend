@@ -31,7 +31,8 @@ class OrderRequest(Base, TimestampMixin):
 
     # 관계 설정
     post = relationship("Post")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])  # 발주 요청자
+    team_leader = relationship("User", foreign_keys=[team_leader_id])  # 요청자의 팀장
     campaign = relationship("Campaign")
 
     def __repr__(self):
