@@ -1169,8 +1169,9 @@ async def get_receivables_status(
     print(f"[RECEIVABLES-STATUS] Getting receivables status for user_id={current_user.id}, role={user_role}, company={user_company}")
 
     try:
-        # 기본 쿼리
+        # 기본 쿼리 - posts를 eager load하여 lazy loading 방지
         query = select(Campaign).options(
+            selectinload(Campaign.posts),
             joinedload(Campaign.creator),
             joinedload(Campaign.client_user),
             joinedload(Campaign.staff_user)
