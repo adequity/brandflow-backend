@@ -1056,8 +1056,8 @@ async def get_monthly_campaign_stats(
     print(f"[MONTHLY-STATS] Getting monthly stats for user_id={current_user.id}, role={user_role}, company={user_company}, month={month}")
 
     try:
-        # 기본 쿼리
-        query = select(Campaign)
+        # 기본 쿼리 - posts를 eager load하여 lazy loading 방지
+        query = select(Campaign).options(selectinload(Campaign.posts))
 
         # 역할별 필터링
         if user_role == "SUPER_ADMIN":
