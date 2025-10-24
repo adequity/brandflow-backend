@@ -3873,3 +3873,96 @@ async def get_status_values(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/debug/user-posts", tags=["debug"])
+async def get_user_posts_debug(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """현재 사용자의 캠페인 및 Post 데이터 확인 (디버그용)"""
+    try:
+        logger.warning(f"[DEBUG-USER-POSTS] User: {current_user.name}, Role: {current_user.role.value}, Company: {current_user.company}")
+
+        # STAFF 사용자의 캠페인 조회
+        query = select(Campaign).options(selectinload(Campaign.posts))
+
+        if current_user.role.value == "STAFF":
+            query = query.where(
+                or_(
+                    Campaign.creator_id == current_user.id,
+                    Campaign.staff_id == current_user.id
+                )
+            )
+        elif current_user.role.value == "AGENCY_ADMIN":
+            query = query.where(Campaign.company == current_user.company)
+        elif current_user.role.value == "TEAM_LEADER":
+            query = query.where(Campaign.company == current_user.company)
+        elif current_user.role.value == "CLIENT":
+            query = query.where(Campaign.client == current_user.company)
+
+        result = await db.execute(query)
+        campaigns = result.scalars().all()
+
+        logger.warning(f"[DEBUG-USER-POSTS] Found {len(campaigns)} campaigns")
+
+        # 캠페인 및 Post 데이터 정리
+        campaign_data = []
+        total_posts = 0
+        for campaign in campaigns:
+            posts_info = []
+            for post in campaign.posts:
+                total_posts += 1
+
+                # start_date와 start_datetime 확인
+                start_date_str = None
+                start_datetime_str = None
+
+                if post.start_date:
+                    start_date_str = str(post.start_date)
+                if post.start_datetime:
+                    start_datetime_str = post.start_datetime.isoformat()
+
+                logger.warning(
+                    f"[DEBUG-POST] Post ID={post.id}, "
+                    f"start_date={start_date_str}, "
+                    f"start_datetime={start_datetime_str}, "
+                    f"budget={post.budget}, "
+                    f"is_active={post.is_active}, "
+                    f"payment_completed={post.payment_completed}"
+                )
+
+                posts_info.append({
+                    "id": post.id,
+                    "title": post.title[:50] if post.title else None,
+                    "start_date": start_date_str,
+                    "start_datetime": start_datetime_str,
+                    "budget": post.budget,
+                    "is_active": post.is_active,
+                    "payment_completed": post.payment_completed
+                })
+
+            campaign_data.append({
+                "id": campaign.id,
+                "name": campaign.name,
+                "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
+                "posts_count": len(campaign.posts),
+                "posts": posts_info
+            })
+
+        logger.warning(f"[DEBUG-USER-POSTS] Total posts: {total_posts}")
+
+        return {
+            "user": {
+                "name": current_user.name,
+                "role": current_user.role.value,
+                "company": current_user.company
+            },
+            "campaigns_count": len(campaigns),
+            "total_posts": total_posts,
+            "campaigns": campaign_data
+        }
+
+    except Exception as e:
+        logger.error(f"[DEBUG-USER-POSTS] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
