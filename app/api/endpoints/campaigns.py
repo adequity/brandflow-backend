@@ -1112,17 +1112,25 @@ async def get_monthly_campaign_stats(
             post_date = None
             if post.start_datetime:
                 post_date = post.start_datetime
+                print(f"[POST-FILTER] Post {post.id} using start_datetime: {post_date}")
             elif post.start_date:
                 try:
                     # start_date가 문자열 형태일 경우 (YYYY-MM-DD)
                     post_date = datetime.strptime(post.start_date, '%Y-%m-%d')
-                except (ValueError, TypeError):
+                    print(f"[POST-FILTER] Post {post.id} using start_date: {post.start_date} -> {post_date}")
+                except (ValueError, TypeError) as e:
+                    print(f"[POST-FILTER] Post {post.id} date parse error: {post.start_date}, error: {e}")
                     return False
+            else:
+                print(f"[POST-FILTER] Post {post.id} has no start_date or start_datetime")
 
             if not post_date:
+                print(f"[POST-FILTER] Post {post.id} excluded - no valid date")
                 return False
 
-            return filter_start_date <= post_date <= filter_end_date
+            in_month = filter_start_date <= post_date <= filter_end_date
+            print(f"[POST-FILTER] Post {post.id} date={post_date}, filter={filter_start_date} to {filter_end_date}, included={in_month}")
+            return in_month
 
         # 통계 계산 (월간 필터가 적용된 Post만 계산)
         # 총 매출 = 선택된 월의 활성 posts.budget 합계
