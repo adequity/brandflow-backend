@@ -1053,7 +1053,11 @@ async def get_monthly_campaign_stats(
     user_role = current_user.role.value
     user_company = current_user.company
 
-    print(f"[MONTHLY-STATS] Getting monthly stats for user_id={current_user.id}, role={user_role}, company={user_company}, month={month}")
+    import sys
+    print(f"\n{'='*80}", flush=True)
+    print(f"[MONTHLY-STATS] Getting monthly stats for user_id={current_user.id}, role={user_role}, company={user_company}, month={month}", flush=True)
+    print(f"{'='*80}", flush=True)
+    sys.stdout.flush()
 
     try:
         # 기본 쿼리 - posts를 eager load하여 lazy loading 방지
@@ -1097,7 +1101,8 @@ async def get_monthly_campaign_stats(
                 _, last_day = monthrange(year, month_num)
                 filter_start_date = datetime(year, month_num, 1)
                 filter_end_date = datetime(year, month_num, last_day, 23, 59, 59)
-                print(f"[MONTHLY-STATS] Month filter will be applied to posts: {filter_start_date.isoformat()} to {filter_end_date.isoformat()}")
+                print(f"[MONTHLY-STATS] Month filter will be applied to posts: {filter_start_date.isoformat()} to {filter_end_date.isoformat()}", flush=True)
+                sys.stdout.flush()
             except (ValueError, AttributeError) as e:
                 print(f"[MONTHLY-STATS] Invalid month format: {month}, error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM format.")
@@ -1112,24 +1117,25 @@ async def get_monthly_campaign_stats(
             post_date = None
             if post.start_datetime:
                 post_date = post.start_datetime
-                print(f"[POST-FILTER] Post {post.id} using start_datetime: {post_date}")
+                print(f"[POST-FILTER] Post {post.id} using start_datetime: {post_date}", flush=True)
             elif post.start_date:
                 try:
                     # start_date가 문자열 형태일 경우 (YYYY-MM-DD)
                     post_date = datetime.strptime(post.start_date, '%Y-%m-%d')
-                    print(f"[POST-FILTER] Post {post.id} using start_date: {post.start_date} -> {post_date}")
+                    print(f"[POST-FILTER] Post {post.id} using start_date: {post.start_date} -> {post_date}", flush=True)
                 except (ValueError, TypeError) as e:
-                    print(f"[POST-FILTER] Post {post.id} date parse error: {post.start_date}, error: {e}")
+                    print(f"[POST-FILTER] Post {post.id} date parse error: {post.start_date}, error: {e}", flush=True)
                     return False
             else:
-                print(f"[POST-FILTER] Post {post.id} has no start_date or start_datetime")
+                print(f"[POST-FILTER] Post {post.id} has no start_date or start_datetime", flush=True)
 
             if not post_date:
-                print(f"[POST-FILTER] Post {post.id} excluded - no valid date")
+                print(f"[POST-FILTER] Post {post.id} excluded - no valid date", flush=True)
                 return False
 
             in_month = filter_start_date <= post_date <= filter_end_date
-            print(f"[POST-FILTER] Post {post.id} date={post_date}, filter={filter_start_date} to {filter_end_date}, included={in_month}")
+            print(f"[POST-FILTER] Post {post.id} date={post_date}, filter={filter_start_date} to {filter_end_date}, included={in_month}, budget={post.budget}", flush=True)
+            sys.stdout.flush()
             return in_month
 
         # 통계 계산 (월간 필터가 적용된 Post만 계산)
