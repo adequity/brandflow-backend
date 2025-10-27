@@ -83,8 +83,8 @@ async def get_purchase_requests(
                 # 직원은 자신이 요청한 것만 조회
                 query = query.where(PurchaseRequest.requester_id == current_user.id)
             elif current_user.role.value == 'TEAM_LEADER':
-                # 팀장은 같은 company + 같은 team의 STAFF들이 작성한 구매요청 조회 가능
-                # 자신의 team_leader_id를 가진 STAFF들의 요청 조회
+                # 팀장은 같은 company의 자신의 팀원들이 작성한 구매요청 조회 가능
+                # company로 필터링 + 팀원 ID로 필터링
                 staff_query = select(User.id).where(
                     User.team_leader_id == current_user.id,
                     User.company == current_user.company
@@ -93,21 +93,16 @@ async def get_purchase_requests(
                 staff_ids = [row[0] for row in staff_result.all()]
 
                 if staff_ids:
-                    query = query.where(PurchaseRequest.requester_id.in_(staff_ids))
+                    query = query.where(
+                        PurchaseRequest.company == current_user.company,
+                        PurchaseRequest.requester_id.in_(staff_ids)
+                    )
                 else:
                     # 팀원이 없으면 빈 결과 반환
                     query = query.where(PurchaseRequest.id == -1)
             elif current_user.role.value == 'AGENCY_ADMIN':
-                # AGENCY_ADMIN은 본인 company의 모든 구매요청 조회 가능
-                # requester의 company가 자신과 동일한 것만
-                requester_query = select(User.id).where(User.company == current_user.company)
-                requester_result = await db.execute(requester_query)
-                requester_ids = [row[0] for row in requester_result.all()]
-
-                if requester_ids:
-                    query = query.where(PurchaseRequest.requester_id.in_(requester_ids))
-                else:
-                    query = query.where(PurchaseRequest.id == -1)
+                # AGENCY_ADMIN은 본인 company의 모든 구매요청 조회 가능 (company 컬럼으로 직접 필터링)
+                query = query.where(PurchaseRequest.company == current_user.company)
             # SUPER_ADMIN은 모든 요청 조회 가능 (필터링 없음)
             
             # 상태 필터링
@@ -125,30 +120,20 @@ async def get_purchase_requests(
             # 전체 개수 조회
             count_query = select(func.count(PurchaseRequest.id))
 
-            # 역할별 필터링 적용
+            # 역할별 필터링 적용 (동일한 로직 사용)
             if current_user.role.value == 'STAFF':
                 count_query = count_query.where(PurchaseRequest.requester_id == current_user.id)
             elif current_user.role.value == 'TEAM_LEADER':
-                staff_query = select(User.id).where(
-                    User.team_leader_id == current_user.id,
-                    User.company == current_user.company
-                )
-                staff_result = await db.execute(staff_query)
-                staff_ids = [row[0] for row in staff_result.all()]
-
+                # 이미 위에서 staff_ids를 조회했으므로 재사용
                 if staff_ids:
-                    count_query = count_query.where(PurchaseRequest.requester_id.in_(staff_ids))
+                    count_query = count_query.where(
+                        PurchaseRequest.company == current_user.company,
+                        PurchaseRequest.requester_id.in_(staff_ids)
+                    )
                 else:
                     count_query = count_query.where(PurchaseRequest.id == -1)
             elif current_user.role.value == 'AGENCY_ADMIN':
-                requester_query = select(User.id).where(User.company == current_user.company)
-                requester_result = await db.execute(requester_query)
-                requester_ids = [row[0] for row in requester_result.all()]
-
-                if requester_ids:
-                    count_query = count_query.where(PurchaseRequest.requester_id.in_(requester_ids))
-                else:
-                    count_query = count_query.where(PurchaseRequest.id == -1)
+                count_query = count_query.where(PurchaseRequest.company == current_user.company)
 
             if status:
                 try:
@@ -270,9 +255,10 @@ async def create_purchase_request(
                 vendor=request_data.vendor,
                 status=RequestStatus.PENDING,
                 campaign_id=request_data.campaign_id,
-                requester_id=current_user.id
+                requester_id=current_user.id,
+                company=current_user.company  # 요청자의 company 자동 복사
             )
-            
+
             db.add(new_request)
             await db.commit()
             await db.refresh(new_request)
@@ -373,12 +359,8 @@ async def update_purchase_request(
                 # TEAM_LEADER는 조회만 가능, 수정/삭제 불가능
                 raise HTTPException(status_code=403, detail="팀장은 구매요청을 조회만 가능하며 수정할 수 없습니다.")
             elif current_user.role.value == 'AGENCY_ADMIN':
-                # AGENCY_ADMIN은 본인 company의 모든 구매요청 수정/삭제 가능
-                requester_query = select(User).where(User.id == purchase_request.requester_id)
-                requester_result = await db.execute(requester_query)
-                requester = requester_result.scalar_one_or_none()
-
-                if not requester or requester.company != current_user.company:
+                # AGENCY_ADMIN은 본인 company의 모든 구매요청 수정/삭제 가능 (company 컬럼으로 직접 체크)
+                if purchase_request.company != current_user.company:
                     raise HTTPException(status_code=403, detail="본인 회사의 구매요청만 수정할 수 있습니다.")
             # SUPER_ADMIN은 모든 요청 수정 가능 (체크 없음)
             
@@ -536,15 +518,8 @@ async def get_purchase_request_stats(
                 else:
                     query = query.where(PurchaseRequest.id == -1)
             elif current_user.role.value == 'AGENCY_ADMIN':
-                # AGENCY_ADMIN은 본인 company의 모든 요청
-                requester_query = select(User.id).where(User.company == current_user.company)
-                requester_result = await db.execute(requester_query)
-                requester_ids = [row[0] for row in requester_result.all()]
-
-                if requester_ids:
-                    query = query.where(PurchaseRequest.requester_id.in_(requester_ids))
-                else:
-                    query = query.where(PurchaseRequest.id == -1)
+                # AGENCY_ADMIN은 본인 company의 모든 요청 (company 컬럼으로 직접 필터링)
+                query = query.where(PurchaseRequest.company == current_user.company)
             # SUPER_ADMIN은 모든 데이터
 
             # 상태별 통계
@@ -592,15 +567,8 @@ async def get_purchase_request_stats(
                 total_amount_query = total_amount_query.where(team_filter)
                 approved_amount_query = approved_amount_query.where(team_filter)
             elif current_user.role.value == 'AGENCY_ADMIN':
-                # 같은 company의 모든 사용자 ID 리스트로 필터링
-                requester_query = select(User.id).where(User.company == current_user.company)
-                requester_result = await db.execute(requester_query)
-                requester_ids = [row[0] for row in requester_result.all()]
-
-                if requester_ids:
-                    company_filter = PurchaseRequest.requester_id.in_(requester_ids)
-                else:
-                    company_filter = PurchaseRequest.id == -1
+                # 같은 company의 모든 요청 (company 컬럼으로 직접 필터링)
+                company_filter = PurchaseRequest.company == current_user.company
 
                 total_query = total_query.where(company_filter)
                 pending_query = pending_query.where(company_filter)
@@ -679,12 +647,8 @@ async def upload_receipt(
         elif current_user.role.value == 'TEAM_LEADER':
             raise HTTPException(status_code=403, detail="팀장은 구매요청을 조회만 가능하며 수정할 수 없습니다.")
         elif current_user.role.value == 'AGENCY_ADMIN':
-            # AGENCY_ADMIN은 본인 company의 구매요청만 수정 가능
-            requester_query = select(User).where(User.id == purchase_request.requester_id)
-            requester_result = await db.execute(requester_query)
-            requester = requester_result.scalar_one_or_none()
-
-            if not requester or requester.company != current_user.company:
+            # AGENCY_ADMIN은 본인 company의 구매요청만 수정 가능 (company 컬럼으로 직접 체크)
+            if purchase_request.company != current_user.company:
                 raise HTTPException(status_code=403, detail="본인 회사의 구매요청만 수정할 수 있습니다.")
         # SUPER_ADMIN은 모든 요청 수정 가능
 
