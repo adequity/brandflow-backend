@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
 from urllib.parse import unquote
 from datetime import datetime
+import os
+import uuid
+from PIL import Image
+import io
 
 from app.db.database import get_async_db
 from app.schemas.purchase_request import PurchaseRequestCreate, PurchaseRequestUpdate, PurchaseRequestResponse
@@ -72,11 +76,11 @@ async def get_purchase_requests(
             query = select(PurchaseRequest)
             
             # 역할별 필터링
-            if current_user.role.value == 'staff':
+            if current_user.role.value == 'client':
+                # 클라이언트는 구매요청 접근 불가 (회사 운영비 관련으로 고객사는 무관)
+                raise HTTPException(status_code=403, detail="고객사는 구매요청에 접근할 수 없습니다.")
+            elif current_user.role.value == 'staff':
                 # 직원은 자신이 요청한 것만 조회
-                query = query.where(PurchaseRequest.requester_id == current_user.id)
-            elif current_user.role.value == 'client':
-                # 클라이언트는 자신의 회사 관련 요청만 조회
                 query = query.where(PurchaseRequest.requester_id == current_user.id)
             # agency_admin, super_admin은 모든 요청 조회 가능
             
@@ -95,8 +99,6 @@ async def get_purchase_requests(
             # 전체 개수 조회
             count_query = select(func.count(PurchaseRequest.id))
             if current_user.role.value == 'staff':
-                count_query = count_query.where(PurchaseRequest.requester_id == current_user.id)
-            elif current_user.role.value == 'client':
                 count_query = count_query.where(PurchaseRequest.requester_id == current_user.id)
             if status:
                 try:
@@ -311,9 +313,9 @@ async def update_purchase_request(
                 raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
             
             # 권한 확인
-            if current_user.role.value == 'staff' and purchase_request.requester_id != current_user.id:
-                raise HTTPException(status_code=403, detail="자신이 생성한 구매요청만 수정할 수 있습니다.")
-            elif current_user.role.value == 'client' and purchase_request.requester_id != current_user.id:
+            if current_user.role.value == 'client':
+                raise HTTPException(status_code=403, detail="고객사는 구매요청에 접근할 수 없습니다.")
+            elif current_user.role.value == 'staff' and purchase_request.requester_id != current_user.id:
                 raise HTTPException(status_code=403, detail="자신이 생성한 구매요청만 수정할 수 있습니다.")
             # agency_admin, super_admin은 모든 요청 수정 가능
             
@@ -451,11 +453,11 @@ async def get_purchase_request_stats(
             # 권한에 따라 데이터 필터링
             query = select(PurchaseRequest)
 
-            if current_user.role.value == 'staff':
+            if current_user.role.value == 'client':
+                # 클라이언트는 구매요청 접근 불가
+                raise HTTPException(status_code=403, detail="고객사는 구매요청 통계에 접근할 수 없습니다.")
+            elif current_user.role.value == 'staff':
                 # 직원은 자신의 요청만
-                query = query.where(PurchaseRequest.requester_id == current_user.id)
-            elif current_user.role.value == 'client':
-                # 클라이언트는 자신의 요청만
                 query = query.where(PurchaseRequest.requester_id == current_user.id)
             # agency_admin, super_admin은 모든 데이터
 
@@ -522,3 +524,129 @@ async def get_purchase_request_stats(
         except Exception as e:
             print(f"[PURCHASE-REQUEST-STATS-JWT] Unexpected error: {type(e).__name__}: {e}")
             raise HTTPException(status_code=500, detail=f"통계 조회 중 오류: {str(e)}")
+
+
+@router.post("/{request_id}/upload-receipt")
+async def upload_receipt(
+    request_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """영수증 파일 업로드 (jpg, jpeg, png만 허용)"""
+    print(f"[RECEIPT-UPLOAD] Request from user_id={current_user.id}, request_id={request_id}, filename={file.filename}")
+
+    try:
+        # 구매요청 찾기
+        request_query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(request_query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인
+        if current_user.role.value == 'client':
+            raise HTTPException(status_code=403, detail="고객사는 구매요청에 접근할 수 없습니다.")
+        elif current_user.role.value == 'staff' and purchase_request.requester_id != current_user.id:
+            raise HTTPException(status_code=403, detail="자신이 생성한 구매요청만 수정할 수 있습니다.")
+
+        # 파일 확장자 검증
+        allowed_extensions = ['jpg', 'jpeg', 'png']
+        file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"지원하지 않는 파일 형식입니다. jpg, jpeg, png 파일만 업로드 가능합니다."
+            )
+
+        # 파일 읽기
+        contents = await file.read()
+
+        # 이미지 검증 및 리사이징 (모바일 최적화)
+        try:
+            image = Image.open(io.BytesIO(contents))
+
+            # EXIF 회전 정보 처리
+            try:
+                from PIL import ExifTags
+                for orientation in ExifTags.TAGS.keys():
+                    if ExifTags.TAGS[orientation] == 'Orientation':
+                        break
+                exif = image._getexif()
+                if exif is not None:
+                    orientation_value = exif.get(orientation)
+                    if orientation_value == 3:
+                        image = image.rotate(180, expand=True)
+                    elif orientation_value == 6:
+                        image = image.rotate(270, expand=True)
+                    elif orientation_value == 8:
+                        image = image.rotate(90, expand=True)
+            except (AttributeError, KeyError, IndexError):
+                pass
+
+            # 이미지 리사이징 (최대 1920px 너비)
+            max_width = 1920
+            if image.width > max_width:
+                ratio = max_width / image.width
+                new_height = int(image.height * ratio)
+                image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+                print(f"[RECEIPT-UPLOAD] Resized image from {image.width}x{image.height} to {max_width}x{new_height}")
+
+            # RGB 변환 (PNG 투명도 처리)
+            if image.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                if image.mode == 'P':
+                    image = image.convert('RGBA')
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+
+            # 최적화된 이미지를 바이트로 저장
+            output = io.BytesIO()
+            image.save(output, format='JPEG', quality=85, optimize=True)
+            optimized_contents = output.getvalue()
+
+        except Exception as img_error:
+            print(f"[RECEIPT-UPLOAD] Image processing error: {img_error}")
+            raise HTTPException(status_code=400, detail="유효하지 않은 이미지 파일입니다.")
+
+        # Railway Volume 저장 경로 설정
+        upload_dir = "/app/uploads/receipts"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # 고유 파일명 생성 (UUID + timestamp)
+        file_id = str(uuid.uuid4())
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{timestamp}_{file_id}.jpg"
+        file_path = os.path.join(upload_dir, filename)
+
+        # 파일 저장
+        with open(file_path, "wb") as f:
+            f.write(optimized_contents)
+
+        # 파일 URL 생성 (Railway 배포 URL 기준)
+        file_url = f"/uploads/receipts/{filename}"
+
+        # DB 업데이트
+        purchase_request.receipt_file_url = file_url
+        purchase_request.updated_at = datetime.now()
+
+        await db.commit()
+        await db.refresh(purchase_request)
+
+        print(f"[RECEIPT-UPLOAD] SUCCESS: Saved {filename} for request {request_id}")
+
+        return {
+            "success": True,
+            "fileUrl": file_url,
+            "filename": filename,
+            "message": "영수증이 업로드되었습니다."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[RECEIPT-UPLOAD] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"파일 업로드 중 오류: {str(e)}")
