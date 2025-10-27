@@ -87,7 +87,11 @@ async def get_purchase_requests(
                     query = query.where(PurchaseRequest.status == status_enum)
                 except ValueError:
                     pass  # 잘못된 상태값은 무시
-            
+
+            # 지출 카테고리 필터링
+            if resourceType:
+                query = query.where(PurchaseRequest.resource_type == resourceType)
+
             # 전체 개수 조회
             count_query = select(func.count(PurchaseRequest.id))
             if current_user.role.value == 'staff':
@@ -100,6 +104,8 @@ async def get_purchase_requests(
                     count_query = count_query.where(PurchaseRequest.status == status_enum)
                 except ValueError:
                     pass
+            if resourceType:
+                count_query = count_query.where(PurchaseRequest.resource_type == resourceType)
             
             total_result = await db.execute(count_query)
             total = total_result.scalar()
@@ -121,6 +127,9 @@ async def get_purchase_requests(
                     "amount": req.amount,
                     "quantity": req.quantity,
                     "vendor": req.vendor,
+                    "resourceType": req.resource_type,  # 지출 카테고리
+                    "receiptFileUrl": req.receipt_file_url,  # 영수증 파일 URL
+                    "attachmentUrls": req.attachment_urls,  # 첨부파일 URLs (JSON)
                     "status": req.status.value,
                     "campaign_id": req.campaign_id,
                     "requester_id": req.requester_id,
