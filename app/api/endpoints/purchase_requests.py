@@ -72,13 +72,13 @@ async def get_purchase_requests(
             staff_result = await db.execute(staff_query)
             staff_ids = [row[0] for row in staff_result.all()]
 
-            if staff_ids:
-                query = query.where(
-                    PurchaseRequest.company == current_user.company,
-                    PurchaseRequest.requester_id.in_(staff_ids)
-                )
-            else:
-                query = query.where(PurchaseRequest.id == -1)
+            # 본인이 작성한 것도 포함
+            staff_ids.append(current_user.id)
+
+            query = query.where(
+                PurchaseRequest.company == current_user.company,
+                PurchaseRequest.requester_id.in_(staff_ids)
+            )
         elif user_role == 'AGENCY_ADMIN':
             query = query.where(PurchaseRequest.company == current_user.company)
         # SUPER_ADMIN은 모든 요청 조회 가능
@@ -100,13 +100,11 @@ async def get_purchase_requests(
         if user_role == 'STAFF':
             count_query = count_query.where(PurchaseRequest.requester_id == current_user.id)
         elif user_role == 'TEAM_LEADER':
-            if staff_ids:
-                count_query = count_query.where(
-                    PurchaseRequest.company == current_user.company,
-                    PurchaseRequest.requester_id.in_(staff_ids)
-                )
-            else:
-                count_query = count_query.where(PurchaseRequest.id == -1)
+            # staff_ids에는 이미 current_user.id가 포함되어 있음 (line 76)
+            count_query = count_query.where(
+                PurchaseRequest.company == current_user.company,
+                PurchaseRequest.requester_id.in_(staff_ids)
+            )
         elif user_role == 'AGENCY_ADMIN':
             count_query = count_query.where(PurchaseRequest.company == current_user.company)
 
@@ -186,14 +184,13 @@ async def get_purchase_requests(
                 staff_result = await db.execute(staff_query)
                 staff_ids = [row[0] for row in staff_result.all()]
 
-                if staff_ids:
-                    query = query.where(
-                        PurchaseRequest.company == current_user.company,
-                        PurchaseRequest.requester_id.in_(staff_ids)
-                    )
-                else:
-                    # 팀원이 없으면 빈 결과 반환
-                    query = query.where(PurchaseRequest.id == -1)
+                # 본인이 작성한 것도 포함
+                staff_ids.append(current_user.id)
+
+                query = query.where(
+                    PurchaseRequest.company == current_user.company,
+                    PurchaseRequest.requester_id.in_(staff_ids)
+                )
             elif current_user.role.value == 'AGENCY_ADMIN':
                 # AGENCY_ADMIN은 본인 company의 모든 구매요청 조회 가능 (company 컬럼으로 직접 필터링)
                 query = query.where(PurchaseRequest.company == current_user.company)
@@ -218,14 +215,11 @@ async def get_purchase_requests(
             if current_user.role.value == 'STAFF':
                 count_query = count_query.where(PurchaseRequest.requester_id == current_user.id)
             elif current_user.role.value == 'TEAM_LEADER':
-                # 이미 위에서 staff_ids를 조회했으므로 재사용
-                if staff_ids:
-                    count_query = count_query.where(
-                        PurchaseRequest.company == current_user.company,
-                        PurchaseRequest.requester_id.in_(staff_ids)
-                    )
-                else:
-                    count_query = count_query.where(PurchaseRequest.id == -1)
+                # staff_ids에는 이미 current_user.id가 포함되어 있음 (line 188)
+                count_query = count_query.where(
+                    PurchaseRequest.company == current_user.company,
+                    PurchaseRequest.requester_id.in_(staff_ids)
+                )
             elif current_user.role.value == 'AGENCY_ADMIN':
                 count_query = count_query.where(PurchaseRequest.company == current_user.company)
 
@@ -603,7 +597,7 @@ async def get_purchase_request_stats(
                 # 직원은 자신의 요청만
                 query = query.where(PurchaseRequest.requester_id == current_user.id)
             elif current_user.role.value == 'TEAM_LEADER':
-                # 팀장은 자신의 팀원들 요청만 조회
+                # 팀장은 자신의 팀원들 요청 + 본인 요청 조회
                 staff_query = select(User.id).where(
                     User.team_leader_id == current_user.id,
                     User.company == current_user.company
@@ -611,10 +605,10 @@ async def get_purchase_request_stats(
                 staff_result = await db.execute(staff_query)
                 staff_ids = [row[0] for row in staff_result.all()]
 
-                if staff_ids:
-                    query = query.where(PurchaseRequest.requester_id.in_(staff_ids))
-                else:
-                    query = query.where(PurchaseRequest.id == -1)
+                # 본인이 작성한 것도 포함
+                staff_ids.append(current_user.id)
+
+                query = query.where(PurchaseRequest.requester_id.in_(staff_ids))
             elif current_user.role.value == 'AGENCY_ADMIN':
                 # AGENCY_ADMIN은 본인 company의 모든 요청 (company 컬럼으로 직접 필터링)
                 query = query.where(PurchaseRequest.company == current_user.company)
@@ -644,18 +638,8 @@ async def get_purchase_request_stats(
                 total_amount_query = total_amount_query.where(user_filter)
                 approved_amount_query = approved_amount_query.where(user_filter)
             elif current_user.role.value == 'TEAM_LEADER':
-                # 팀원들의 ID 리스트로 필터링
-                staff_query = select(User.id).where(
-                    User.team_leader_id == current_user.id,
-                    User.company == current_user.company
-                )
-                staff_result = await db.execute(staff_query)
-                staff_ids = [row[0] for row in staff_result.all()]
-
-                if staff_ids:
-                    team_filter = PurchaseRequest.requester_id.in_(staff_ids)
-                else:
-                    team_filter = PurchaseRequest.id == -1
+                # staff_ids는 위에서 이미 조회되었으므로 재사용 (line 609에서 current_user.id 포함됨)
+                team_filter = PurchaseRequest.requester_id.in_(staff_ids)
 
                 total_query = total_query.where(team_filter)
                 pending_query = pending_query.where(team_filter)
