@@ -192,6 +192,7 @@ async def get_purchase_requests(
 
 
 @router.post("/", response_model=PurchaseRequestResponse)
+@router.post("", response_model=PurchaseRequestResponse)  # 슬래시 없는 URL도 허용
 async def create_purchase_request(
     request_data: PurchaseRequestCreate,
     # Node.js API 호환성을 위한 쿼리 파라미터
@@ -253,6 +254,9 @@ async def create_purchase_request(
                 amount=request_data.amount,
                 quantity=request_data.quantity,
                 vendor=request_data.vendor,
+                resource_type=request_data.resource_type,  # 지출 카테고리
+                priority=request_data.priority,  # 우선순위
+                due_date=request_data.due_date,  # 희망 완료일
                 status=RequestStatus.PENDING,
                 campaign_id=request_data.campaign_id,
                 requester_id=current_user.id,
@@ -262,10 +266,10 @@ async def create_purchase_request(
             db.add(new_request)
             await db.commit()
             await db.refresh(new_request)
-            
+
             print(f"[PURCHASE-REQUEST-CREATE-JWT] SUCCESS: Created request {new_request.id} for user {current_user.id}")
             return new_request
-            
+
         except Exception as e:
             print(f"[PURCHASE-REQUEST-CREATE-JWT] Unexpected error: {type(e).__name__}: {e}")
             await db.rollback()

@@ -11,6 +11,14 @@ class PurchaseRequestBase(BaseModel):
     amount: float = Field(..., gt=0)
     quantity: int = Field(default=1, gt=0)
     vendor: Optional[str] = Field(None, max_length=200)
+    resource_type: Optional[str] = Field(None, alias="resourceType")
+    priority: Optional[str] = Field(default="보통")
+    due_date: Optional[datetime] = Field(None, alias="dueDate")
+    approver_comment: Optional[str] = Field(None, alias="approverComment")
+    reject_reason: Optional[str] = Field(None, alias="rejectReason")
+
+    class Config:
+        populate_by_name = True  # alias와 실제 필드명 모두 허용
 
 
 class PurchaseRequestCreate(PurchaseRequestBase):
@@ -25,6 +33,14 @@ class PurchaseRequestUpdate(BaseModel):
     vendor: Optional[str] = Field(None, max_length=200)
     status: Optional[RequestStatus] = None
     campaign_id: Optional[int] = None
+    resource_type: Optional[str] = Field(None, alias="resourceType")
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = Field(None, alias="dueDate")
+    approver_comment: Optional[str] = Field(None, alias="approverComment")
+    reject_reason: Optional[str] = Field(None, alias="rejectReason")
+
+    class Config:
+        populate_by_name = True  # alias와 실제 필드명 모두 허용
 
 
 class PurchaseRequestResponse(PurchaseRequestBase):
