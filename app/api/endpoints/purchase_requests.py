@@ -55,16 +55,110 @@ async def get_purchase_requests(
         
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-        
-        # 임시로 빈 결과 반환 (테이블에 데이터가 없어 SQL 오류 방지)
-        requests = []
-        total = 0
-        
+
+        # JWT 방식과 동일한 조회 로직 적용
+        query = select(PurchaseRequest)
+
+        # 역할별 필터링
+        if user_role == 'CLIENT':
+            raise HTTPException(status_code=403, detail="고객사는 구매요청에 접근할 수 없습니다.")
+        elif user_role == 'STAFF':
+            query = query.where(PurchaseRequest.requester_id == current_user.id)
+        elif user_role == 'TEAM_LEADER':
+            staff_query = select(User.id).where(
+                User.team_leader_id == current_user.id,
+                User.company == current_user.company
+            )
+            staff_result = await db.execute(staff_query)
+            staff_ids = [row[0] for row in staff_result.all()]
+
+            if staff_ids:
+                query = query.where(
+                    PurchaseRequest.company == current_user.company,
+                    PurchaseRequest.requester_id.in_(staff_ids)
+                )
+            else:
+                query = query.where(PurchaseRequest.id == -1)
+        elif user_role == 'AGENCY_ADMIN':
+            query = query.where(PurchaseRequest.company == current_user.company)
+        # SUPER_ADMIN은 모든 요청 조회 가능
+
+        # 상태 필터링
+        if status:
+            try:
+                status_enum = RequestStatus(status)
+                query = query.where(PurchaseRequest.status == status_enum)
+            except ValueError:
+                pass
+
+        # 지출 카테고리 필터링
+        if resourceType:
+            query = query.where(PurchaseRequest.resource_type == resourceType)
+
+        # 전체 개수 조회
+        count_query = select(func.count(PurchaseRequest.id))
+        if user_role == 'STAFF':
+            count_query = count_query.where(PurchaseRequest.requester_id == current_user.id)
+        elif user_role == 'TEAM_LEADER':
+            if staff_ids:
+                count_query = count_query.where(
+                    PurchaseRequest.company == current_user.company,
+                    PurchaseRequest.requester_id.in_(staff_ids)
+                )
+            else:
+                count_query = count_query.where(PurchaseRequest.id == -1)
+        elif user_role == 'AGENCY_ADMIN':
+            count_query = count_query.where(PurchaseRequest.company == current_user.company)
+
+        if status:
+            try:
+                status_enum = RequestStatus(status)
+                count_query = count_query.where(PurchaseRequest.status == status_enum)
+            except ValueError:
+                pass
+        if resourceType:
+            count_query = count_query.where(PurchaseRequest.resource_type == resourceType)
+
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
+
+        # 페이지네이션
+        offset = (page - 1) * limit
+        paginated_query = query.offset(offset).limit(limit).order_by(PurchaseRequest.created_at.desc())
+
+        result = await db.execute(paginated_query)
+        requests = result.scalars().all()
+
+        # 응답 데이터 구성
+        requests_data = []
+        for req in requests:
+            request_data = {
+                "id": req.id,
+                "title": req.title,
+                "description": req.description,
+                "amount": req.amount,
+                "quantity": req.quantity,
+                "vendor": req.vendor,
+                "resourceType": req.resource_type,
+                "priority": req.priority,
+                "dueDate": req.due_date.isoformat() if req.due_date else None,
+                "receiptFileUrl": req.receipt_file_url,
+                "attachmentUrls": req.attachment_urls,
+                "status": req.status.value,
+                "campaign_id": req.campaign_id,
+                "requester_id": req.requester_id,
+                "created_at": req.created_at.isoformat() if req.created_at else None,
+                "updated_at": req.updated_at.isoformat() if req.updated_at else None
+            }
+            requests_data.append(request_data)
+
+        total_pages = (total + limit - 1) // limit
+
         return {
-            "requests": requests,
+            "requests": requests_data,
             "total": total,
             "page": page,
-            "totalPages": (total + limit - 1) // limit
+            "totalPages": total_pages
         }
     else:
         # 기존 API 모드 (JWT 토큰 기반)
