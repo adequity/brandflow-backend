@@ -162,9 +162,15 @@ class FileUploadManager:
             # 파일 해시 계산 (중복 검사용)
             file_hash = hashlib.md5(content).hexdigest()
 
-            # 이미지인 경우 썸네일 생성
+            # 이미지인 경우 리사이징 및 썸네일 생성
             thumbnail_path = None
             if category == 'images' and file_info['extension'] in {'jpg', 'jpeg', 'png', 'webp'}:
+                # 원본 이미지 리사이징 (1920x1920, 품질 85%)
+                resized = await self.resize_image(file_path, max_width=1920, max_height=1920, quality=85)
+                if resized:
+                    logger.info(f"[FILE-UPLOAD] Image resized for optimization")
+
+                # 썸네일 생성
                 thumbnail_path = await self.create_thumbnail(file_path)
                 logger.info(f"[FILE-UPLOAD] Thumbnail created: {thumbnail_path}")
 
@@ -218,16 +224,45 @@ class FileUploadManager:
             'total_failed': len(failed_files)
         }
     
+    async def resize_image(self, image_path: Path, max_width: int = 1920, max_height: int = 1920, quality: int = 85) -> bool:
+        """원본 이미지 리사이징 (영수증 등 큰 이미지 최적화)"""
+        try:
+            with Image.open(image_path) as img:
+                original_size = img.size
+
+                # 이미 충분히 작으면 리사이징 안 함
+                if img.width <= max_width and img.height <= max_height:
+                    logger.info(f"[IMAGE-RESIZE] Image already small enough: {original_size}")
+                    return False
+
+                # 비율 유지하면서 리사이징
+                img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+                # RGBA -> RGB 변환 (JPEG 저장을 위해)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+
+                # 원본 파일 덮어쓰기
+                img.save(image_path, 'JPEG', quality=quality, optimize=True)
+
+                new_size = img.size
+                logger.info(f"[IMAGE-RESIZE] Resized {original_size} -> {new_size}, quality={quality}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to resize image {image_path}: {e}")
+            return False
+
     async def create_thumbnail(self, image_path: Path, size: tuple = (200, 200)) -> Optional[str]:
         """이미지 썸네일 생성"""
         try:
             thumbnail_dir = self.upload_dir / 'images' / 'thumbnails'
             await aiofiles.os.makedirs(thumbnail_dir, exist_ok=True)
-            
+
             # 썸네일 파일명
             thumbnail_filename = f"thumb_{image_path.stem}.jpg"
             thumbnail_path = thumbnail_dir / thumbnail_filename
-            
+
             # PIL로 썸네일 생성 (동기 작업)
             with Image.open(image_path) as img:
                 img.thumbnail(size, Image.Resampling.LANCZOS)
@@ -235,9 +270,9 @@ class FileUploadManager:
                 if img.mode in ('RGBA', 'P'):
                     img = img.convert('RGB')
                 img.save(thumbnail_path, 'JPEG', quality=85)
-            
+
             return f"images/thumbnails/{thumbnail_filename}"
-            
+
         except Exception as e:
             logger.error(f"Failed to create thumbnail for {image_path}: {e}")
             return None
