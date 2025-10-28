@@ -751,3 +751,326 @@ async def upload_receipt(
         print(f"[RECEIPT-UPLOAD] Unexpected error: {type(e).__name__}: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"파일 업로드 중 오류: {str(e)}")
+
+
+@router.delete("/{request_id}")
+async def delete_purchase_request(
+    request_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """구매요청 삭제"""
+    # JWT 기반 또는 Node.js API 호환 모드
+    if viewerId is not None:
+        user_id = viewerId
+        user_role = unquote(viewerRole).strip() if viewerRole else None
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # 사용자 조회
+        user_query = select(User).where(User.id == user_id)
+        result = await db.execute(user_query)
+        current_user = result.scalar_one_or_none()
+
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    else:
+        current_user = jwt_user
+
+    print(f"[PURCHASE-REQUEST-DELETE] Request from user_id={current_user.id}, user_role={current_user.role}")
+
+    try:
+        # 구매요청 찾기
+        request_query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(request_query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인
+        if current_user.role.value == 'CLIENT':
+            raise HTTPException(status_code=403, detail="고객사는 구매요청에 접근할 수 없습니다.")
+        elif current_user.role.value == 'STAFF':
+            # STAFF는 자신이 생성한 구매요청만 삭제 가능
+            if purchase_request.requester_id != current_user.id:
+                raise HTTPException(status_code=403, detail="자신이 생성한 구매요청만 삭제할 수 있습니다.")
+        elif current_user.role.value == 'TEAM_LEADER':
+            # TEAM_LEADER는 조회만 가능, 수정/삭제 불가능
+            raise HTTPException(status_code=403, detail="팀장은 구매요청을 조회만 가능하며 삭제할 수 없습니다.")
+        elif current_user.role.value == 'AGENCY_ADMIN':
+            # AGENCY_ADMIN은 본인 company의 모든 구매요청 삭제 가능
+            if purchase_request.company != current_user.company:
+                raise HTTPException(status_code=403, detail="본인 회사의 구매요청만 삭제할 수 있습니다.")
+        # SUPER_ADMIN은 모든 요청 삭제 가능
+
+        # 영수증 파일이 있으면 삭제
+        if purchase_request.receipt_file_url:
+            try:
+                file_path = f"/app{purchase_request.receipt_file_url}"
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"[PURCHASE-REQUEST-DELETE] Deleted receipt file: {file_path}")
+            except Exception as file_error:
+                print(f"[PURCHASE-REQUEST-DELETE] Failed to delete receipt file: {file_error}")
+                # 파일 삭제 실패는 무시하고 계속 진행
+
+        # DB에서 삭제
+        await db.delete(purchase_request)
+        await db.commit()
+
+        print(f"[PURCHASE-REQUEST-DELETE] SUCCESS: Deleted request {request_id} by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "구매요청이 삭제되었습니다.",
+            "deletedId": request_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PURCHASE-REQUEST-DELETE] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"구매요청 삭제 중 오류: {str(e)}")
+
+
+@router.put("/{request_id}/approve")
+async def approve_purchase_request(
+    request_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """구매요청 승인"""
+    # JWT 기반 또는 Node.js API 호환 모드
+    if viewerId is not None:
+        user_id = viewerId
+        user_role = unquote(viewerRole).strip() if viewerRole else None
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # 사용자 조회
+        user_query = select(User).where(User.id == user_id)
+        result = await db.execute(user_query)
+        current_user = result.scalar_one_or_none()
+
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    else:
+        current_user = jwt_user
+
+    print(f"[PURCHASE-REQUEST-APPROVE] Request from user_id={current_user.id}, user_role={current_user.role}")
+
+    try:
+        # 구매요청 찾기
+        request_query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(request_query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인 - AGENCY_ADMIN과 SUPER_ADMIN만 승인 가능
+        if current_user.role.value not in ['AGENCY_ADMIN', 'SUPER_ADMIN']:
+            raise HTTPException(status_code=403, detail="구매요청 승인은 대행사 어드민 또는 슈퍼 어드민만 가능합니다.")
+
+        if current_user.role.value == 'AGENCY_ADMIN':
+            # AGENCY_ADMIN은 본인 company의 구매요청만 승인 가능
+            if purchase_request.company != current_user.company:
+                raise HTTPException(status_code=403, detail="본인 회사의 구매요청만 승인할 수 있습니다.")
+
+        # 상태 업데이트
+        old_status = purchase_request.status
+        purchase_request.status = RequestStatus.APPROVED
+
+        await db.commit()
+        await db.refresh(purchase_request)
+
+        # WebSocket 알림
+        await manager.notify_purchase_request(
+            request_id=purchase_request.id,
+            status=purchase_request.status,
+            user_id=purchase_request.requester_id
+        )
+
+        print(f"[PURCHASE-REQUEST-APPROVE] SUCCESS: Approved request {request_id} by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "구매요청이 승인되었습니다.",
+            "request": {
+                "id": purchase_request.id,
+                "title": purchase_request.title,
+                "status": purchase_request.status.value,
+                "previousStatus": old_status.value
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PURCHASE-REQUEST-APPROVE] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"구매요청 승인 중 오류: {str(e)}")
+
+
+@router.put("/{request_id}/reject")
+async def reject_purchase_request(
+    request_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """구매요청 반려"""
+    # JWT 기반 또는 Node.js API 호환 모드
+    if viewerId is not None:
+        user_id = viewerId
+        user_role = unquote(viewerRole).strip() if viewerRole else None
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # 사용자 조회
+        user_query = select(User).where(User.id == user_id)
+        result = await db.execute(user_query)
+        current_user = result.scalar_one_or_none()
+
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    else:
+        current_user = jwt_user
+
+    print(f"[PURCHASE-REQUEST-REJECT] Request from user_id={current_user.id}, user_role={current_user.role}")
+
+    try:
+        # 구매요청 찾기
+        request_query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(request_query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인 - AGENCY_ADMIN과 SUPER_ADMIN만 반려 가능
+        if current_user.role.value not in ['AGENCY_ADMIN', 'SUPER_ADMIN']:
+            raise HTTPException(status_code=403, detail="구매요청 반려는 대행사 어드민 또는 슈퍼 어드민만 가능합니다.")
+
+        if current_user.role.value == 'AGENCY_ADMIN':
+            # AGENCY_ADMIN은 본인 company의 구매요청만 반려 가능
+            if purchase_request.company != current_user.company:
+                raise HTTPException(status_code=403, detail="본인 회사의 구매요청만 반려할 수 있습니다.")
+
+        # 상태 업데이트
+        old_status = purchase_request.status
+        purchase_request.status = RequestStatus.REJECTED
+
+        await db.commit()
+        await db.refresh(purchase_request)
+
+        # WebSocket 알림
+        await manager.notify_purchase_request(
+            request_id=purchase_request.id,
+            status=purchase_request.status,
+            user_id=purchase_request.requester_id
+        )
+
+        print(f"[PURCHASE-REQUEST-REJECT] SUCCESS: Rejected request {request_id} by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "구매요청이 반려되었습니다.",
+            "request": {
+                "id": purchase_request.id,
+                "title": purchase_request.title,
+                "status": purchase_request.status.value,
+                "previousStatus": old_status.value
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PURCHASE-REQUEST-REJECT] Unexpected error: {type(e).__name__}: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"구매요청 반려 중 오류: {str(e)}")
+
+
+@router.post("/{request_id}/generate-documents")
+async def generate_purchase_request_documents(
+    request_id: int,
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """구매요청 문서 생성 (견적서, 거래명세서 등)"""
+    # JWT 기반 또는 Node.js API 호환 모드
+    if viewerId is not None:
+        user_id = viewerId
+        user_role = unquote(viewerRole).strip() if viewerRole else None
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # 사용자 조회
+        user_query = select(User).where(User.id == user_id)
+        result = await db.execute(user_query)
+        current_user = result.scalar_one_or_none()
+
+        if not current_user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    else:
+        current_user = jwt_user
+
+    print(f"[PURCHASE-REQUEST-GENERATE-DOCS] Request from user_id={current_user.id}, user_role={current_user.role}")
+
+    try:
+        # 구매요청 찾기
+        request_query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(request_query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인
+        if current_user.role.value == 'CLIENT':
+            raise HTTPException(status_code=403, detail="고객사는 구매요청 문서를 생성할 수 없습니다.")
+        elif current_user.role.value == 'STAFF':
+            if purchase_request.requester_id != current_user.id:
+                raise HTTPException(status_code=403, detail="자신이 생성한 구매요청의 문서만 생성할 수 있습니다.")
+        elif current_user.role.value == 'TEAM_LEADER':
+            raise HTTPException(status_code=403, detail="팀장은 구매요청 문서 생성 권한이 없습니다.")
+        elif current_user.role.value == 'AGENCY_ADMIN':
+            if purchase_request.company != current_user.company:
+                raise HTTPException(status_code=403, detail="본인 회사의 구매요청 문서만 생성할 수 있습니다.")
+
+        # TODO: 실제 문서 생성 로직 구현
+        # 현재는 플레이스홀더로 성공 응답만 반환
+        print(f"[PURCHASE-REQUEST-GENERATE-DOCS] SUCCESS: Document generation requested for request {request_id}")
+
+        return {
+            "success": True,
+            "message": "문서 생성 기능은 현재 개발 중입니다.",
+            "files": {
+                "pdf": None,
+                "jpg": None
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[PURCHASE-REQUEST-GENERATE-DOCS] Unexpected error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"문서 생성 중 오류: {str(e)}")
