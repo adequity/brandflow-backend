@@ -451,11 +451,159 @@ class ExportService:
             })
             raise
     
+    async def generate_purchase_request_document(
+        self,
+        purchase_request: PurchaseRequest,
+        requester: User,
+        approver: User
+    ) -> str:
+        """구매요청 지출품의서 PDF 생성"""
+        try:
+            # 파일명 생성
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"purchase_request_{purchase_request.id}_{timestamp}.pdf"
+            filepath = self.export_dir / filename
+
+            # PDF 문서 생성
+            doc = SimpleDocTemplate(str(filepath), pagesize=A4)
+            story = []
+
+            # 제목
+            title = Paragraph("지출품의서", self.title_style)
+            story.append(title)
+            story.append(Spacer(1, 20))
+
+            # 문서 번호 및 생성 정보
+            doc_info = Paragraph(
+                f"문서번호: PR-{purchase_request.id:05d}<br/>"
+                f"생성일시: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M:%S')}",
+                self.styles['Normal']
+            )
+            story.append(doc_info)
+            story.append(Spacer(1, 30))
+
+            # 기본 정보
+            basic_info_heading = Paragraph("기본 정보", self.heading_style)
+            story.append(basic_info_heading)
+
+            basic_info_data = [
+                ['구분', '내용'],
+                ['제목', purchase_request.title],
+                ['설명', purchase_request.description or '-'],
+                ['요청자', requester.name if requester else '-'],
+                ['요청자 이메일', requester.email if requester else '-'],
+                ['승인자', approver.name if approver else '-'],
+                ['승인일시', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+                ['상태', '승인됨']
+            ]
+
+            basic_info_table = Table(basic_info_data, colWidths=[2*inch, 4*inch])
+            basic_info_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+
+            story.append(basic_info_table)
+            story.append(Spacer(1, 30))
+
+            # 지출 상세 정보
+            expense_heading = Paragraph("지출 상세", self.heading_style)
+            story.append(expense_heading)
+
+            expense_data = [
+                ['항목', '내용'],
+                ['지출 카테고리', purchase_request.resource_type or '-'],
+                ['공급업체', purchase_request.vendor or '-'],
+                ['수량', str(purchase_request.quantity) if purchase_request.quantity else '-'],
+                ['금액', f"{purchase_request.amount:,.0f}원" if purchase_request.amount else '-'],
+                ['우선순위', purchase_request.priority or '-'],
+                ['희망 완료일', purchase_request.due_date.strftime('%Y-%m-%d') if purchase_request.due_date else '-']
+            ]
+
+            expense_table = Table(expense_data, colWidths=[2*inch, 4*inch])
+            expense_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+
+            story.append(expense_table)
+            story.append(Spacer(1, 30))
+
+            # 총액 표시
+            if purchase_request.amount:
+                total_amount = Paragraph(
+                    f"<b>총 지출 금액: {purchase_request.amount:,.0f}원</b>",
+                    self.heading_style
+                )
+                story.append(total_amount)
+                story.append(Spacer(1, 20))
+
+            # 승인자 코멘트 (있는 경우)
+            if purchase_request.approver_comment:
+                comment_heading = Paragraph("승인자 의견", self.heading_style)
+                story.append(comment_heading)
+
+                comment_para = Paragraph(purchase_request.approver_comment, self.styles['Normal'])
+                story.append(comment_para)
+                story.append(Spacer(1, 30))
+
+            # 서명란
+            signature_heading = Paragraph("서명", self.heading_style)
+            story.append(signature_heading)
+
+            signature_data = [
+                ['요청자', '승인자'],
+                [f"{requester.name}\n_____________", f"{approver.name}\n_____________"]
+            ]
+
+            signature_table = Table(signature_data, colWidths=[3*inch, 3*inch])
+            signature_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 20),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
+            ]))
+
+            story.append(signature_table)
+            story.append(Spacer(1, 30))
+
+            # 문서 하단 정보
+            footer_text = Paragraph(
+                "본 문서는 BrandFlow 시스템에서 자동 생성되었습니다.",
+                self.styles['Italic']
+            )
+            story.append(footer_text)
+
+            # PDF 빌드
+            doc.build(story)
+
+            logger.info(f"Purchase request document generated: {filename}")
+
+            return str(filepath)
+
+        except Exception as e:
+            logger.error(f"Purchase request document generation failed: {e}")
+            raise
+
     async def cleanup_old_exports(self, days: int = 7):
         """오래된 내보내기 파일 정리"""
         cutoff_time = datetime.now().timestamp() - (days * 24 * 60 * 60)
         deleted_count = 0
-        
+
         for file_path in self.export_dir.rglob('*'):
             if file_path.is_file():
                 try:
@@ -464,7 +612,7 @@ class ExportService:
                         deleted_count += 1
                 except Exception as e:
                     logger.error(f"Failed to delete old export file {file_path}: {e}")
-        
+
         logger.info(f"Cleaned up {deleted_count} old export files")
         return deleted_count
 

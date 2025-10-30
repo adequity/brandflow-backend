@@ -937,6 +937,31 @@ async def serve_uploaded_file(category: str, filename: str):
     return FileResponse(file_path)
 
 
+@app.get("/exports/{filename}")
+async def serve_export_file(filename: str):
+    """내보내기 파일 직접 서빙 (PDF 등)"""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    export_dir = Path("./exports")
+    file_path = export_dir / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+
+    # 보안: 경로 탐색 방지
+    if not str(file_path.resolve()).startswith(str(export_dir.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # PDF 파일인 경우 적절한 Content-Type 설정
+    media_type = "application/pdf" if filename.endswith('.pdf') else "application/octet-stream"
+
+    return FileResponse(file_path, media_type=media_type, filename=filename)
+
+
 @app.get("/debug/uploads")
 async def debug_uploads():
     """업로드 디렉토리 상태 확인 및 테스트"""
