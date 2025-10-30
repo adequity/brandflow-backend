@@ -292,26 +292,40 @@ async def create_purchase_request(
     jwt_user: User = Depends(get_current_active_user)
 ):
     """새 구매요청 생성"""
+    # 🔍 프론트엔드에서 보낸 데이터 로그
+    print(f"[PURCHASE-REQUEST-CREATE] Received data:")
+    print(f"  - title: {request_data.title}")
+    print(f"  - description: {request_data.description}")
+    print(f"  - amount: {request_data.amount}")
+    print(f"  - quantity: {request_data.quantity}")
+    print(f"  - vendor: {request_data.vendor}")
+    print(f"  - resource_type: {request_data.resource_type}")
+    print(f"  - priority: {request_data.priority}")
+    print(f"  - due_date: {request_data.due_date}")
+    print(f"  - campaign_id: {request_data.campaign_id}")
+
     # Node.js API 호환 모드인지 확인
     if viewerId is not None or adminId is not None:
         # Node.js API 호환 모드
         user_id = viewerId or adminId
         user_role = viewerRole or adminRole
-        
+
         if not user_id or not user_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
+
         # URL 디코딩
         user_role = unquote(user_role).strip()
-        
+
         # 요청자 정보 확인
         requester_query = select(User).where(User.id == user_id)
         result = await db.execute(requester_query)
         requester = result.scalar_one_or_none()
-        
+
         if not requester:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-        
+
+        print(f"[PURCHASE-REQUEST-CREATE] Node.js API mode - user_id={user_id}, company={requester.company}")
+
         # 새 구매요청 생성
         new_request = PurchaseRequest(
             title=request_data.title,
