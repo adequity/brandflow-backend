@@ -127,9 +127,14 @@ async def get_purchase_requests(
         result = await db.execute(paginated_query)
         requests = result.scalars().all()
 
-        # 응답 데이터 구성
+        # 응답 데이터 구성 (requester 정보 포함)
         requests_data = []
         for req in requests:
+            # requester 정보 조회
+            requester_query = select(User).where(User.id == req.requester_id)
+            requester_result = await db.execute(requester_query)
+            requester = requester_result.scalar_one_or_none()
+
             request_data = {
                 "id": req.id,
                 "title": req.title,
@@ -145,6 +150,11 @@ async def get_purchase_requests(
                 "status": req.status.value,
                 "campaign_id": req.campaign_id,
                 "requester_id": req.requester_id,
+                "requester": {
+                    "id": requester.id,
+                    "name": requester.name,
+                    "email": requester.email
+                } if requester else None,
                 "created_at": req.created_at.isoformat() if req.created_at else None,
                 "updated_at": req.updated_at.isoformat() if req.updated_at else None
             }
