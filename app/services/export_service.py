@@ -540,21 +540,18 @@ class ExportService:
             story.append(basic_info_table)
             story.append(Spacer(1, 15))
 
-            # 지출 상세 정보
+            # 지출 상세 정보 (4열 레이아웃: 구분|내용|구분|내용)
             expense_heading = Paragraph("지출 상세", self.heading_style)
             story.append(expense_heading)
 
             expense_data = [
-                ['항목', '내용'],
-                ['지출 카테고리', purchase_request.resource_type or '-'],
-                ['공급업체', purchase_request.vendor or '-'],
-                ['수량', str(purchase_request.quantity) if purchase_request.quantity else '-'],
-                ['금액', f"{purchase_request.amount:,.0f}원" if purchase_request.amount else '-'],
-                ['우선순위', purchase_request.priority or '-'],
-                ['희망 완료일', purchase_request.due_date.strftime('%Y-%m-%d') if purchase_request.due_date else '-']
+                ['항목', '내용', '항목', '내용'],
+                ['지출 카테고리', purchase_request.resource_type or '-', '공급업체', purchase_request.vendor or '-'],
+                ['수량', str(purchase_request.quantity) if purchase_request.quantity else '-', '금액', f"{purchase_request.amount:,.0f}원" if purchase_request.amount else '-'],
+                ['우선순위', purchase_request.priority or '-', '희망 완료일', purchase_request.due_date.strftime('%Y-%m-%d') if purchase_request.due_date else '-']
             ]
 
-            expense_table = Table(expense_data, colWidths=[2*inch, 3.5*inch])
+            expense_table = Table(expense_data, colWidths=[1*inch, 2*inch, 1.2*inch, 1.8*inch])
             expense_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.black),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
