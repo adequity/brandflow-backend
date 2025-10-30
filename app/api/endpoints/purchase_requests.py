@@ -1094,32 +1094,12 @@ async def approve_purchase_request(
             if purchase_request.company != current_user.company:
                 raise HTTPException(status_code=403, detail="본인 회사의 구매요청만 승인할 수 있습니다.")
 
-        # 요청자 정보 조회 (문서 생성용)
-        requester_query = select(User).where(User.id == purchase_request.requester_id)
-        requester_result = await db.execute(requester_query)
-        requester = requester_result.scalar_one_or_none()
-
         # 상태 업데이트
         old_status = purchase_request.status
         purchase_request.status = RequestStatus.APPROVED
 
         await db.commit()
         await db.refresh(purchase_request)
-
-        # 지출품의서 PDF 자동 생성
-        document_url = None
-        try:
-            document_path = await export_service.generate_purchase_request_document(
-                purchase_request=purchase_request,
-                requester=requester,
-                approver=current_user
-            )
-            # 상대 경로로 변환 (예: ./exports/purchase_request_1_20250130_123456.pdf -> /exports/purchase_request_1_20250130_123456.pdf)
-            document_url = document_path.replace('./exports', '/exports')
-            print(f"[PURCHASE-REQUEST-APPROVE] Document generated: {document_url}")
-        except Exception as doc_error:
-            # 문서 생성 실패는 로그만 남기고 승인 프로세스는 계속 진행
-            print(f"[PURCHASE-REQUEST-APPROVE] Document generation failed: {doc_error}")
 
         # WebSocket 알림
         await manager.notify_purchase_request(
@@ -1133,7 +1113,6 @@ async def approve_purchase_request(
         return {
             "success": True,
             "message": "구매요청이 승인되었습니다.",
-            "documentUrl": document_url,
             "request": {
                 "id": purchase_request.id,
                 "title": purchase_request.title,
