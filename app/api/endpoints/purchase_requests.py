@@ -1284,16 +1284,37 @@ async def generate_purchase_request_documents(
             if purchase_request.company != current_user.company:
                 raise HTTPException(status_code=403, detail="본인 회사의 구매요청 문서만 생성할 수 있습니다.")
 
-        # TODO: 실제 문서 생성 로직 구현
-        # 현재는 플레이스홀더로 성공 응답만 반환
-        print(f"[PURCHASE-REQUEST-GENERATE-DOCS] SUCCESS: Document generation requested for request {request_id}")
+        # 승인된 구매요청만 문서 생성 가능
+        if purchase_request.status != RequestStatus.APPROVED:
+            raise HTTPException(status_code=400, detail="승인된 구매요청만 문서를 생성할 수 있습니다.")
+
+        # 요청자 정보 조회
+        requester_query = select(User).where(User.id == purchase_request.requester_id)
+        requester_result = await db.execute(requester_query)
+        requester = requester_result.scalar_one_or_none()
+
+        # 지출품의서 PDF 생성
+        document_url = None
+        try:
+            document_path = await export_service.generate_purchase_request_document(
+                purchase_request=purchase_request,
+                requester=requester,
+                approver=current_user  # 현재 문서 생성을 요청한 사용자
+            )
+            # 상대 경로로 변환
+            document_url = document_path.replace('./exports', '/exports')
+            print(f"[PURCHASE-REQUEST-GENERATE-DOCS] SUCCESS: Document generated at {document_url}")
+        except Exception as doc_error:
+            print(f"[PURCHASE-REQUEST-GENERATE-DOCS] Document generation failed: {doc_error}")
+            raise HTTPException(status_code=500, detail=f"문서 생성 중 오류: {str(doc_error)}")
 
         return {
             "success": True,
-            "message": "문서 생성 기능은 현재 개발 중입니다.",
+            "message": "지출품의서가 생성되었습니다.",
+            "documentUrl": document_url,
             "files": {
-                "pdf": None,
-                "jpg": None
+                "pdf": document_url,
+                "jpg": None  # JPG는 현재 미지원
             }
         }
 
