@@ -509,22 +509,19 @@ class ExportService:
             story.append(doc_info)
             story.append(Spacer(1, 15))
 
-            # 기본 정보
+            # 기본 정보 (4열 레이아웃: 구분|내용|구분|내용)
             basic_info_heading = Paragraph("기본 정보", self.heading_style)
             story.append(basic_info_heading)
 
             basic_info_data = [
-                ['구분', '내용'],
-                ['제목', purchase_request.title],
-                ['설명', purchase_request.description or '-'],
-                ['요청자', requester.name if requester else '-'],
-                ['요청자 이메일', requester.email if requester else '-'],
-                ['승인자', approver.name if approver else '-'],
-                ['승인일시', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
-                ['상태', '승인됨']
+                ['구분', '내용', '구분', '내용'],
+                ['제목', purchase_request.title, '설명', purchase_request.description or '-'],
+                ['요청자', requester.name if requester else '-', '요청자 이메일', requester.email if requester else '-'],
+                ['승인자', approver.name if approver else '-', '승인일시', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+                ['상태', '승인됨', '', '']
             ]
 
-            basic_info_table = Table(basic_info_data, colWidths=[2*inch, 3.5*inch])
+            basic_info_table = Table(basic_info_data, colWidths=[1*inch, 2*inch, 1.2*inch, 1.8*inch])
             basic_info_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.black),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
