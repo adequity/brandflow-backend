@@ -54,8 +54,8 @@ class ExportService:
         self.title_style = ParagraphStyle(
             'CustomTitle',
             parent=self.styles['Heading1'],
-            fontSize=28,
-            spaceAfter=30,
+            fontSize=22,
+            spaceAfter=15,
             textColor=colors.black,
             fontName=self.korean_font,
             alignment=1  # 중앙 정렬 (0=왼쪽, 1=중앙, 2=오른쪽)
@@ -64,9 +64,9 @@ class ExportService:
         self.heading_style = ParagraphStyle(
             'CustomHeading',
             parent=self.styles['Heading2'],
-            fontSize=14,
-            spaceBefore=25,
-            spaceAfter=15,
+            fontSize=12,
+            spaceBefore=12,
+            spaceAfter=8,
             textColor=colors.black,
             fontName=self.korean_font,
             alignment=1  # 중앙 정렬
@@ -75,7 +75,7 @@ class ExportService:
         self.normal_style = ParagraphStyle(
             'CustomNormal',
             parent=self.styles['Normal'],
-            fontSize=10,
+            fontSize=9,
             fontName=self.korean_font,
             alignment=1  # 중앙 정렬
         )
@@ -498,7 +498,7 @@ class ExportService:
             # 제목
             title = Paragraph("지출품의서", self.title_style)
             story.append(title)
-            story.append(Spacer(1, 20))
+            story.append(Spacer(1, 10))
 
             # 문서 번호 및 생성 정보
             doc_info = Paragraph(
@@ -507,7 +507,7 @@ class ExportService:
                 self.normal_style
             )
             story.append(doc_info)
-            story.append(Spacer(1, 30))
+            story.append(Spacer(1, 15))
 
             # 기본 정보
             basic_info_heading = Paragraph("기본 정보", self.heading_style)
@@ -524,16 +524,16 @@ class ExportService:
                 ['상태', '승인됨']
             ]
 
-            basic_info_table = Table(basic_info_data, colWidths=[2.5*inch, 3.5*inch])
+            basic_info_table = Table(basic_info_data, colWidths=[2*inch, 3.5*inch])
             basic_info_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.black),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
-                ('FONTSIZE', (0, 0), (-1, 0), 11),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
                 ('GRID', (0, 0), (-1, -1), 1.5, colors.black),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -541,7 +541,7 @@ class ExportService:
             ]))
 
             story.append(basic_info_table)
-            story.append(Spacer(1, 30))
+            story.append(Spacer(1, 15))
 
             # 지출 상세 정보
             expense_heading = Paragraph("지출 상세", self.heading_style)
@@ -557,16 +557,16 @@ class ExportService:
                 ['희망 완료일', purchase_request.due_date.strftime('%Y-%m-%d') if purchase_request.due_date else '-']
             ]
 
-            expense_table = Table(expense_data, colWidths=[2.5*inch, 3.5*inch])
+            expense_table = Table(expense_data, colWidths=[2*inch, 3.5*inch])
             expense_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.black),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
-                ('FONTSIZE', (0, 0), (-1, 0), 11),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
                 ('GRID', (0, 0), (-1, -1), 1.5, colors.black),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -574,27 +574,27 @@ class ExportService:
             ]))
 
             story.append(expense_table)
-            story.append(Spacer(1, 30))
+            story.append(Spacer(1, 15))
 
             # 총액 표시 (블랙 박스)
             if purchase_request.amount:
                 total_data = [
                     ['총 지출 금액', f"{purchase_request.amount:,.0f}원"]
                 ]
-                total_table = Table(total_data, colWidths=[2.5*inch, 3.5*inch])
+                total_table = Table(total_data, colWidths=[2*inch, 3.5*inch])
                 total_table.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, -1), colors.black),
                     ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
-                    ('FONTSIZE', (0, 0), (-1, -1), 14),
-                    ('TOPPADDING', (0, 0), (-1, -1), 15),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+                    ('FONTSIZE', (0, 0), (-1, -1), 12),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
                     ('GRID', (0, 0), (-1, -1), 2, colors.black),
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ]))
                 story.append(total_table)
-                story.append(Spacer(1, 30))
+                story.append(Spacer(1, 15))
 
             # 승인자 코멘트 (있는 경우)
             if purchase_request.approver_comment:
@@ -603,7 +603,7 @@ class ExportService:
 
                 comment_para = Paragraph(purchase_request.approver_comment, self.normal_style)
                 story.append(comment_para)
-                story.append(Spacer(1, 30))
+                story.append(Spacer(1, 12))
 
             # 서명란
             signature_heading = Paragraph("서명", self.heading_style)
@@ -614,21 +614,21 @@ class ExportService:
                 [f"{requester.name}\n_____________", f"{approver.name}\n_____________"]
             ]
 
-            signature_table = Table(signature_data, colWidths=[3*inch, 3*inch])
+            signature_table = Table(signature_data, colWidths=[2.75*inch, 2.75*inch])
             signature_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
-                ('FONTSIZE', (0, 0), (1, 0), 11),
-                ('FONTSIZE', (0, 1), (1, 1), 10),
-                ('TOPPADDING', (0, 0), (-1, -1), 20),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
+                ('FONTSIZE', (0, 0), (1, 0), 10),
+                ('FONTSIZE', (0, 1), (1, 1), 9),
+                ('TOPPADDING', (0, 0), (-1, -1), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
                 ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
                 ('GRID', (0, 0), (1, 0), 1.5, colors.black),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ]))
 
             story.append(signature_table)
-            story.append(Spacer(1, 30))
+            story.append(Spacer(1, 15))
 
             # 문서 하단 정보
             footer_style = ParagraphStyle(
