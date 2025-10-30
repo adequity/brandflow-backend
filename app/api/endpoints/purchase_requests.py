@@ -426,9 +426,9 @@ async def update_purchase_request(
             raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
         
         # 권한 확인 - 대행사 어드민/직원만 상태 변경 가능
-        is_agency_admin = user_role == '대행사 어드민'
-        is_staff = user_role == '직원'
-        
+        is_agency_admin = user_role in ['AGENCY_ADMIN', '대행사 어드민']
+        is_staff = user_role in ['STAFF', '직원']
+
         if not is_agency_admin and not is_staff:
             raise HTTPException(status_code=403, detail="권한이 없습니다. 대행사 어드민 또는 직원만 구매요청 상태를 변경할 수 있습니다.")
         
