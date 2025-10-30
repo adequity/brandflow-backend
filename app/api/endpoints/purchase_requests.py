@@ -319,9 +319,13 @@ async def create_purchase_request(
             amount=request_data.amount,
             quantity=request_data.quantity,
             vendor=request_data.vendor,
+            resource_type=request_data.resource_type,  # 지출 카테고리
+            priority=request_data.priority,  # 우선순위
+            due_date=request_data.due_date,  # 희망 완료일
             status=RequestStatus.PENDING,
             campaign_id=request_data.campaign_id,
-            requester_id=user_id
+            requester_id=user_id,
+            company=requester.company  # ✅ 요청자의 company 자동 복사
         )
         
         db.add(new_request)
