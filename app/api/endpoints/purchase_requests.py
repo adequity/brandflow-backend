@@ -729,15 +729,111 @@ async def get_purchase_request_stats(
             raise HTTPException(status_code=500, detail=f"통계 조회 중 오류: {str(e)}")
 
 
+@router.post("/{request_id}/receipt")
+async def upload_receipt_new(
+    request_id: int,
+    receipt: UploadFile = File(...),
+    # Node.js API 호환성을 위한 쿼리 파라미터
+    viewerId: Optional[int] = Query(None, alias="viewerId"),
+    viewerRole: Optional[str] = Query(None, alias="viewerRole"),
+    db: AsyncSession = Depends(get_async_db),
+    jwt_user: User = Depends(get_current_active_user)
+):
+    """구매요청 영수증 첨부 (로고 방식과 동일)"""
+    from app.core.file_upload import file_manager
+
+    # Node.js API 호환 모드인지 확인
+    if viewerId is not None:
+        user_id = viewerId
+        user_role = viewerRole
+
+        if not user_id or not user_role:
+            raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
+
+        # URL 디코딩
+        user_role = unquote(user_role).strip()
+
+        print(f"[RECEIPT-UPLOAD] Node.js mode - user_id={user_id}, role={user_role}, filename={receipt.filename}")
+
+        # 구매요청 찾기
+        query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인
+        is_agency_admin = user_role in ['AGENCY_ADMIN', '대행사 어드민']
+        is_staff = user_role in ['STAFF', '직원']
+        is_requester = purchase_request.requester_id == user_id
+
+        if not (is_agency_admin or (is_staff and is_requester)):
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+
+        # 파일 업로드 (file_manager 사용)
+        file_result = await file_manager.save_file(receipt)
+        receipt_url = file_result["url"]
+
+        # 영수증 URL 업데이트
+        purchase_request.receipt_file_url = receipt_url
+        await db.commit()
+        await db.refresh(purchase_request)
+
+        print(f"[RECEIPT-UPLOAD] SUCCESS: Saved receipt for request {request_id}, URL: {receipt_url}")
+
+        return {
+            "success": True,
+            "fileUrl": receipt_url,
+            "message": "영수증이 업로드되었습니다."
+        }
+    else:
+        # JWT 토큰 기반
+        current_user = jwt_user
+        print(f"[RECEIPT-UPLOAD] JWT mode - user_id={current_user.id}, filename={receipt.filename}")
+
+        # 구매요청 찾기
+        query = select(PurchaseRequest).where(PurchaseRequest.id == request_id)
+        result = await db.execute(query)
+        purchase_request = result.scalar_one_or_none()
+
+        if not purchase_request:
+            raise HTTPException(status_code=404, detail="구매요청을 찾을 수 없습니다.")
+
+        # 권한 확인
+        is_agency_admin = current_user.role.value == 'AGENCY_ADMIN'
+        is_requester = purchase_request.requester_id == current_user.id
+
+        if not (is_agency_admin or is_requester):
+            raise HTTPException(status_code=403, detail="권한이 없습니다.")
+
+        # 파일 업로드 (file_manager 사용)
+        file_result = await file_manager.save_file(receipt)
+        receipt_url = file_result["url"]
+
+        # 영수증 URL 업데이트
+        purchase_request.receipt_file_url = receipt_url
+        await db.commit()
+        await db.refresh(purchase_request)
+
+        print(f"[RECEIPT-UPLOAD] SUCCESS: Saved receipt for request {request_id}, URL: {receipt_url}")
+
+        return {
+            "success": True,
+            "fileUrl": receipt_url,
+            "message": "영수증이 업로드되었습니다."
+        }
+
+
 @router.post("/{request_id}/upload-receipt")
-async def upload_receipt(
+async def upload_receipt_legacy(
     request_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """영수증 파일 업로드 (jpg, jpeg, png만 허용)"""
-    print(f"[RECEIPT-UPLOAD] Request from user_id={current_user.id}, request_id={request_id}, filename={file.filename}")
+    """영수증 파일 업로드 (구버전 - 호환성 유지용)"""
+    print(f"[RECEIPT-UPLOAD-LEGACY] Request from user_id={current_user.id}, request_id={request_id}, filename={file.filename}")
 
     try:
         # 구매요청 찾기
