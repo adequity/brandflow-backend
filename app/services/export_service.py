@@ -29,28 +29,52 @@ logger = logging.getLogger(__name__)
 
 class ExportService:
     """데이터 내보내기 서비스"""
-    
+
     def __init__(self):
         self.export_dir = Path("./exports")
         self.export_dir.mkdir(exist_ok=True)
-        
-        # 스타일 설정
+
+        # 한글 폰트 등록
+        try:
+            # NanumGothic 폰트 등록 (Railway에서 설치 필요)
+            font_path = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
+            if os.path.exists(font_path):
+                pdfmetrics.registerFont(TTFont('NanumGothic', font_path))
+                self.korean_font = 'NanumGothic'
+            else:
+                # 폰트 없으면 기본 폰트 사용
+                self.korean_font = 'Helvetica'
+                logger.warning("Korean font not found, using default font")
+        except Exception as e:
+            logger.error(f"Failed to load Korean font: {e}")
+            self.korean_font = 'Helvetica'
+
+        # 스타일 설정 (한글 폰트 적용)
         self.styles = getSampleStyleSheet()
         self.title_style = ParagraphStyle(
             'CustomTitle',
             parent=self.styles['Heading1'],
             fontSize=24,
             spaceAfter=30,
-            textColor=colors.HexColor('#2c3e50')
+            textColor=colors.HexColor('#2c3e50'),
+            fontName=self.korean_font
         )
-        
+
         self.heading_style = ParagraphStyle(
             'CustomHeading',
             parent=self.styles['Heading2'],
             fontSize=16,
             spaceBefore=20,
             spaceAfter=12,
-            textColor=colors.HexColor('#34495e')
+            textColor=colors.HexColor('#34495e'),
+            fontName=self.korean_font
+        )
+
+        self.normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            fontName=self.korean_font
         )
     
     async def export_campaigns_excel(self, campaigns: List[Campaign], user_id: int) -> str:
@@ -477,7 +501,7 @@ class ExportService:
             doc_info = Paragraph(
                 f"문서번호: PR-{purchase_request.id:05d}<br/>"
                 f"생성일시: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M:%S')}",
-                self.styles['Normal']
+                self.normal_style
             )
             story.append(doc_info)
             story.append(Spacer(1, 30))
@@ -502,7 +526,7 @@ class ExportService:
                 ('BACKGROUND', (0, 0), (1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
@@ -532,7 +556,7 @@ class ExportService:
                 ('BACKGROUND', (0, 0), (1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
+                ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
@@ -557,7 +581,7 @@ class ExportService:
                 comment_heading = Paragraph("승인자 의견", self.heading_style)
                 story.append(comment_heading)
 
-                comment_para = Paragraph(purchase_request.approver_comment, self.styles['Normal'])
+                comment_para = Paragraph(purchase_request.approver_comment, self.normal_style)
                 story.append(comment_para)
                 story.append(Spacer(1, 30))
 
@@ -573,6 +597,7 @@ class ExportService:
             signature_table = Table(signature_data, colWidths=[3*inch, 3*inch])
             signature_table.setStyle(TableStyle([
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, -1), self.korean_font),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('TOPPADDING', (0, 0), (-1, -1), 20),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 20),
@@ -582,9 +607,15 @@ class ExportService:
             story.append(Spacer(1, 30))
 
             # 문서 하단 정보
+            footer_style = ParagraphStyle(
+                'Footer',
+                parent=self.normal_style,
+                fontSize=8,
+                textColor=colors.grey
+            )
             footer_text = Paragraph(
                 "본 문서는 BrandFlow 시스템에서 자동 생성되었습니다.",
-                self.styles['Italic']
+                footer_style
             )
             story.append(footer_text)
 

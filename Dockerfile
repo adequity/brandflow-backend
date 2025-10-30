@@ -9,10 +9,13 @@ ENV PYTHONUNBUFFERED=1
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 패키지 설치
+# 시스템 패키지 및 한글 폰트 설치
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    fonts-nanum \
+    fontconfig \
+    && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 # requirements.txt 복사 및 의존성 설치
