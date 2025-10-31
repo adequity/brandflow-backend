@@ -46,6 +46,9 @@ class BoardPost(Base):
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="작성자 ID")
     author = relationship("User", foreign_keys=[author_id], backref="board_posts")
 
+    # 회사 정보 (다중 회사 분리를 위함)
+    company = Column(String(200), nullable=True, comment="소속 회사 (작성자의 company와 동일)")
+
     # 타임스탬프
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="생성일시")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False, comment="수정일시")

@@ -70,8 +70,14 @@ async def get_board_posts(
     게시글 목록 조회
     - 모든 사용자가 조회 가능
     - 삭제되지 않은 게시글만 반환
+    - 같은 회사(company)의 게시글만 조회
     """
-    query = select(BoardPost).where(BoardPost.is_deleted == False)
+    query = select(BoardPost).where(
+        and_(
+            BoardPost.is_deleted == False,
+            BoardPost.company == current_user.company  # 회사별 필터링
+        )
+    )
 
     # 필터링
     if post_type:
@@ -92,7 +98,12 @@ async def get_board_posts(
     posts = result.scalars().all()
 
     # 총 개수 조회
-    count_query = select(func.count(BoardPost.id)).where(BoardPost.is_deleted == False)
+    count_query = select(func.count(BoardPost.id)).where(
+        and_(
+            BoardPost.is_deleted == False,
+            BoardPost.company == current_user.company  # 회사별 필터링
+        )
+    )
     if post_type:
         count_query = count_query.where(BoardPost.post_type == post_type)
     if is_notice is not None:
@@ -139,11 +150,13 @@ async def get_board_post(
     """
     게시글 상세 조회
     - 조회수 증가
+    - 같은 회사의 게시글만 조회
     """
     query = select(BoardPost).where(
         and_(
             BoardPost.id == post_id,
-            BoardPost.is_deleted == False
+            BoardPost.is_deleted == False,
+            BoardPost.company == current_user.company  # 회사별 필터링
         )
     )
     result = await db.execute(query)
@@ -230,7 +243,8 @@ async def create_board_post(
         attachment_url=attachment_url,
         attachment_name=attachment_name,
         attachment_size=attachment_size,
-        author_id=current_user.id
+        author_id=current_user.id,
+        company=current_user.company  # 작성자의 회사 정보 저장
     )
 
     db.add(new_post)
@@ -268,13 +282,15 @@ async def update_board_post(
     """
     게시글 수정
     - agency_admin만 가능
+    - 같은 회사의 게시글만 수정 가능
     """
     check_agency_admin(current_user)
 
     query = select(BoardPost).where(
         and_(
             BoardPost.id == post_id,
-            BoardPost.is_deleted == False
+            BoardPost.is_deleted == False,
+            BoardPost.company == current_user.company  # 회사별 필터링
         )
     )
     result = await db.execute(query)
@@ -345,13 +361,15 @@ async def delete_board_post(
     """
     게시글 삭제 (soft delete)
     - agency_admin만 가능
+    - 같은 회사의 게시글만 삭제 가능
     """
     check_agency_admin(current_user)
 
     query = select(BoardPost).where(
         and_(
             BoardPost.id == post_id,
-            BoardPost.is_deleted == False
+            BoardPost.is_deleted == False,
+            BoardPost.company == current_user.company  # 회사별 필터링
         )
     )
     result = await db.execute(query)
@@ -380,6 +398,7 @@ async def get_popup_posts(
     """
     대시보드 팝업 게시글 조회
     - 현재 시간 기준으로 활성화된 팝업만 반환
+    - 같은 회사의 게시글만 조회
     """
     now = datetime.utcnow()
 
@@ -387,6 +406,7 @@ async def get_popup_posts(
         and_(
             BoardPost.is_deleted == False,
             BoardPost.is_popup == True,
+            BoardPost.company == current_user.company,  # 회사별 필터링
             or_(
                 BoardPost.popup_start_date == None,
                 BoardPost.popup_start_date <= now
