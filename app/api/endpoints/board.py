@@ -10,9 +10,9 @@ import os
 import shutil
 from pathlib import Path
 
-from app.database import get_db
+from app.db.database import get_async_db
 from app.models import User, BoardPost, PostType, UserRole
-from app.api.dependencies import get_current_user
+from app.api.deps import get_current_active_user
 
 router = APIRouter(prefix="/api/board", tags=["board"])
 
@@ -35,8 +35,8 @@ async def get_board_posts(
     is_notice: Optional[bool] = None,
     skip: int = 0,
     limit: int = 20,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     게시글 목록 조회
@@ -105,8 +105,8 @@ async def get_board_posts(
 @router.get("/posts/{post_id}")
 async def get_board_post(
     post_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     게시글 상세 조회
@@ -161,8 +161,8 @@ async def create_board_post(
     popup_start_date: Optional[str] = Form(None),
     popup_end_date: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     게시글 생성
@@ -234,8 +234,8 @@ async def update_board_post(
     popup_end_date: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     remove_attachment: bool = Form(False),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     게시글 수정
@@ -311,8 +311,8 @@ async def update_board_post(
 @router.delete("/posts/{post_id}")
 async def delete_board_post(
     post_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     게시글 삭제 (soft delete)
@@ -346,8 +346,8 @@ async def delete_board_post(
 
 @router.get("/popup-posts")
 async def get_popup_posts(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     대시보드 팝업 게시글 조회
