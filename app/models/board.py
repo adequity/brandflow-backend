@@ -49,6 +49,9 @@ class BoardPost(Base):
     # 회사 정보 (다중 회사 분리를 위함)
     company = Column(String(200), nullable=True, comment="소속 회사 (작성자의 company와 동일)")
 
+    # 첨부파일 관계 (다중 파일 지원)
+    attachments = relationship("BoardPostAttachment", back_populates="post", cascade="all, delete-orphan")
+
     # 타임스탬프
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="생성일시")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False, comment="수정일시")

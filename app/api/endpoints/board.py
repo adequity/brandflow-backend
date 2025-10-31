@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 
 from app.db.database import get_async_db
-from app.models import User, BoardPost, PostType, UserRole
+from app.models import User, BoardPost, PostType, UserRole, BoardPostAttachment
 from app.api.deps import get_current_active_user
 
 router = APIRouter(prefix="/api/board", tags=["board"])
@@ -84,7 +84,8 @@ async def get_board_posts(
         }
 
     query = select(BoardPost).options(
-        joinedload(BoardPost.author)  # author를 eager loading
+        joinedload(BoardPost.author),  # author를 eager loading
+        joinedload(BoardPost.attachments)  # attachments를 eager loading
     ).where(
         and_(
             BoardPost.is_deleted == False,
@@ -140,6 +141,16 @@ async def get_board_posts(
                 "attachmentUrl": post.attachment_url,
                 "attachmentName": post.attachment_name,
                 "attachmentSize": post.attachment_size,
+                "attachments": [
+                    {
+                        "id": att.id,
+                        "fileUrl": att.file_url,
+                        "fileName": att.file_name,
+                        "fileSize": att.file_size,
+                        "createdAt": att.created_at.isoformat()
+                    }
+                    for att in post.attachments
+                ],
                 "viewCount": post.view_count,
                 "authorId": post.author_id,
                 "authorName": post.author.name if post.author else None,
@@ -170,7 +181,8 @@ async def get_board_post(
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
     query = select(BoardPost).options(
-        joinedload(BoardPost.author)  # author를 eager loading
+        joinedload(BoardPost.author),  # author를 eager loading
+        joinedload(BoardPost.attachments)  # attachments를 eager loading
     ).where(
         and_(
             BoardPost.id == post_id,
@@ -202,6 +214,16 @@ async def get_board_post(
             "attachmentUrl": post.attachment_url,
             "attachmentName": post.attachment_name,
             "attachmentSize": post.attachment_size,
+            "attachments": [
+                {
+                    "id": att.id,
+                    "fileUrl": att.file_url,
+                    "fileName": att.file_name,
+                    "fileSize": att.file_size,
+                    "createdAt": att.created_at.isoformat()
+                }
+                for att in post.attachments
+            ],
             "viewCount": post.view_count,
             "authorId": post.author_id,
             "authorName": post.author.name if post.author else None,
@@ -220,14 +242,14 @@ async def create_board_post(
     is_popup: bool = Form(False),
     popup_start_date: Optional[str] = Form(None),
     popup_end_date: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
+    files: List[UploadFile] = File([]),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
     """
     게시글 생성
     - agency_admin만 가능
-    - 파일 업로드 지원
+    - 다중 파일 업로드 지원
     """
     check_agency_admin(current_user)
 
@@ -235,26 +257,7 @@ async def create_board_post(
     if not current_user.company:
         raise HTTPException(status_code=400, detail="회사 정보가 없어 게시글을 작성할 수 없습니다.")
 
-    # 파일 업로드 처리
-    attachment_url = None
-    attachment_name = None
-    attachment_size = None
-
-    if file and file.filename:
-        # 파일 저장
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_extension = os.path.splitext(file.filename)[1]
-        safe_filename = f"{timestamp}_{file.filename}"
-        file_path = UPLOAD_DIR / safe_filename
-
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        attachment_url = f"/uploads/board/{safe_filename}"
-        attachment_name = file.filename
-        attachment_size = file_path.stat().st_size
-
-    # 게시글 생성
+    # 게시글 생성 (첨부파일 없이 먼저 생성)
     new_post = BoardPost(
         title=title,
         content=content,
@@ -263,16 +266,36 @@ async def create_board_post(
         is_popup=is_popup,
         popup_start_date=parse_datetime(popup_start_date),
         popup_end_date=parse_datetime(popup_end_date),
-        attachment_url=attachment_url,
-        attachment_name=attachment_name,
-        attachment_size=attachment_size,
         author_id=current_user.id,
-        company=current_user.company  # 작성자의 회사 정보 저장
+        company=current_user.company
     )
 
     db.add(new_post)
     await db.commit()
     await db.refresh(new_post)
+
+    # 다중 파일 업로드 처리
+    if files and len(files) > 0:
+        for file in files:
+            if file.filename:
+                # 파일 저장
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
+                safe_filename = f"{timestamp}_{file.filename}"
+                file_path = UPLOAD_DIR / safe_filename
+
+                with file_path.open("wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+
+                # BoardPostAttachment 생성
+                attachment = BoardPostAttachment(
+                    post_id=new_post.id,
+                    file_url=f"/uploads/board/{safe_filename}",
+                    file_name=file.filename,
+                    file_size=file_path.stat().st_size
+                )
+                db.add(attachment)
+
+        await db.commit()
 
     return {
         "success": True,
@@ -297,8 +320,8 @@ async def update_board_post(
     is_popup: bool = Form(False),
     popup_start_date: Optional[str] = Form(None),
     popup_end_date: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    remove_attachment: bool = Form(False),
+    files: List[UploadFile] = File([]),
+    remove_attachment_ids: Optional[str] = Form(None),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db)
 ):
@@ -306,6 +329,7 @@ async def update_board_post(
     게시글 수정
     - agency_admin만 가능
     - 같은 회사의 게시글만 수정 가능
+    - 다중 파일 업로드 지원
     """
     check_agency_admin(current_user)
 
@@ -313,7 +337,9 @@ async def update_board_post(
     if not current_user.company:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
-    query = select(BoardPost).where(
+    query = select(BoardPost).options(
+        joinedload(BoardPost.attachments)
+    ).where(
         and_(
             BoardPost.id == post_id,
             BoardPost.is_deleted == False,
@@ -321,40 +347,43 @@ async def update_board_post(
         )
     )
     result = await db.execute(query)
-    post = result.scalar_one_or_none()
+    post = result.scalars().unique().one_or_none()
 
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
-    # 기존 첨부파일 처리
-    if remove_attachment and post.attachment_url:
-        # 파일 삭제
-        old_file_path = Path(f".{post.attachment_url}")
-        if old_file_path.exists():
-            old_file_path.unlink()
-        post.attachment_url = None
-        post.attachment_name = None
-        post.attachment_size = None
+    # 삭제할 첨부파일 처리
+    if remove_attachment_ids:
+        ids_to_remove = [int(id.strip()) for id in remove_attachment_ids.split(",") if id.strip()]
+        for attachment in post.attachments:
+            if attachment.id in ids_to_remove:
+                # 파일 삭제
+                file_path = Path(f".{attachment.file_url}")
+                if file_path.exists():
+                    file_path.unlink()
+                # DB에서 삭제
+                await db.delete(attachment)
 
     # 새 파일 업로드
-    if file and file.filename:
-        # 기존 파일 삭제
-        if post.attachment_url:
-            old_file_path = Path(f".{post.attachment_url}")
-            if old_file_path.exists():
-                old_file_path.unlink()
+    if files and len(files) > 0:
+        for file in files:
+            if file.filename:
+                # 파일 저장
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
+                safe_filename = f"{timestamp}_{file.filename}"
+                file_path = UPLOAD_DIR / safe_filename
 
-        # 새 파일 저장
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = f"{timestamp}_{file.filename}"
-        file_path = UPLOAD_DIR / safe_filename
+                with file_path.open("wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
 
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        post.attachment_url = f"/uploads/board/{safe_filename}"
-        post.attachment_name = file.filename
-        post.attachment_size = file_path.stat().st_size
+                # BoardPostAttachment 생성
+                attachment = BoardPostAttachment(
+                    post_id=post.id,
+                    file_url=f"/uploads/board/{safe_filename}",
+                    file_name=file.filename,
+                    file_size=file_path.stat().st_size
+                )
+                db.add(attachment)
 
     # 게시글 정보 업데이트
     post.title = title
