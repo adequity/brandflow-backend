@@ -72,6 +72,16 @@ async def get_board_posts(
     - 삭제되지 않은 게시글만 반환
     - 같은 회사(company)의 게시글만 조회
     """
+    # company가 없는 사용자는 빈 결과 반환
+    if not current_user.company:
+        return {
+            "success": True,
+            "posts": [],
+            "total": 0,
+            "skip": skip,
+            "limit": limit
+        }
+
     query = select(BoardPost).where(
         and_(
             BoardPost.is_deleted == False,
@@ -152,6 +162,10 @@ async def get_board_post(
     - 조회수 증가
     - 같은 회사의 게시글만 조회
     """
+    # company가 없는 사용자는 접근 불가
+    if not current_user.company:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+
     query = select(BoardPost).where(
         and_(
             BoardPost.id == post_id,
@@ -211,6 +225,10 @@ async def create_board_post(
     - 파일 업로드 지원
     """
     check_agency_admin(current_user)
+
+    # company가 없는 사용자는 게시글 생성 불가
+    if not current_user.company:
+        raise HTTPException(status_code=400, detail="회사 정보가 없어 게시글을 작성할 수 없습니다.")
 
     # 파일 업로드 처리
     attachment_url = None
@@ -285,6 +303,10 @@ async def update_board_post(
     - 같은 회사의 게시글만 수정 가능
     """
     check_agency_admin(current_user)
+
+    # company가 없는 사용자는 접근 불가
+    if not current_user.company:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
     query = select(BoardPost).where(
         and_(
@@ -365,6 +387,10 @@ async def delete_board_post(
     """
     check_agency_admin(current_user)
 
+    # company가 없는 사용자는 접근 불가
+    if not current_user.company:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+
     query = select(BoardPost).where(
         and_(
             BoardPost.id == post_id,
@@ -400,6 +426,13 @@ async def get_popup_posts(
     - 현재 시간 기준으로 활성화된 팝업만 반환
     - 같은 회사의 게시글만 조회
     """
+    # company가 없는 사용자는 빈 결과 반환
+    if not current_user.company:
+        return {
+            "success": True,
+            "posts": []
+        }
+
     now = datetime.utcnow()
 
     query = select(BoardPost).where(
