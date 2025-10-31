@@ -29,6 +29,34 @@ def check_agency_admin(current_user: User):
     return True
 
 
+def parse_datetime(date_str: Optional[str]) -> Optional[datetime]:
+    """
+    ISO 8601 형식 날짜 문자열을 datetime으로 안전하게 파싱
+    - 2025-10-24T00:00:00.000Z
+    - 2025-10-24T00:00:00Z
+    - 2025-10-24
+    """
+    if not date_str:
+        return None
+
+    try:
+        # ISO format with milliseconds and Z
+        if 'T' in date_str:
+            # Remove 'Z' suffix if present
+            clean_str = date_str.rstrip('Z')
+            # Try parsing with milliseconds
+            try:
+                return datetime.fromisoformat(clean_str)
+            except:
+                # Try without milliseconds
+                return datetime.strptime(clean_str.split('.')[0], "%Y-%m-%dT%H:%M:%S")
+        else:
+            # Simple date format (2025-10-24)
+            return datetime.strptime(date_str, "%Y-%m-%d")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"날짜 형식이 잘못되었습니다: {date_str}")
+
+
 @router.get("/posts")
 async def get_board_posts(
     post_type: Optional[str] = None,
@@ -197,8 +225,8 @@ async def create_board_post(
         post_type=PostType(post_type),
         is_notice=is_notice,
         is_popup=is_popup,
-        popup_start_date=datetime.fromisoformat(popup_start_date) if popup_start_date else None,
-        popup_end_date=datetime.fromisoformat(popup_end_date) if popup_end_date else None,
+        popup_start_date=parse_datetime(popup_start_date),
+        popup_end_date=parse_datetime(popup_end_date),
         attachment_url=attachment_url,
         attachment_name=attachment_name,
         attachment_size=attachment_size,
@@ -291,8 +319,8 @@ async def update_board_post(
     post.post_type = PostType(post_type)
     post.is_notice = is_notice
     post.is_popup = is_popup
-    post.popup_start_date = datetime.fromisoformat(popup_start_date) if popup_start_date else None
-    post.popup_end_date = datetime.fromisoformat(popup_end_date) if popup_end_date else None
+    post.popup_start_date = parse_datetime(popup_start_date)
+    post.popup_end_date = parse_datetime(popup_end_date)
     post.updated_at = datetime.utcnow()
 
     await db.commit()
