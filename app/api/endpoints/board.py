@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
+from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from datetime import datetime
 import os
@@ -82,7 +83,9 @@ async def get_board_posts(
             "limit": limit
         }
 
-    query = select(BoardPost).where(
+    query = select(BoardPost).options(
+        joinedload(BoardPost.author)  # author를 eager loading
+    ).where(
         and_(
             BoardPost.is_deleted == False,
             BoardPost.company == current_user.company  # 회사별 필터링
@@ -105,7 +108,7 @@ async def get_board_posts(
     query = query.offset(skip).limit(limit)
 
     result = await db.execute(query)
-    posts = result.scalars().all()
+    posts = result.scalars().unique().all()  # unique() 추가 (joinedload 사용 시 필요)
 
     # 총 개수 조회
     count_query = select(func.count(BoardPost.id)).where(
@@ -166,7 +169,9 @@ async def get_board_post(
     if not current_user.company:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
 
-    query = select(BoardPost).where(
+    query = select(BoardPost).options(
+        joinedload(BoardPost.author)  # author를 eager loading
+    ).where(
         and_(
             BoardPost.id == post_id,
             BoardPost.is_deleted == False,
@@ -174,7 +179,7 @@ async def get_board_post(
         )
     )
     result = await db.execute(query)
-    post = result.scalar_one_or_none()
+    post = result.scalars().unique().one_or_none()
 
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
@@ -435,7 +440,9 @@ async def get_popup_posts(
 
     now = datetime.utcnow()
 
-    query = select(BoardPost).where(
+    query = select(BoardPost).options(
+        joinedload(BoardPost.author)  # author를 eager loading
+    ).where(
         and_(
             BoardPost.is_deleted == False,
             BoardPost.is_popup == True,
@@ -452,7 +459,7 @@ async def get_popup_posts(
     ).order_by(BoardPost.created_at.desc())
 
     result = await db.execute(query)
-    posts = result.scalars().all()
+    posts = result.scalars().unique().all()  # unique() 추가
 
     return {
         "success": True,
