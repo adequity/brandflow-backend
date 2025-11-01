@@ -3377,6 +3377,43 @@ async def update_order_cost_prices(
 
 
 
+@router.post("/migrate-order-request-companies")
+async def migrate_order_request_companies(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """기존 order_requests의 company, requester_role, team_leader_id를 users 테이블에서 채움"""
+    try:
+        from sqlalchemy import text
+
+        # 모든 활성 order_requests의 company, requester_role, team_leader_id 업데이트
+        update_query = text("""
+            UPDATE order_requests
+            SET
+                company = COALESCE(users.company, 'default_company'),
+                requester_role = users.role,
+                team_leader_id = users.team_leader_id
+            FROM users
+            WHERE order_requests.user_id = users.id
+            AND order_requests.is_active = true
+        """)
+
+        result = await db.execute(update_query)
+        await db.commit()
+
+        print(f"[MIGRATE-COMPANY] Updated {result.rowcount} order_requests")
+
+        return {
+            "message": "order_requests company/requester_role/team_leader_id 업데이트 완료",
+            "updated_count": result.rowcount
+        }
+
+    except Exception as e:
+        print(f"[MIGRATE-COMPANY] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"company 필드 업데이트 중 오류: {str(e)}")
+
+
 @router.get("/debug-order-requests")
 async def debug_order_requests(
     current_user: User = Depends(get_current_active_user),
