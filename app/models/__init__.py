@@ -11,6 +11,7 @@ from .order_request import OrderRequest
 from .monthly_incentive import MonthlyIncentive
 from .board import BoardPost, PostType
 from .board_attachment import BoardPostAttachment
+from .campaign_contract import CampaignContract
 
 # 새로운 모델들 (Campaign과 User에 의존)
 from .incentive_rule import IncentiveRule
