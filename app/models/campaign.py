@@ -60,6 +60,7 @@ class Campaign(Base, TimestampMixin):
     staff_user = relationship("User", foreign_keys=[staff_id], lazy="selectin")  # 담당 직원 관계 (eager loading)
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     posts = relationship("Post", back_populates="campaign", cascade="all, delete-orphan")
+    contracts = relationship("CampaignContract", back_populates="campaign", cascade="all, delete-orphan")
     # costs relationship은 campaign_costs 엔드포인트에서 직접 쿼리로 처리 (순환 import 방지)
     # costs = relationship("CampaignCost", back_populates="campaign", cascade="all, delete-orphan")
     

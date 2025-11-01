@@ -4003,3 +4003,163 @@ async def get_user_posts_debug(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# 계약서 관리 API
+# ============================================================================
+
+@router.post("/{campaign_id}/upload-contract")
+async def upload_campaign_contract(
+    campaign_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 계약서 파일 업로드"""
+    try:
+        from app.models.campaign_contract import CampaignContract
+        import shutil
+        from pathlib import Path
+
+        # 캠페인 존재 및 권한 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인 (캠페인 수정 권한과 동일)
+        user_role = current_user.role
+        user_company = current_user.company
+
+        can_upload = False
+        if user_role == UserRole.SUPER_ADMIN:
+            can_upload = True
+        elif user_role == UserRole.AGENCY_ADMIN and campaign.company == user_company:
+            can_upload = True
+        elif user_role == UserRole.TEAM_LEADER and campaign.company == user_company:
+            can_upload = True
+        elif user_role == UserRole.STAFF and campaign.creator_id == current_user.id:
+            can_upload = True
+
+        if not can_upload:
+            raise HTTPException(status_code=403, detail="계약서 업로드 권한이 없습니다.")
+
+        # 파일 크기 체크 (10MB)
+        if file.size and file.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다.")
+
+        # 업로드 디렉토리 생성
+        UPLOAD_DIR = Path(__file__).parent.parent.parent.parent / "uploads" / "contracts"
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+        # 파일명 생성 (타임스탬프 + 원본 파일명)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
+        safe_filename = f"{timestamp}_{file.filename}"
+        file_path = UPLOAD_DIR / safe_filename
+
+        # 파일 저장
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # DB에 계약서 정보 저장
+        contract = CampaignContract(
+            campaign_id=campaign_id,
+            file_url=f"/uploads/contracts/{safe_filename}",
+            file_name=file.filename,
+            file_size=file_path.stat().st_size
+        )
+        db.add(contract)
+        await db.commit()
+        await db.refresh(contract)
+
+        print(f"[CONTRACT-UPLOAD] Campaign {campaign_id} uploaded contract: {file.filename}")
+
+        return {
+            "id": contract.id,
+            "campaign_id": contract.campaign_id,
+            "file_url": contract.file_url,
+            "file_name": contract.file_name,
+            "file_size": contract.file_size,
+            "uploaded_at": contract.uploaded_at.isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CONTRACT-UPLOAD] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"계약서 업로드 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.delete("/{campaign_id}/contracts/{contract_id}")
+async def delete_campaign_contract(
+    campaign_id: int,
+    contract_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 계약서 삭제"""
+    try:
+        from app.models.campaign_contract import CampaignContract
+        from pathlib import Path
+        import os
+
+        # 계약서 조회
+        contract_query = select(CampaignContract).where(
+            CampaignContract.id == contract_id,
+            CampaignContract.campaign_id == campaign_id
+        )
+        contract_result = await db.execute(contract_query)
+        contract = contract_result.scalar_one_or_none()
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="계약서를 찾을 수 없습니다.")
+
+        # 캠페인 조회 및 권한 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인
+        user_role = current_user.role
+        user_company = current_user.company
+
+        can_delete = False
+        if user_role == UserRole.SUPER_ADMIN:
+            can_delete = True
+        elif user_role == UserRole.AGENCY_ADMIN and campaign.company == user_company:
+            can_delete = True
+        elif user_role == UserRole.TEAM_LEADER and campaign.company == user_company:
+            can_delete = True
+        elif user_role == UserRole.STAFF and campaign.creator_id == current_user.id:
+            can_delete = True
+
+        if not can_delete:
+            raise HTTPException(status_code=403, detail="계약서 삭제 권한이 없습니다.")
+
+        # 파일 삭제
+        file_path = Path(__file__).parent.parent.parent.parent / contract.file_url.lstrip('/')
+        if file_path.exists():
+            os.remove(file_path)
+            print(f"[CONTRACT-DELETE] Deleted file: {file_path}")
+
+        # DB에서 삭제
+        await db.delete(contract)
+        await db.commit()
+
+        print(f"[CONTRACT-DELETE] Campaign {campaign_id} deleted contract {contract_id}")
+
+        return {"success": True, "message": "계약서가 성공적으로 삭제되었습니다."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CONTRACT-DELETE] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"계약서 삭제 중 오류가 발생했습니다: {str(e)}")
+
+
