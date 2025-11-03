@@ -466,8 +466,29 @@ async def create_campaign(
     except Exception as e:
         # WebSocket 에러는 무시하고 계속 진행
         print(f"WebSocket notification failed: {e}")
-    
-    return new_campaign
+
+    # 명시적 dict 변환으로 직렬화 문제 해결
+    response_data = {
+        "id": new_campaign.id,
+        "name": new_campaign.name,
+        "description": new_campaign.description,
+        "client_company": new_campaign.client_company,
+        "budget": new_campaign.budget,
+        "staff_id": new_campaign.staff_id,
+        "start_date": new_campaign.start_date,
+        "end_date": new_campaign.end_date,
+        "status": new_campaign.status,
+        "creator_id": new_campaign.creator_id,
+        "client_user_id": getattr(new_campaign, 'client_user_id', None),
+        "created_at": new_campaign.created_at,
+        "updated_at": new_campaign.updated_at,
+        "creator_name": None,  # 관계 로딩 제거
+        "client_name": None,
+        "client_user": None
+    }
+
+    print(f"[CAMPAIGN-CREATE-JWT] Returning response: {response_data}")
+    return response_data
 
 
 @router.get("/staff-list", response_model=List[dict])
