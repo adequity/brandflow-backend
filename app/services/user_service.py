@@ -153,6 +153,10 @@ class UserService:
             # 대행사 어드민은 슈퍼 어드민을 제외한 모든 역할 생성 가능
             return target_role != UserRole.SUPER_ADMIN
 
+        if creator.role == UserRole.TEAM_LEADER:
+            # TEAM_LEADER는 STAFF와 CLIENT 생성 가능
+            return target_role in [UserRole.STAFF, UserRole.CLIENT]
+
         if creator.role == UserRole.STAFF:
             # STAFF는 CLIENT만 생성 가능
             return target_role == UserRole.CLIENT
