@@ -17,12 +17,14 @@ router = APIRouter()
 class WorkTypeCreate(BaseModel):
     name: str
     description: Optional[str] = ""
+    color: Optional[str] = "#6B7280"  # RGB 색상 코드
     sortOrder: Optional[int] = 0
 
 
 class WorkTypeUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    color: Optional[str] = None  # RGB 색상 코드
     is_active: Optional[bool] = None
     sortOrder: Optional[int] = None
 
@@ -92,6 +94,7 @@ async def get_work_types(
                 "id": wt.id,
                 "name": wt.name,
                 "description": wt.description,
+                "color": getattr(wt, 'color', '#6B7280'),  # 색상 필드 추가 (컬럼 체크)
                 "is_active": wt.is_active,
                 "created_at": wt.created_at.isoformat() if wt.created_at else None,
                 "updated_at": wt.updated_at.isoformat() if wt.updated_at else None
@@ -102,7 +105,7 @@ async def get_work_types(
         # 기존 API 모드 (JWT 토큰 기반)
         current_user = jwt_user
         print(f"[WORK-TYPES-LIST-JWT] Request from user_id={current_user.id}, user_role={current_user.role}")
-        
+
         try:
             # JWT 기반 작업 유형 목록 조회 (회사별 필터링 - 스키마 체크)
             user_company = current_user.company or 'default_company'
@@ -130,16 +133,17 @@ async def get_work_types(
                 print(f"[WORK-TYPES-JWT] Company column not found, using fallback query")
             result = await db.execute(query)
             work_types = result.scalars().all()
-            
+
             # work_types 테이블에서 직접 조회 (하드코딩 제거)
-            
+
             print(f"[WORK-TYPES-LIST-JWT] SUCCESS: Found {len(work_types)} work types for user {current_user.id}")
-            
+
             return [
                 {
                     "id": wt.id,
                     "name": wt.name,
                     "description": wt.description,
+                    "color": getattr(wt, 'color', '#6B7280'),  # 색상 필드 추가 (컬럼 체크)
                     "is_active": wt.is_active,
                     "created_at": wt.created_at.isoformat() if wt.created_at else None,
                     "updated_at": wt.updated_at.isoformat() if wt.updated_at else None
@@ -239,6 +243,7 @@ async def create_work_type(
             new_work_type = WorkType(
                 name=work_type_data.name,
                 description=work_type_data.description or "",
+                color=work_type_data.color or "#6B7280",  # 색상 필드 추가
                 company=user_company,  # 생성자의 회사로 자동 설정
                 is_active=True
             )
@@ -259,6 +264,7 @@ async def create_work_type(
             new_work_type = WorkType(
                 name=work_type_data.name,
                 description=work_type_data.description or "",
+                color=work_type_data.color or "#6B7280",  # 색상 필드 추가
                 is_active=True
             )
             print(f"[WORK-TYPE-CREATE] Creating without company column (fallback mode)")
@@ -273,6 +279,7 @@ async def create_work_type(
             "id": new_work_type.id,
             "name": new_work_type.name,
             "description": new_work_type.description,
+            "color": getattr(new_work_type, 'color', '#6B7280'),  # 색상 필드 추가
             "is_active": new_work_type.is_active,
             "created_at": new_work_type.created_at.isoformat() if new_work_type.created_at else None,
             "updated_at": new_work_type.updated_at.isoformat() if new_work_type.updated_at else None
@@ -370,6 +377,7 @@ async def update_work_type(
             "id": work_type.id,
             "name": work_type.name,
             "description": work_type.description,
+            "color": getattr(work_type, 'color', '#6B7280'),  # 색상 필드 추가
             "is_active": work_type.is_active,
             "created_at": work_type.created_at.isoformat() if work_type.created_at else None,
             "updated_at": work_type.updated_at.isoformat() if work_type.updated_at else None
