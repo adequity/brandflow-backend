@@ -2425,7 +2425,8 @@ async def create_campaign_post(
 
         # 상품 정보 조회 (원가 자동 연동을 위해)
         product_cost = None
-        product_name = None
+        product_name = post_data.product_name  # 엑셀 업로드 시 직접 전달된 제품명 우선 사용
+
         if post_data.product_id:
             from app.models.product import Product
             product_query = select(Product).where(Product.id == post_data.product_id)
@@ -2433,7 +2434,8 @@ async def create_campaign_post(
             product = product_result.scalar_one_or_none()
             if product:
                 product_cost = product.cost  # 상품 원가 자동 연동
-                product_name = product.name
+                if not product_name:  # product_name이 없을 때만 DB에서 가져온 이름 사용
+                    product_name = product.name
 
         # 새 포스트 생성
         new_post = Post(
