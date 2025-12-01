@@ -313,6 +313,8 @@ async def get_campaigns(
                     # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,
                     # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,
                     "productId": post.product_id,
+                    "product_name": post.product_name,  # 상품명 추가
+                    "productName": post.product_name,  # 프론트엔드 호환성
                     "quantity": post.quantity,
                     "budget": post.budget or 0.0,  # 견적 금액
                     # 재무 관련 필드
