@@ -179,17 +179,19 @@ async def cors_exception_handler(request: Request, exc: Exception):
     
     # CORS 헤더 수동 추가
     origin = request.headers.get("origin")
-    # CORS 허용 도메인 확대 (Netlify 서브도메인 포함)
+    # CORS 허용 도메인 확대 (Netlify 서브도메인 + 커스텀 도메인 포함)
     allowed_origins = [
+        "https://adsmanager.pro",
+        "https://www.adsmanager.pro",
         "https://brandflo.netlify.app",
-        "https://brandflow-frontend.netlify.app", 
+        "https://brandflow-frontend.netlify.app",
         "https://adequate-brandflow.netlify.app",
         "https://adequity-brandflow.netlify.app",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
-        "http://localhost:5176", 
+        "http://localhost:5176",
         "http://localhost:5177",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
@@ -207,19 +209,21 @@ async def cors_exception_handler(request: Request, exc: Exception):
     
     return response
 
-# CORS 미들웨어 설정 (프로덕션 보안 강화 + 인증 지원)
+# CORS 미들웨어 설정 (프로덕션 보안 강화 + 인증 지원 + 커스텀 도메인)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://adsmanager.pro",
+        "https://www.adsmanager.pro",
         "https://brandflo.netlify.app",
-        "https://brandflow-frontend.netlify.app", 
+        "https://brandflow-frontend.netlify.app",
         "https://adequate-brandflow.netlify.app",
         "https://adequity-brandflow.netlify.app",
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
-        "http://localhost:5176", 
+        "http://localhost:5176",
         "http://localhost:5177",
         "http://localhost:5178",
         "http://localhost:5179",
