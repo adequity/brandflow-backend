@@ -2360,7 +2360,7 @@ async def get_campaign_posts_jwt(
             # "startDatetime": post.start_datetime.isoformat() if post.start_datetime else None,  # 새로운 DateTime
             # "dueDatetime": post.due_datetime.isoformat() if post.due_datetime else None,        # 새로운 DateTime
             "productId": post.product_id,
-            "productName": product.name if product else None,  # 제품명 추가
+            "productName": post.product_name or (product.name if product else None),  # 제품명: post.product_name 우선, 없으면 product.name
             "quantity": post.quantity,
             "budget": post.budget or 0.0,  # 포스트별 매출 예산
             # 재무 관련 필드
