@@ -444,9 +444,10 @@ async def update_user(
             is_agency_admin = (viewer_role in ['대행사 어드민', '대행사어드민', 'agency_admin'] or
                               ('대행사' in viewer_role and '어드민' in viewer_role) or
                               ('agency' in viewer_role.lower() and 'admin' in viewer_role.lower()))
+            is_staff = (viewer_role in ['직원', 'staff'])
 
-            if not is_super_admin and not is_agency_admin:
-                raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자만 사용자 정보를 수정할 수 있습니다.")
+            if not (is_super_admin or is_agency_admin or is_staff):
+                raise HTTPException(status_code=403, detail="권한이 없습니다. 관리자 또는 직원만 사용자 정보를 수정할 수 있습니다.")
 
             # 대행사 어드민의 경우 같은 회사 사용자만 수정 가능
             if is_agency_admin and not is_super_admin:
@@ -456,6 +457,11 @@ async def update_user(
 
                 if not viewer or user.company != viewer.company:
                     raise HTTPException(status_code=403, detail="같은 회사 소속 사용자만 수정할 수 있습니다.")
+
+            # STAFF의 경우 자신이 담당하는 CLIENT만 수정 가능
+            if is_staff and not (is_super_admin or is_agency_admin):
+                if user.role != UserRole.CLIENT or user.assigned_staff_id != viewer_id:
+                    raise HTTPException(status_code=403, detail="자신이 담당하는 클라이언트만 수정할 수 있습니다.")
 
             # 사용자 정보 업데이트
             update_data = user_data.model_dump(exclude_unset=True)

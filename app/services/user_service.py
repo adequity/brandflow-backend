@@ -167,11 +167,15 @@ class UserService:
         """사용자 수정 권한 확인"""
         if updater.role == UserRole.SUPER_ADMIN:
             return True
-        
+
         if updater.role == UserRole.AGENCY_ADMIN:
             # 대행사 어드민은 슈퍼 어드민을 제외한 모든 사용자 수정 가능
             return target.role != UserRole.SUPER_ADMIN
-        
+
+        if updater.role == UserRole.STAFF:
+            # STAFF는 자신이 담당하는 CLIENT만 수정 가능
+            return target.role == UserRole.CLIENT and target.assigned_staff_id == updater.id
+
         # 일반 사용자는 자신의 정보만 수정 가능
         return updater.id == target.id
 
