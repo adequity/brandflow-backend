@@ -324,9 +324,14 @@ async def create_user(
         # 직원의 경우 같은 회사의 클라이언트만 생성 가능
         if is_staff and not is_admin:
             user_data.company = current_user.company
-            # STAFF가 CLIENT를 생성하는 경우 담당 STAFF 자동 할당
+            # STAFF가 CLIENT를 생성하는 경우 담당 STAFF 자동 할당 및 팀 정보 복사
             if user_data.role == UserRole.CLIENT:
                 user_data.assigned_staff_id = user_id
+                # STAFF의 팀 정보를 CLIENT에게 자동 할당
+                if current_user.team_name:
+                    user_data.team_name = current_user.team_name
+                if current_user.team_leader_id:
+                    user_data.team_leader_id = current_user.team_leader_id
 
         # 이메일 중복 확인
         existing_user_query = select(User).where(User.email == user_data.email)
@@ -377,10 +382,15 @@ async def create_user(
         if not service.can_create_user(current_user, user_data.role):
             raise HTTPException(status_code=403, detail="사용자 생성 권한이 없습니다.")
 
-        # STAFF가 CLIENT를 생성하는 경우 회사 정보 및 담당 STAFF 상속
+        # STAFF가 CLIENT를 생성하는 경우 회사 정보, 담당 STAFF 및 팀 정보 상속
         if current_user.role == UserRole.STAFF and user_data.role == UserRole.CLIENT:
             user_data.company = current_user.company
             user_data.assigned_staff_id = current_user.id
+            # STAFF의 팀 정보를 CLIENT에게 자동 할당
+            if current_user.team_name:
+                user_data.team_name = current_user.team_name
+            if current_user.team_leader_id:
+                user_data.team_leader_id = current_user.team_leader_id
 
         # 이메일 중복 확인
         existing_user = await service.get_user_by_email(user_data.email)
