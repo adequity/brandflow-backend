@@ -17,3 +17,5 @@ from .campaign_contract import CampaignContract
 from .incentive_rule import IncentiveRule
 from .campaign_cost import CampaignCost
 from .incentive import Incentive, IncentiveStatus
+# 게임 에셋 모델
+from .game_asset import GameAsset, GameAssetType, GameAssetCategory
