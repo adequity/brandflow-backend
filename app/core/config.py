@@ -38,8 +38,19 @@ class Settings(BaseSettings):
         print(f"Using Railway PostgreSQL fallback")
         return railway_url
     
-    # Security
-    SECRET_KEY: str = "brandflow-production-secret-key-2024-change-this-in-production"
+    # Security - SECRET_KEY는 환경변수에서 읽음 (프로덕션 보안)
+    # Railway에서 SECRET_KEY 환경변수 설정 필요
+    @property
+    def SECRET_KEY(self) -> str:
+        """JWT 서명을 위한 시크릿 키 - 환경변수에서 읽음"""
+        secret = os.getenv("SECRET_KEY")
+        if secret:
+            return secret
+        # 개발 환경용 폴백 (프로덕션에서는 반드시 환경변수 설정!)
+        import warnings
+        warnings.warn("SECRET_KEY not set in environment! Using fallback for development only.")
+        return "dev-only-secret-key-do-not-use-in-production"
+
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8시간 (업무 시간 동안 끊김 없음)
     
