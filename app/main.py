@@ -256,7 +256,12 @@ app.add_middleware(
 # 임시 마이그레이션 엔드포인트 (products.company 컬럼 추가)
 @app.get("/api/admin/migrate-products-company")
 async def migrate_products_company():
-    """Railway에서 products.company 컬럼을 수동으로 추가하는 임시 엔드포인트"""
+    """Railway에서 products.company 컬럼을 수동으로 추가하는 임시 엔드포인트
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -320,7 +325,12 @@ async def migrate_products_company():
 # 임시 마이그레이션 엔드포인트 (work_types.company 컬럼 추가)
 @app.get("/api/admin/migrate-work-types-company")
 async def migrate_work_types_company():
-    """Railway에서 work_types.company 컬럼을 수동으로 추가하는 임시 엔드포인트"""
+    """Railway에서 work_types.company 컬럼을 수동으로 추가하는 임시 엔드포인트
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -391,7 +401,12 @@ async def migrate_work_types_company():
 
 @app.get("/api/admin/debug-campaigns")
 async def debug_campaigns():
-    """캠페인과 사용자 company 정보 디버깅"""
+    """캠페인과 사용자 company 정보 디버깅
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -462,7 +477,12 @@ async def debug_campaigns():
 
 @app.get("/api/admin/fix-campaign-company")
 async def fix_campaign_company():
-    """기존 캠페인들을 AGENCY_ADMIN company로 업데이트"""
+    """기존 캠페인들을 AGENCY_ADMIN company로 업데이트
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -528,7 +548,12 @@ async def fix_campaign_company():
 
 @app.get("/api/admin/check-campaign-50")
 async def check_campaign_50():
-    """campaign 50의 상세 정보 확인"""
+    """campaign 50의 상세 정보 확인
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -618,7 +643,12 @@ async def check_campaign_50():
 
 @app.get("/api/admin/fix-campaign-50")
 async def fix_campaign_50():
-    """campaign 50을 agency_admin이 볼 수 있도록 staff_id 업데이트"""
+    """campaign 50을 agency_admin이 볼 수 있도록 staff_id 업데이트
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -689,7 +719,12 @@ async def fix_campaign_50():
 
 @app.get("/api/admin/migrate-campaign-company")
 async def migrate_campaign_company():
-    """기존 캠페인들에 적절한 company 값 설정"""
+    """기존 캠페인들에 적절한 company 값 설정
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
@@ -754,7 +789,14 @@ async def migrate_campaign_company():
 
 @app.get("/api/admin/check-test-data")
 async def check_test_data():
-    """Railway 환경의 테스트 데이터 존재 여부 확인"""
+    """Railway 환경의 테스트 데이터 존재 여부 확인
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    # 프로덕션 보안: 환경변수로 비활성화
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
+
     try:
         from sqlalchemy import text
         import os
@@ -824,7 +866,14 @@ async def check_test_data():
 
 @app.get("/api/admin/create-test-users")
 async def create_test_users_endpoint():
-    """Railway 환경에서 테스트 사용자 수동 생성"""
+    """Railway 환경에서 테스트 사용자 수동 생성
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    # 프로덕션 보안: 환경변수로 비활성화
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
+
     try:
         from app.db.database import get_async_db
         from app.db.init_data import create_test_users
@@ -969,7 +1018,12 @@ async def serve_export_file(filename: str):
 
 @app.get("/debug/uploads")
 async def debug_uploads():
-    """업로드 디렉토리 상태 확인 및 테스트"""
+    """업로드 디렉토리 상태 확인 및 테스트
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     from pathlib import Path
     import os
     import aiofiles
@@ -1068,7 +1122,12 @@ async def health_check():
 
 @app.get("/debug/routes")
 async def debug_routes():
-    """진단용: 실제 등록된 라우트 확인"""
+    """진단용: 실제 등록된 라우트 확인
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     routes_info = []
     for route in app.router.routes:
         if hasattr(route, 'path') and hasattr(route, 'methods'):
@@ -1095,7 +1154,12 @@ async def debug_routes():
 
 @app.get("/debug/imports")
 async def debug_imports():
-    """진단용: 모듈 임포트 상태 확인"""
+    """진단용: 모듈 임포트 상태 확인
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     import_status = {}
     modules_to_test = [
         "dashboard", "search", "export", "admin", "websocket", 
@@ -1129,7 +1193,12 @@ async def debug_imports():
 
 @app.get("/api/admin/add-all-company-columns")
 async def add_all_company_columns():
-    """모든 테이블에 company 컬럼 추가 (campaigns, posts, order_requests, purchase_requests)"""
+    """모든 테이블에 company 컬럼 추가 (campaigns, posts, order_requests, purchase_requests)
+
+    보안: ENABLE_SETUP_ENDPOINTS=true 환경변수가 설정된 경우에만 활성화
+    """
+    if os.getenv("ENABLE_SETUP_ENDPOINTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         from sqlalchemy import text
 
