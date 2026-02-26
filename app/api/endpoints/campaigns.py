@@ -783,7 +783,7 @@ async def get_all_order_requests(
                 "product_name": product.name if product else None,
                 "product_cost": product.cost if product else 0,  # 제품 원가
                 "quantity": post.quantity or 1,  # 수량
-                "total_cost": (product.cost or 0) * (post.quantity or 1),  # 총 원가 (원가 * 수량)
+                "total_cost": ((product.cost or 0) * (post.quantity or 1)) if product else 0,  # 총 원가 (원가 * 수량)
                 "requester_name": requester_name,
                 "work_type": post.work_type
             })
