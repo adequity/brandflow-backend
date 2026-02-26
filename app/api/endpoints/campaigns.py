@@ -781,9 +781,9 @@ async def get_all_order_requests(
                 "post_title": post.title,
                 "campaign_name": campaign.name,
                 "product_name": post.product_name or (product.name if product else None),
-                "product_cost": post.product_cost or (product.cost if product else 0) or 0,  # posts → products fallback
+                "product_cost": product.cost if product else 0,  # products 테이블 원가
                 "quantity": post.quantity or 1,  # 수량
-                "total_cost": (post.product_cost or (product.cost if product else 0) or 0) * (post.quantity or 1),  # 총 원가
+                "total_cost": order_request.cost_price or 0,  # order_requests 테이블 원장 값
                 "requester_name": requester_name,
                 "work_type": post.work_type
             })
@@ -3297,27 +3297,35 @@ async def create_order_request(
         if not post:
             raise HTTPException(status_code=404, detail="포스트를 찾을 수 없습니다")
 
-        # 제품 정보 조회 (cost_price 자동 계산용)
+        # 제품 정보 조회 (cost_price 계산 - DB 단일 출처)
         from app.models.product import Product
+        if not post.product_id:
+            raise HTTPException(status_code=400, detail="제품이 연동되지 않은 업무입니다. 업무에 제품을 먼저 연결해주세요.")
+
         product_query = select(Product).where(Product.id == post.product_id)
         product_result = await db.execute(product_query)
         product = product_result.scalar_one_or_none()
 
-        # cost_price 결정: DB 자동 계산 → 프론트 전달값 → 0
-        calculated_cost_price = 0
-        if product and product.cost and post.quantity:
-            calculated_cost_price = int(product.cost * post.quantity)
-            print(f"[ORDER-REQUEST] Auto-calculated cost_price: {product.cost} × {post.quantity} = {calculated_cost_price}")
+        if not product or not product.cost:
+            raise HTTPException(status_code=400, detail="연동된 제품의 원가 정보가 없습니다. 상품관리에서 원가를 설정해주세요.")
 
-        # 자동 계산 실패 시 프론트에서 보낸 cost_price 사용
-        final_cost_price = calculated_cost_price or (order_data.cost_price or 0)
-        print(f"[ORDER-REQUEST] Final cost_price: {final_cost_price} (calculated={calculated_cost_price}, frontend={order_data.cost_price})")
+        if not post.quantity or post.quantity <= 0:
+            raise HTTPException(status_code=400, detail="업무 수량이 설정되지 않았습니다. 업무 수량을 먼저 설정해주세요.")
+
+        # cost_price = products.cost × posts.quantity (DB 단일 출처, 원장 기준)
+        calculated_cost_price = int(product.cost * post.quantity)
+        print(f"[ORDER-REQUEST] cost_price: {product.cost} × {post.quantity} = {calculated_cost_price}")
+
+        # 포스트에 product_cost가 없으면 자동 동기화
+        if not post.product_cost:
+            post.product_cost = product.cost
+            print(f"[ORDER-REQUEST] Synced post.product_cost = {product.cost}")
 
         # 발주요청 생성
         new_order_request = OrderRequest(
             title=order_data.title,
             description=order_data.description,
-            cost_price=final_cost_price,  # DB 계산 우선, 프론트 전달값 fallback
+            cost_price=calculated_cost_price,  # DB 단일 출처 (products.cost × posts.quantity)
             resource_type=order_data.resource_type,
             post_id=post_id,
             user_id=current_user.id,
