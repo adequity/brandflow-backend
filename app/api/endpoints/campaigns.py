@@ -2385,6 +2385,8 @@ async def get_campaign_posts_jwt(
             "productId": post.product_id,
             "productName": post.product_name or (product.name if product else None),  # 제품명: post.product_name 우선, 없으면 product.name
             "quantity": post.quantity,
+            "cost": post.cost,  # 포스트별 작업 단가
+            "productCost": post.product_cost or (product.cost if product else None),  # 제품 원가: post 우선, 없으면 product DB
             "budget": post.budget or 0.0,  # 포스트별 매출 예산
             # 재무 관련 필드
             "invoiceIssued": post.invoice_issued or False,
