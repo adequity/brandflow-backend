@@ -38,33 +38,35 @@ async def get_users(
         
         if not user_id or not user_role:
             raise HTTPException(status_code=400, detail="viewerId와 viewerRole이 필요합니다")
-        
-        # URL 디코딩
-        user_role = unquote(user_role).strip()
-        
+
+        # URL 디코딩 및 대문자 정규화
+        user_role = unquote(user_role).strip().upper()
+
         # 현재 사용자 조회
         current_user_query = select(User).where(User.id == user_id)
         result = await db.execute(current_user_query)
         current_user = result.scalar_one_or_none()
-        
+
         if not current_user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-        
+
         # 권한별 필터링 (UserRole enum 값 사용)
-        if user_role == UserRole.SUPER_ADMIN.value or 'super' in user_role.lower():
+        if user_role == UserRole.SUPER_ADMIN.value:
             # 슈퍼 어드민은 모든 사용자 조회 가능
             query = select(User)
-        elif user_role == UserRole.AGENCY_ADMIN.value or ('agency' in user_role.lower() and 'admin' in user_role.lower()):
+        elif user_role == UserRole.AGENCY_ADMIN.value:
             # 대행사 어드민은 같은 회사 사용자만 조회 가능
             query = select(User).where(User.company == current_user.company)
         elif user_role == UserRole.CLIENT.value:
             # 클라이언트는 자신만 조회 가능
             query = select(User).where(User.id == user_id)
-        elif user_role == UserRole.STAFF.value:
-            # 직원은 자신이 담당하는 CLIENT만 조회 가능 (assigned_staff_id 기준)
+        elif user_role in (UserRole.STAFF.value, UserRole.TEAM_LEADER.value):
+            # 직원/팀리더는 자신 + 담당 CLIENT 조회 가능
             query = select(User).where(
-                User.role == UserRole.CLIENT,
-                User.assigned_staff_id == user_id
+                or_(
+                    User.id == user_id,
+                    (User.role == UserRole.CLIENT) & (User.assigned_staff_id == user_id)
+                )
             )
         else:
             # 기본값: 같은 회사 사용자만 조회 가능

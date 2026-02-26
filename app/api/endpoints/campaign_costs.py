@@ -221,10 +221,15 @@ async def _update_campaign_cost(db: AsyncSession, campaign_id: int):
 
     total_cost = sum([Decimal(str(cost.amount)) for cost in costs])
 
-    # 캠페인 원가 및 이익 업데이트
+    # 캠페인 원가 및 이익 업데이트 (취소된 캠페인은 마진 0)
     campaign.cost = total_cost
-    campaign.margin = Decimal(str(campaign.budget)) - total_cost
-    campaign.margin_rate = (campaign.margin / Decimal(str(campaign.budget)) * Decimal('100')) if campaign.budget > 0 else Decimal('0')
+    if hasattr(campaign, 'status') and campaign.status and campaign.status.value == '취소':
+        campaign.margin = Decimal('0')
+        campaign.margin_rate = Decimal('0')
+    else:
+        effective_budget = Decimal(str(campaign.budget)) - Decimal(str(campaign.refund_amount or 0))
+        campaign.margin = effective_budget - total_cost
+        campaign.margin_rate = (campaign.margin / effective_budget * Decimal('100')) if effective_budget > 0 else Decimal('0')
 
     await db.commit()
 

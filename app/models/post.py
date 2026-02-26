@@ -37,6 +37,10 @@ class Post(Base, TimestampMixin):
     invoice_due_date = Column(DateTime, nullable=True)  # 포스트별 계산서 발행 마감일
     payment_due_date = Column(DateTime, nullable=True)  # 포스트별 결제 마감일
 
+    # 취소/환불 관련 필드
+    is_cancelled = Column(Boolean, default=False, nullable=True)
+    refund_amount = Column(Float, nullable=True, default=0.0)
+
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
     assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 포스트 담당자
     is_active = Column(Boolean, default=True)
@@ -45,6 +49,7 @@ class Post(Base, TimestampMixin):
     campaign = relationship("Campaign", back_populates="posts")
     product = relationship("Product")
     assigned_user = relationship("User", foreign_keys=[assigned_user_id])
+    refunds = relationship("PostRefund", back_populates="post", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Post(id={self.id}, title={self.title}, campaign_id={self.campaign_id})>"

@@ -336,10 +336,11 @@ async def get_campaigns(
                     "uploaded_at": contract.uploaded_at.isoformat() if contract.uploaded_at else None
                 } for contract in (campaign.contracts or []) if contract.is_active
             ],
-            # 캠페인 일정 정보 추가 (마이그레이션 후 활성화)
-            # "invoiceDueDate": campaign.invoice_due_date.isoformat() if campaign.invoice_due_date else None,
-            # "paymentDueDate": campaign.payment_due_date.isoformat() if campaign.payment_due_date else None,
-            # "projectDueDate": campaign.project_due_date.isoformat() if campaign.project_due_date else None
+            # 취소/환불 관련 필드
+            "cancelled_at": campaign.cancelled_at.isoformat() if getattr(campaign, 'cancelled_at', None) else None,
+            "cancellation_reason": getattr(campaign, 'cancellation_reason', None),
+            "refund_amount": float(campaign.refund_amount) if getattr(campaign, 'refund_amount', None) else 0,
+            "is_refunded": getattr(campaign, 'is_refunded', False)
         }
         serialized_campaigns.append(campaign_data)
     
@@ -522,10 +523,10 @@ async def get_staff_members(
                 User.is_active == True
             )
         else:
-            # 대행사 어드민은 같은 회사의 직원들과 팀 리더만 조회
+            # 대행사 어드민은 같은 회사의 직원, 팀 리더, 대행사 어드민 조회
             staff_query = select(User).where(
                 User.company == current_user.company,
-                User.role.in_([UserRole.STAFF, UserRole.TEAM_LEADER]),
+                User.role.in_([UserRole.STAFF, UserRole.TEAM_LEADER, UserRole.AGENCY_ADMIN]),
                 User.is_active == True
             )
         result = await db.execute(staff_query)
@@ -1173,46 +1174,51 @@ async def get_monthly_campaign_stats(
             logger.warning(f"[POST-FILTER] Post {post.id} date={post_date}, filter={filter_start_date} to {filter_end_date}, included={in_month}, budget={post.budget}")
             return in_month
 
-        # 통계 계산 (월간 필터가 적용된 Post만 계산)
+        # 취소되지 않은 캠페인만 필터링
+        active_campaigns = [c for c in campaigns if c.status != CampaignStatus.CANCELLED]
+
+        # 통계 계산 (월간 필터가 적용된 Post만 계산, 취소된 캠페인/업무 제외)
         # 총 매출 = 선택된 월의 활성 posts.budget 합계
         total_revenue = sum(
             post.budget or 0
-            for campaign in campaigns
+            for campaign in active_campaigns
             for post in campaign.posts
-            if post.is_active and is_post_in_month(post)
+            if post.is_active and not getattr(post, 'is_cancelled', False) and is_post_in_month(post)
         )
 
         # 실제 수금액 = 선택된 월의 입금 완료된 posts의 budget 합계
         collected_revenue = sum(
             post.budget or 0
-            for campaign in campaigns
+            for campaign in active_campaigns
             for post in campaign.posts
-            if post.is_active and post.payment_completed and is_post_in_month(post)
+            if post.is_active and not getattr(post, 'is_cancelled', False) and post.payment_completed and is_post_in_month(post)
         )
 
         # Campaign 모델에 cost 필드가 없으므로 0으로 처리 (실제 비용은 발주/구매요청에서 계산)
         total_cost = 0
         total_campaigns = len(campaigns)
-        completed_campaigns = sum(1 for campaign in campaigns if campaign.status in ['완료', 'COMPLETED'])
+        completed_campaigns = sum(1 for campaign in campaigns if campaign.status == CampaignStatus.COMPLETED)
+        cancelled_campaigns = sum(1 for campaign in campaigns if campaign.status == CampaignStatus.CANCELLED)
 
-        # 재무 상태는 이제 Post 레벨에서 계산 (월간 필터 적용)
+        # 재무 상태는 이제 Post 레벨에서 계산 (월간 필터 적용, 취소 제외)
         pending_invoices = sum(
-            1 for campaign in campaigns
+            1 for campaign in active_campaigns
             for post in campaign.posts
-            if post.is_active and not post.invoice_issued and is_post_in_month(post)
+            if post.is_active and not getattr(post, 'is_cancelled', False) and not post.invoice_issued and is_post_in_month(post)
         )
         pending_payments = sum(
-            1 for campaign in campaigns
+            1 for campaign in active_campaigns
             for post in campaign.posts
-            if post.is_active and not post.payment_completed and is_post_in_month(post)
+            if post.is_active and not getattr(post, 'is_cancelled', False) and not post.payment_completed and is_post_in_month(post)
         )
 
         stats = {
             "totalRevenue": total_revenue,
-            "collectedRevenue": collected_revenue,  # 실제 수금액 추가
+            "collectedRevenue": collected_revenue,
             "totalCost": total_cost,
             "totalCampaigns": total_campaigns,
             "completedCampaigns": completed_campaigns,
+            "cancelledCampaigns": cancelled_campaigns,
             "pendingInvoices": pending_invoices,
             "pendingPayments": pending_payments
         }
@@ -1279,9 +1285,9 @@ async def get_receivables_status(
                 "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
                 "staff_name": c.staff_user.name if c.staff_user else (c.creator.name if c.creator else None),
                 "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0,
-                "pending_posts": sum(1 for post in c.posts if post.is_active and not post.invoice_issued)
+                "pending_posts": sum(1 for post in c.posts if post.is_active and not getattr(post, 'is_cancelled', False) and not post.invoice_issued)
             }
-            for c in campaigns if any(post.is_active and not post.invoice_issued for post in c.posts)
+            for c in campaigns if c.status != CampaignStatus.CANCELLED and any(post.is_active and not getattr(post, 'is_cancelled', False) and not post.invoice_issued for post in c.posts)
         ]
 
         # 미입금 캠페인 (Post 기반으로 계산)
@@ -1295,9 +1301,9 @@ async def get_receivables_status(
                 "status": c.status.value if hasattr(c.status, 'value') else str(c.status),
                 "staff_name": c.staff_user.name if c.staff_user else (c.creator.name if c.creator else None),
                 "days_overdue": (datetime.now() - c.start_date).days if c.start_date else 0,
-                "pending_posts": sum(1 for post in c.posts if post.is_active and not post.payment_completed)
+                "pending_posts": sum(1 for post in c.posts if post.is_active and not getattr(post, 'is_cancelled', False) and not post.payment_completed)
             }
-            for c in campaigns if any(post.is_active and not post.payment_completed for post in c.posts)
+            for c in campaigns if c.status != CampaignStatus.CANCELLED and any(post.is_active and not getattr(post, 'is_cancelled', False) and not post.payment_completed for post in c.posts)
         ]
 
         # 금액 합계
@@ -1516,11 +1522,12 @@ async def get_campaign_detail(
                 raise HTTPException(status_code=403, detail="자신이 생성하거나 담당하는 캠페인만 접근할 수 있습니다.")
         
         
-        # 총 매출 계산 (모든 posts의 budget 합계)
+        # 총 매출 계산 (취소되지 않은 활성 posts의 budget 합계)
         from sqlalchemy import func
         posts_budget_query = select(func.sum(Post.budget)).where(
             Post.campaign_id == campaign_id,
-            Post.is_active == True
+            Post.is_active == True,
+            or_(Post.is_cancelled == False, Post.is_cancelled == None)
         )
         posts_budget_result = await db.execute(posts_budget_query)
         total_revenue = float(posts_budget_result.scalar() or 0.0)
@@ -1564,7 +1571,12 @@ async def get_campaign_detail(
                 "client_company_address": getattr(campaign.client_user, 'client_company_address', None),
                 "client_business_type": getattr(campaign.client_user, 'client_business_type', None),
                 "client_business_item": getattr(campaign.client_user, 'client_business_item', None)
-            } if campaign.client_user else None
+            } if campaign.client_user else None,
+            # 취소/환불 관련 필드
+            "cancelled_at": campaign.cancelled_at.isoformat() if getattr(campaign, 'cancelled_at', None) else None,
+            "cancellation_reason": getattr(campaign, 'cancellation_reason', None),
+            "refund_amount": float(campaign.refund_amount) if getattr(campaign, 'refund_amount', None) else 0,
+            "is_refunded": getattr(campaign, 'is_refunded', False)
         }
         return response_data
         
@@ -2187,19 +2199,26 @@ async def get_campaign_financial_summary(
         
         # 재무 요약 데이터 (posts.budget 합계 기반 계산)
         budget_amount = float(campaign.budget) if campaign.budget else 0.0
-        
-        # 총 매출 = 모든 posts의 budget 합계
+        refund_amount = float(campaign.refund_amount or 0) if hasattr(campaign, 'refund_amount') else 0.0
+
+        # 총 매출 = 취소되지 않은 활성 posts의 budget 합계
         from sqlalchemy import func
         posts_budget_query = select(func.sum(Post.budget)).where(
             Post.campaign_id == campaign_id,
-            Post.is_active == True
+            Post.is_active == True,
+            or_(Post.is_cancelled == False, Post.is_cancelled == None)
         )
         posts_budget_result = await db.execute(posts_budget_query)
         total_revenue = float(posts_budget_result.scalar() or 0.0)
-        
-        total_cost = budget_amount * 0.45  # 지출 금액
-        total_profit = total_revenue - total_cost  # 순이익 계산
-        
+
+        # 취소된 캠페인은 매출 0 처리
+        is_cancelled = campaign.status == CampaignStatus.CANCELLED
+        if is_cancelled:
+            total_revenue = 0.0
+
+        total_cost = budget_amount * 0.45
+        total_profit = total_revenue - total_cost
+
         return {
             "campaign_id": campaign_id,
             "campaign_name": campaign.name,
@@ -2209,8 +2228,12 @@ async def get_campaign_financial_summary(
             "total_profit": total_profit,
             "spent_amount": total_cost,
             "remaining_budget": budget_amount - total_cost,
-            "total_tasks": 10,  # 전체 작업 수 (예시)
-            "completed_tasks": 7,  # 완료된 작업 수 (예시)
+            "refund_amount": refund_amount,
+            "is_cancelled": is_cancelled,
+            "is_refunded": getattr(campaign, 'is_refunded', False) or False,
+            "net_revenue": total_revenue - refund_amount,
+            "total_tasks": 10,
+            "completed_tasks": 7,
             "expense_categories": {
                 "광고비": budget_amount * 0.25,
                 "제작비": budget_amount * 0.15,
@@ -2218,8 +2241,8 @@ async def get_campaign_financial_summary(
             },
             "roi": 2.3,
             "conversion_rate": 0.045,
-            "completion_rate": 0.7,  # 완료율
-            "margin_rate": (total_profit / total_revenue) if total_revenue > 0 else 0  # 마진율
+            "completion_rate": 0.7,
+            "margin_rate": (total_profit / total_revenue) if total_revenue > 0 else 0
         }
     else:
         # 기존 API 모드 (JWT 토큰 기반)
@@ -4201,3 +4224,482 @@ async def delete_campaign_contract(
         raise HTTPException(status_code=500, detail=f"계약서 삭제 중 오류가 발생했습니다: {str(e)}")
 
 
+# ============================================================================
+# 캠페인 취소/환불 API
+# ============================================================================
+
+@router.post("/{campaign_id}/cancel")
+async def cancel_campaign(
+    campaign_id: int,
+    cancel_request: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 취소 + 환불 처리"""
+    from app.models.campaign_refund import CampaignRefund, RefundType, RefundStatus
+    from app.models.post_refund import PostRefund
+
+    try:
+        # 권한 확인: SUPER_ADMIN, AGENCY_ADMIN만 취소 가능
+        if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
+            raise HTTPException(status_code=403, detail="캠페인 취소 권한이 없습니다. 관리자만 취소할 수 있습니다.")
+
+        # 캠페인 조회
+        query = select(Campaign).options(
+            selectinload(Campaign.posts)
+        ).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        campaign = result.scalar_one_or_none()
+
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # AGENCY_ADMIN은 자기 회사 캠페인만 취소 가능
+        if current_user.role == UserRole.AGENCY_ADMIN and campaign.company != current_user.company:
+            raise HTTPException(status_code=403, detail="다른 회사의 캠페인을 취소할 수 없습니다.")
+
+        # 이미 취소된 캠페인 체크
+        if campaign.status == CampaignStatus.CANCELLED:
+            raise HTTPException(status_code=400, detail="이미 취소된 캠페인입니다.")
+
+        # 요청 데이터 파싱
+        cancellation_reason = cancel_request.get("cancellation_reason", "")
+        refund_type_str = cancel_request.get("refund_type", "전액환불")
+        refund_amount_input = cancel_request.get("refund_amount")
+        cancel_posts = cancel_request.get("cancel_posts", True)
+
+        # 캠페인 총 예산 계산 (활성 포스트 기준)
+        total_budget = sum(
+            (post.budget or 0) for post in campaign.posts if post.is_active
+        )
+
+        # 환불 금액 결정
+        if refund_type_str == "전액환불":
+            refund_type = RefundType.FULL
+            actual_refund_amount = total_budget
+        else:
+            refund_type = RefundType.PARTIAL
+            if refund_amount_input is None or float(refund_amount_input) <= 0:
+                raise HTTPException(status_code=400, detail="부분환불 시 환불 금액을 입력해주세요.")
+            actual_refund_amount = float(refund_amount_input)
+            if actual_refund_amount > total_budget:
+                raise HTTPException(status_code=400, detail=f"환불 금액({actual_refund_amount:,.0f}원)이 총 예산({total_budget:,.0f}원)을 초과할 수 없습니다.")
+
+        # 1. 캠페인 상태 변경
+        campaign.status = CampaignStatus.CANCELLED
+        campaign.cancelled_at = datetime.now(timezone.utc)
+        campaign.cancelled_by = current_user.id
+        campaign.cancellation_reason = cancellation_reason
+        campaign.refund_amount = actual_refund_amount
+        campaign.is_refunded = True
+
+        # 2. 환불 기록 생성
+        campaign_refund = CampaignRefund(
+            campaign_id=campaign_id,
+            refund_type=refund_type,
+            refund_amount=actual_refund_amount,
+            original_amount=total_budget,
+            refund_reason=cancellation_reason,
+            status=RefundStatus.COMPLETED,
+            requested_by=current_user.id,
+            approved_by=current_user.id,
+            approved_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc)
+        )
+        db.add(campaign_refund)
+
+        # 3. 포스트 취소 처리
+        cancelled_post_count = 0
+        if cancel_posts:
+            for post in campaign.posts:
+                if post.is_active and not getattr(post, 'is_cancelled', False):
+                    post.is_cancelled = True
+                    post.refund_amount = post.budget or 0
+                    cancelled_post_count += 1
+
+                    # 포스트별 환불 기록
+                    post_refund = PostRefund(
+                        post_id=post.id,
+                        campaign_id=campaign_id,
+                        refund_type=RefundType.FULL,
+                        refund_amount=post.budget or 0,
+                        original_budget=post.budget or 0,
+                        refund_reason=f"캠페인 취소: {cancellation_reason}" if cancellation_reason else "캠페인 취소",
+                        status=RefundStatus.COMPLETED,
+                        requested_by=current_user.id,
+                        approved_by=current_user.id,
+                        approved_at=datetime.now(timezone.utc),
+                        completed_at=datetime.now(timezone.utc)
+                    )
+                    db.add(post_refund)
+
+        await db.commit()
+
+        print(f"[CAMPAIGN-CANCEL] Campaign {campaign_id} cancelled by user {current_user.id}. "
+              f"Refund: {actual_refund_amount:,.0f}원 ({refund_type_str}), "
+              f"Posts cancelled: {cancelled_post_count}")
+
+        return {
+            "success": True,
+            "message": f"캠페인이 취소되었습니다. 환불금액: {actual_refund_amount:,.0f}원",
+            "campaign_id": campaign_id,
+            "refund_type": refund_type_str,
+            "refund_amount": actual_refund_amount,
+            "original_budget": total_budget,
+            "cancelled_posts": cancelled_post_count,
+            "cancelled_at": campaign.cancelled_at.isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CAMPAIGN-CANCEL] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"캠페인 취소 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/{campaign_id}/posts/{post_id}/refund")
+async def refund_post(
+    campaign_id: int,
+    post_id: int,
+    refund_request: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """개별 업무(Post) 환불 처리"""
+    from app.models.post_refund import PostRefund
+    from app.models.campaign_refund import RefundType, RefundStatus
+
+    try:
+        # 권한 확인
+        if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
+            raise HTTPException(status_code=403, detail="환불 처리 권한이 없습니다.")
+
+        # 캠페인 + 포스트 조회
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        if current_user.role == UserRole.AGENCY_ADMIN and campaign.company != current_user.company:
+            raise HTTPException(status_code=403, detail="다른 회사의 캠페인을 처리할 수 없습니다.")
+
+        post_query = select(Post).where(Post.id == post_id, Post.campaign_id == campaign_id)
+        post_result = await db.execute(post_query)
+        post = post_result.scalar_one_or_none()
+        if not post:
+            raise HTTPException(status_code=404, detail="업무를 찾을 수 없습니다.")
+
+        if getattr(post, 'is_cancelled', False):
+            raise HTTPException(status_code=400, detail="이미 취소된 업무입니다.")
+
+        # 요청 데이터 파싱
+        refund_type_str = refund_request.get("refund_type", "전액환불")
+        refund_amount_input = refund_request.get("refund_amount")
+        refund_reason = refund_request.get("refund_reason", "")
+        original_budget = post.budget or 0
+
+        if refund_type_str == "전액환불":
+            refund_type = RefundType.FULL
+            actual_refund_amount = original_budget
+        else:
+            refund_type = RefundType.PARTIAL
+            if refund_amount_input is None or float(refund_amount_input) <= 0:
+                raise HTTPException(status_code=400, detail="부분환불 시 환불 금액을 입력해주세요.")
+            actual_refund_amount = float(refund_amount_input)
+            if actual_refund_amount > original_budget:
+                raise HTTPException(status_code=400, detail=f"환불 금액이 업무 예산({original_budget:,.0f}원)을 초과할 수 없습니다.")
+
+        # 1. 포스트 상태 업데이트
+        if refund_type_str == "전액환불":
+            post.is_cancelled = True
+        post.refund_amount = (post.refund_amount or 0) + actual_refund_amount
+
+        # 2. 환불 기록 생성
+        post_refund = PostRefund(
+            post_id=post_id,
+            campaign_id=campaign_id,
+            refund_type=refund_type,
+            refund_amount=actual_refund_amount,
+            original_budget=original_budget,
+            refund_reason=refund_reason,
+            status=RefundStatus.COMPLETED,
+            requested_by=current_user.id,
+            approved_by=current_user.id,
+            approved_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc)
+        )
+        db.add(post_refund)
+
+        # 3. 캠페인의 총 환불액 업데이트 (비정규화)
+        campaign.refund_amount = float(campaign.refund_amount or 0) + actual_refund_amount
+
+        await db.commit()
+
+        print(f"[POST-REFUND] Post {post_id} in Campaign {campaign_id} refunded: "
+              f"{actual_refund_amount:,.0f}원 ({refund_type_str})")
+
+        return {
+            "success": True,
+            "message": f"업무 환불이 처리되었습니다. 환불금액: {actual_refund_amount:,.0f}원",
+            "post_id": post_id,
+            "campaign_id": campaign_id,
+            "refund_type": refund_type_str,
+            "refund_amount": actual_refund_amount,
+            "original_budget": original_budget
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[POST-REFUND] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"업무 환불 처리 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/{campaign_id}/refunds/{refund_id}/upload-cancel-invoice")
+async def upload_cancel_invoice(
+    campaign_id: int,
+    refund_id: int,
+    file: UploadFile = File(...),
+    refund_target: str = Query("campaign", description="환불 대상: campaign 또는 post"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """취소 계산서 파일 업로드"""
+    from app.models.campaign_refund import CampaignRefund
+    from app.models.post_refund import PostRefund
+    import shutil
+    from pathlib import Path
+
+    try:
+        # 권한 확인
+        if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.AGENCY_ADMIN]:
+            raise HTTPException(status_code=403, detail="취소 계산서 업로드 권한이 없습니다.")
+
+        # 파일 크기 체크 (10MB)
+        if file.size and file.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="파일 크기는 10MB를 초과할 수 없습니다.")
+
+        # 환불 기록 조회
+        if refund_target == "post":
+            refund_query = select(PostRefund).where(PostRefund.id == refund_id, PostRefund.campaign_id == campaign_id)
+            refund_result = await db.execute(refund_query)
+            refund = refund_result.scalar_one_or_none()
+        else:
+            refund_query = select(CampaignRefund).where(CampaignRefund.id == refund_id, CampaignRefund.campaign_id == campaign_id)
+            refund_result = await db.execute(refund_query)
+            refund = refund_result.scalar_one_or_none()
+
+        if not refund:
+            raise HTTPException(status_code=404, detail="환불 기록을 찾을 수 없습니다.")
+
+        # 업로드 디렉토리 생성
+        UPLOAD_DIR = Path(__file__).parent.parent.parent.parent / "uploads" / "cancel_invoices"
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+        # 파일명 생성
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
+        safe_filename = f"{timestamp}_{file.filename}"
+        file_path = UPLOAD_DIR / safe_filename
+
+        # 파일 저장
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # DB 업데이트
+        refund.cancel_invoice_url = f"/uploads/cancel_invoices/{safe_filename}"
+        refund.cancel_invoice_name = file.filename
+        refund.cancel_invoice_size = file_path.stat().st_size
+
+        await db.commit()
+
+        print(f"[CANCEL-INVOICE] Refund {refund_id} uploaded cancel invoice: {file.filename}")
+
+        return {
+            "success": True,
+            "cancel_invoice_url": refund.cancel_invoice_url,
+            "cancel_invoice_name": refund.cancel_invoice_name,
+            "cancel_invoice_size": refund.cancel_invoice_size
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CANCEL-INVOICE] Error: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"취소 계산서 업로드 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/{campaign_id}/refunds")
+async def get_campaign_refunds(
+    campaign_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 환불 내역 조회"""
+    from app.models.campaign_refund import CampaignRefund
+    from app.models.post_refund import PostRefund
+
+    try:
+        # 캠페인 존재 확인
+        campaign_query = select(Campaign).where(Campaign.id == campaign_id)
+        campaign_result = await db.execute(campaign_query)
+        campaign = campaign_result.scalar_one_or_none()
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인
+        user_role = current_user.role
+        if user_role == UserRole.AGENCY_ADMIN and campaign.company != current_user.company:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+        elif user_role == UserRole.STAFF and campaign.creator_id != current_user.id and campaign.staff_id != current_user.id:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+        # 캠페인 환불 내역
+        cr_query = select(CampaignRefund).where(
+            CampaignRefund.campaign_id == campaign_id
+        ).order_by(CampaignRefund.created_at.desc())
+        cr_result = await db.execute(cr_query)
+        campaign_refunds = cr_result.scalars().all()
+
+        # 포스트 환불 내역
+        pr_query = select(PostRefund).where(
+            PostRefund.campaign_id == campaign_id
+        ).order_by(PostRefund.created_at.desc())
+        pr_result = await db.execute(pr_query)
+        post_refunds = pr_result.scalars().all()
+
+        # 요청자/승인자 이름 조회
+        user_ids = set()
+        for r in campaign_refunds:
+            user_ids.add(r.requested_by)
+            if r.approved_by:
+                user_ids.add(r.approved_by)
+        for r in post_refunds:
+            user_ids.add(r.requested_by)
+            if r.approved_by:
+                user_ids.add(r.approved_by)
+
+        user_names = {}
+        if user_ids:
+            users_query = select(User).where(User.id.in_(list(user_ids)))
+            users_result = await db.execute(users_query)
+            for u in users_result.scalars().all():
+                user_names[u.id] = u.name
+
+        return {
+            "campaign_refunds": [
+                {
+                    "id": r.id,
+                    "campaign_id": r.campaign_id,
+                    "refund_type": r.refund_type.value if hasattr(r.refund_type, 'value') else str(r.refund_type),
+                    "refund_amount": float(r.refund_amount),
+                    "original_amount": float(r.original_amount),
+                    "refund_reason": r.refund_reason,
+                    "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                    "cancel_invoice_url": r.cancel_invoice_url,
+                    "cancel_invoice_name": r.cancel_invoice_name,
+                    "requested_by": r.requested_by,
+                    "requester_name": user_names.get(r.requested_by),
+                    "approved_by": r.approved_by,
+                    "approver_name": user_names.get(r.approved_by) if r.approved_by else None,
+                    "created_at": r.created_at.isoformat() if r.created_at else None
+                }
+                for r in campaign_refunds
+            ],
+            "post_refunds": [
+                {
+                    "id": r.id,
+                    "post_id": r.post_id,
+                    "campaign_id": r.campaign_id,
+                    "refund_type": r.refund_type.value if hasattr(r.refund_type, 'value') else str(r.refund_type),
+                    "refund_amount": float(r.refund_amount),
+                    "original_budget": float(r.original_budget),
+                    "refund_reason": r.refund_reason,
+                    "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                    "cancel_invoice_url": r.cancel_invoice_url,
+                    "cancel_invoice_name": r.cancel_invoice_name,
+                    "requested_by": r.requested_by,
+                    "created_at": r.created_at.isoformat() if r.created_at else None
+                }
+                for r in post_refunds
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[CAMPAIGN-REFUNDS] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"환불 내역 조회 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/{campaign_id}/refund-summary")
+async def get_refund_summary(
+    campaign_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """캠페인 환불 요약 조회"""
+    from app.models.campaign_refund import CampaignRefund
+    from app.models.post_refund import PostRefund
+
+    try:
+        # 캠페인 조회
+        query = select(Campaign).options(
+            selectinload(Campaign.posts)
+        ).where(Campaign.id == campaign_id)
+        result = await db.execute(query)
+        campaign = result.scalar_one_or_none()
+        if not campaign:
+            raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+
+        # 권한 확인
+        if current_user.role == UserRole.AGENCY_ADMIN and campaign.company != current_user.company:
+            raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+        # 총 예산
+        original_budget = sum((p.budget or 0) for p in campaign.posts if p.is_active)
+
+        # 총 환불액
+        total_refunded = float(campaign.refund_amount or 0)
+
+        # 잔액
+        remaining_amount = original_budget - total_refunded
+
+        # 환불 건수
+        cr_count_query = select(func.count(CampaignRefund.id)).where(CampaignRefund.campaign_id == campaign_id)
+        cr_count_result = await db.execute(cr_count_query)
+        campaign_refund_count = cr_count_result.scalar() or 0
+
+        pr_count_query = select(func.count(PostRefund.id)).where(PostRefund.campaign_id == campaign_id)
+        pr_count_result = await db.execute(pr_count_query)
+        post_refund_count = pr_count_result.scalar() or 0
+
+        # 취소된 업무 수
+        cancelled_posts = sum(1 for p in campaign.posts if getattr(p, 'is_cancelled', False))
+
+        return {
+            "campaign_id": campaign_id,
+            "campaign_name": campaign.name,
+            "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
+            "is_cancelled": campaign.status == CampaignStatus.CANCELLED,
+            "original_budget": original_budget,
+            "total_refunded": total_refunded,
+            "remaining_amount": max(remaining_amount, 0),
+            "is_fully_refunded": getattr(campaign, 'is_refunded', False),
+            "campaign_refund_count": campaign_refund_count,
+            "post_refund_count": post_refund_count,
+            "total_posts": len(campaign.posts),
+            "cancelled_posts": cancelled_posts,
+            "active_posts": len(campaign.posts) - cancelled_posts,
+            "cancellation_reason": campaign.cancellation_reason,
+            "cancelled_at": campaign.cancelled_at.isoformat() if campaign.cancelled_at else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[REFUND-SUMMARY] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"환불 요약 조회 중 오류가 발생했습니다: {str(e)}")

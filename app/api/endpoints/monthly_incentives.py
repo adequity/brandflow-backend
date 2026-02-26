@@ -115,12 +115,13 @@ async def calculate_monthly_incentives(
                     print(f"    요청 연도/월: {request.year}/{request.month}")
                     print(f"    필터 매치: {matches_filter} (연도매치: {extract_year == request.year}, 월매치: {extract_month == request.month})")
 
-                # 해당 사용자의 캠페인 데이터 조회 (campaign.start_date 기준)
+                # 해당 사용자의 캠페인 데이터 조회 (campaign.start_date 기준, 취소 캠페인 제외)
                 campaign_query = select(Campaign).where(
                     and_(
                         Campaign.staff_id == user.id,
                         extract('year', Campaign.start_date) == request.year,
-                        extract('month', Campaign.start_date) == request.month
+                        extract('month', Campaign.start_date) == request.month,
+                        Campaign.status != CampaignStatus.CANCELLED
                     )
                 ).options(
                     selectinload(Campaign.posts).selectinload(Post.product)
@@ -139,13 +140,16 @@ async def calculate_monthly_incentives(
                 campaign_count = len(campaigns)
 
                 for campaign in campaigns:
-                    # 매출 (캠페인 예산)
+                    # 매출 (캠페인 예산 - 환불액)
                     campaign_revenue = campaign.budget or 0.0
-                    total_revenue += campaign_revenue
+                    campaign_refund = float(campaign.refund_amount or 0) if hasattr(campaign, 'refund_amount') else 0.0
+                    total_revenue += (campaign_revenue - campaign_refund)
 
-                    # 원가 계산 (product.cost × posts.quantity)
+                    # 원가 계산 (취소되지 않은 post만)
                     campaign_cost = 0.0
                     for post in campaign.posts:
+                        if getattr(post, 'is_cancelled', False):
+                            continue
                         if post.product and post.product.cost:
                             post_cost = post.product.cost * (post.quantity or 1)
                             campaign_cost += post_cost

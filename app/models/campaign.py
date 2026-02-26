@@ -5,6 +5,7 @@ from typing import Optional
 from decimal import Decimal
 
 from .base import Base, TimestampMixin
+# campaign_refund는 순환 import 방지를 위해 relationship string으로 참조
 
 
 class CampaignStatus(str, enum.Enum):
@@ -48,7 +49,14 @@ class Campaign(Base, TimestampMixin):
     # invoice_due_date = Column(DateTime, nullable=True)  # 계산서 발행 마감일 -> Post로 이동
     # payment_due_date = Column(DateTime, nullable=True)  # 결제 마감일 -> Post로 이동
     project_due_date = Column(DateTime, nullable=True)  # 프로젝트 완료 마감일 (Campaign 레벨 유지)
-    
+
+    # 취소/환불 관련 필드
+    cancelled_at = Column(DateTime, nullable=True)
+    cancelled_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
+    refund_amount = Column(Numeric(12, 2), default=0, nullable=True)  # 비정규화: 총 환불액
+    is_refunded = Column(Boolean, default=False, nullable=True)
+
     # 외래키
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     client_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 클라이언트 사용자 ID
@@ -61,6 +69,8 @@ class Campaign(Base, TimestampMixin):
     purchase_requests = relationship("PurchaseRequest", back_populates="campaign")
     posts = relationship("Post", back_populates="campaign", cascade="all, delete-orphan")
     contracts = relationship("CampaignContract", back_populates="campaign", cascade="all, delete-orphan")
+    refunds = relationship("CampaignRefund", back_populates="campaign", cascade="all, delete-orphan")
+    cancelled_by_user = relationship("User", foreign_keys=[cancelled_by])
     # costs relationship은 campaign_costs 엔드포인트에서 직접 쿼리로 처리 (순환 import 방지)
     # costs = relationship("CampaignCost", back_populates="campaign", cascade="all, delete-orphan")
     
