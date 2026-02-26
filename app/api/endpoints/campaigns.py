@@ -781,9 +781,9 @@ async def get_all_order_requests(
                 "post_title": post.title,
                 "campaign_name": campaign.name,
                 "product_name": post.product_name or (product.name if product else None),
-                "product_cost": post.product_cost or 0,  # Posts 테이블의 제품 단가
+                "product_cost": post.product_cost or (product.cost if product else 0) or 0,  # posts → products fallback
                 "quantity": post.quantity or 1,  # 수량
-                "total_cost": (post.product_cost or 0) * (post.quantity or 1),  # 총 원가 (posts.product_cost × posts.quantity)
+                "total_cost": (post.product_cost or (product.cost if product else 0) or 0) * (post.quantity or 1),  # 총 원가
                 "requester_name": requester_name,
                 "work_type": post.work_type
             })
