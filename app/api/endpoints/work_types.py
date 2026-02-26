@@ -84,17 +84,17 @@ async def get_work_types(
             # company 컬럼이 없는 경우 fallback
             query = select(WorkType).where(WorkType.is_active == True)
             print(f"[WORK-TYPES] Company column not found, using fallback query")
+        query = query.order_by(WorkType.sort_order.asc(), WorkType.id.asc())
         result = await db.execute(query)
         work_types = result.scalars().all()
-        
-        # work_types 테이블에서 직접 조회 (하드코딩 제거)
-        
+
         return [
             {
                 "id": wt.id,
                 "name": wt.name,
                 "description": wt.description,
-                "color": getattr(wt, 'color', '#6B7280'),  # 색상 필드 추가 (컬럼 체크)
+                "color": getattr(wt, 'color', '#6B7280'),
+                "sortOrder": getattr(wt, 'sort_order', 0),
                 "is_active": wt.is_active,
                 "created_at": wt.created_at.isoformat() if wt.created_at else None,
                 "updated_at": wt.updated_at.isoformat() if wt.updated_at else None
@@ -243,8 +243,9 @@ async def create_work_type(
             new_work_type = WorkType(
                 name=work_type_data.name,
                 description=work_type_data.description or "",
-                color=work_type_data.color or "#6B7280",  # 색상 필드 추가
-                company=user_company,  # 생성자의 회사로 자동 설정
+                color=work_type_data.color or "#6B7280",
+                sort_order=work_type_data.sortOrder or 0,
+                company=user_company,
                 is_active=True
             )
             print(f"[WORK-TYPE-CREATE] Creating with company: {user_company}")
@@ -264,7 +265,8 @@ async def create_work_type(
             new_work_type = WorkType(
                 name=work_type_data.name,
                 description=work_type_data.description or "",
-                color=work_type_data.color or "#6B7280",  # 색상 필드 추가
+                color=work_type_data.color or "#6B7280",
+                sort_order=work_type_data.sortOrder or 0,
                 is_active=True
             )
             print(f"[WORK-TYPE-CREATE] Creating without company column (fallback mode)")
@@ -279,7 +281,8 @@ async def create_work_type(
             "id": new_work_type.id,
             "name": new_work_type.name,
             "description": new_work_type.description,
-            "color": getattr(new_work_type, 'color', '#6B7280'),  # 색상 필드 추가
+            "color": getattr(new_work_type, 'color', '#6B7280'),
+            "sortOrder": getattr(new_work_type, 'sort_order', 0),
             "is_active": new_work_type.is_active,
             "created_at": new_work_type.created_at.isoformat() if new_work_type.created_at else None,
             "updated_at": new_work_type.updated_at.isoformat() if new_work_type.updated_at else None
@@ -363,10 +366,12 @@ async def update_work_type(
         # 수정할 필드만 업데이트
         update_data = work_type_data.dict(exclude_unset=True)
 
+        field_mapping = {"sortOrder": "sort_order"}
         for field, value in update_data.items():
-            if hasattr(work_type, field):
-                setattr(work_type, field, value)
-                print(f"[WORK-TYPE-UPDATE] Updated {field}: {value}")
+            db_field = field_mapping.get(field, field)
+            if hasattr(work_type, db_field):
+                setattr(work_type, db_field, value)
+                print(f"[WORK-TYPE-UPDATE] Updated {db_field}: {value}")
 
         await db.commit()
         await db.refresh(work_type)
@@ -377,7 +382,8 @@ async def update_work_type(
             "id": work_type.id,
             "name": work_type.name,
             "description": work_type.description,
-            "color": getattr(work_type, 'color', '#6B7280'),  # 색상 필드 추가
+            "color": getattr(work_type, 'color', '#6B7280'),
+            "sortOrder": getattr(work_type, 'sort_order', 0),
             "is_active": work_type.is_active,
             "created_at": work_type.created_at.isoformat() if work_type.created_at else None,
             "updated_at": work_type.updated_at.isoformat() if work_type.updated_at else None
