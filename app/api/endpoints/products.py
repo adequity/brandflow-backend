@@ -50,6 +50,7 @@ class ProductUpdate(BaseModel):
     minQuantity: Optional[int] = None
     maxQuantity: Optional[int] = None
     tags: Optional[str] = None
+    isActive: Optional[bool] = None
 
     @field_validator('costPrice', 'sellingPrice', 'minQuantity', 'maxQuantity', 'work_type_id', mode='before')
     @classmethod
@@ -429,7 +430,8 @@ async def update_product(
         if not product:
             raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다")
 
-        if not product.is_active:
+        # is_active 변경 요청이 아닌 경우에만 삭제 상품 수정 차단
+        if not product.is_active and product_data.isActive is None:
             raise HTTPException(status_code=404, detail="삭제된 상품은 수정할 수 없습니다")
 
         # SKU 중복 확인 (변경된 경우에만, 회사 내에서만)
@@ -460,11 +462,19 @@ async def update_product(
 
         # 제공된 필드만 업데이트 (부분 업데이트)
         update_data = product_data.dict(exclude_unset=True)
+        # camelCase → snake_case 매핑
+        field_mapping = {
+            "costPrice": None,  # 별도 처리
+            "isActive": "is_active",
+            "workTypeId": "work_type_id",
+        }
         for field, value in update_data.items():
             if field == "costPrice":
                 # costPrice를 price 필드와 cost 필드 모두에 저장
                 product.price = value
                 product.cost = value
+            elif field in field_mapping and field_mapping[field]:
+                setattr(product, field_mapping[field], value)
             elif hasattr(product, field):
                 setattr(product, field, value)
 
