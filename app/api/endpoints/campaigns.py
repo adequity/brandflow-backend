@@ -3303,17 +3303,21 @@ async def create_order_request(
         product_result = await db.execute(product_query)
         product = product_result.scalar_one_or_none()
 
-        # cost_price 자동 계산: products.cost × posts.quantity
+        # cost_price 결정: DB 자동 계산 → 프론트 전달값 → 0
         calculated_cost_price = 0
         if product and product.cost and post.quantity:
             calculated_cost_price = int(product.cost * post.quantity)
             print(f"[ORDER-REQUEST] Auto-calculated cost_price: {product.cost} × {post.quantity} = {calculated_cost_price}")
 
+        # 자동 계산 실패 시 프론트에서 보낸 cost_price 사용
+        final_cost_price = calculated_cost_price or (order_data.cost_price or 0)
+        print(f"[ORDER-REQUEST] Final cost_price: {final_cost_price} (calculated={calculated_cost_price}, frontend={order_data.cost_price})")
+
         # 발주요청 생성
         new_order_request = OrderRequest(
             title=order_data.title,
             description=order_data.description,
-            cost_price=calculated_cost_price,  # 자동 계산된 값 사용
+            cost_price=final_cost_price,  # DB 계산 우선, 프론트 전달값 fallback
             resource_type=order_data.resource_type,
             post_id=post_id,
             user_id=current_user.id,
